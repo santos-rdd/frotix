@@ -4,21 +4,28 @@
     "slug": "frotix",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
+      "package": "com.frotix.android",
+      "plugins": [
+        [
+          "expo-navigation-bar",
+          {
+            "backgroundColor": "#121212",
+            "barStyle": "light"
+          }
+        ],
+        [
+          "@react-native-google-signin/google-signin",
+          {
+            "androidClientId": "716901513376-555june9ubufoab9fjm4gokcchmep3d0.apps.googleusercontent.com",
+            "iosUrlScheme": "com.googleusercontent.apps._some_id_here_"
+          }
+        ]
+      ]
     }
   }
 }
