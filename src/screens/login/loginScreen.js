@@ -8,46 +8,104 @@ import {
   Image,
   Alert
 } from 'react-native';
-import { GoogleSignin, isSuccessResponse, statusCodes } from '@react-native-google-signin/google-signin';
+import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
+import GOOGLE_CONFIG from '../../config/google';
+import { API_URL } from '../../config/api.js';
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
+  const [emailInput, setEmailInput] = useState(''); 
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
-  const [auth, setAuth] = useState('');
 
   useEffect(() => {
     GoogleSignin.configure({
-      webClientId: '716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com', 
+      webClientId: GOOGLE_CONFIG.webClientId,
       offlineAccess: true,
       scopes: ['profile', 'email'],
     });
-  }, []);
+  }, []); 
+  
+  const logIn = async (googleEmail, googleData) => {
+    try {
+      console.log('Enviando requisição para:', `${API_URL}/auth/login-google`);
+      
+      const response = await fetch(`${API_URL}/auth/login-google`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: googleEmail }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log('Usuário autorizado!', data.usuario);
+        navigation.navigate('HomePage', { auth: googleData, bankUser: data.usuario });
+      } else {
+        console.log('Acesso negado pelo backend:', data.erro);
+        Alert.alert("Acesso Negado", data.erro || "E-mail não autorizado.");
+      }
+    } catch (error) {
+      console.error('Erro de conexão com o servidor', error);
+      Alert.alert("Erro de Conexão", `Não foi possível conectar em ${API_URL}. Verifique o servidor ou cabo.`);
+    }
+  };
 
   async function singIn(){
     try {
+      console.log('Botão clicado: checando Play Services...');
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+      try {
+        await GoogleSignin.signOut();
+      } catch (e) {
+        console.log('Nenhuma sessão anterior para limpar.');
+      }
+      
       const response = await GoogleSignin.signIn();
       
       if(isSuccessResponse(response)){
-        console.log("Login com sucesso:", response.data);
-        setAuth(response.data);
-        navigation.navigate('HomePage');
+        const emailGoogle = response.data.user.email;
+        console.log('Google login OK:', emailGoogle);
+        await logIn(emailGoogle, response.data);
+      } else {
+        console.log('Login do Google não retornou sucesso (cancelado?).');
       }
     } catch(err){
-      console.log("Erro completo no login:", JSON.stringify(err, null, 2), err);
-      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
-        Alert.alert("Aviso", "Login cancelado pelo usuário.");
-      } else if (err.code === statusCodes.IN_PROGRESS) {
-        Alert.alert("Aguarde", "O login já está em andamento.");
-      } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
-        Alert.alert("Erro", "Google Play Services desatualizado ou não disponível.");
+      console.log("Erro completo no login:", JSON.stringify(err, null, 2));
+      Alert.alert("Erro", `Falha na Autenticação com o Google: ${err.message || err}`);
+    }
+  };
+
+  const handleEmailLogin = async () => {
+    if (!emailInput || !password) {
+      Alert.alert("Atenção", "Preencha o e-mail e a senha.");
+      return;
+    }
+
+    try {
+      console.log('Enviando login por email para:', `${API_URL}/auth/login-email`);
+
+      const response = await fetch(`${API_URL}/auth/login-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: emailInput, password: password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+          console.log('Login por email autorizado!', data.usuario);
+          navigation.navigate('HomePage', { bankUser: data.usuario });
       } else {
-        Alert.alert(
-          "Erro na Autenticação Google", 
-          `Código: ${err.code}\n${err.message || 'DEVELOPER_ERROR: Verifique o SHA-1 no Google Cloud Console.'}`
-        );
+        Alert.alert("Acesso Negado", data.erro || "Credenciais inválidas.");
       }
+    } catch (error) {
+      console.error('Erro de conexão no login por email:', error);
+      Alert.alert("Erro", "Não foi possível conectar ao servidor.");
     }
   };
 
@@ -75,7 +133,7 @@ export default function LoginScreen({ navigation }) {
           onPress={() => singIn()}
           style={styles.googleButton} activeOpacity={0.8}>
           <Image
-            source={require('../../assets/icons/logo.png')}
+            source={require('../../../assets/icons/logo.png')}
             style={styles.imageGoogle}
             />
 
@@ -98,8 +156,8 @@ export default function LoginScreen({ navigation }) {
               style={styles.input}
               placeholder=""
               placeholderTextColor="#666"
-              value={email}
-              onChangeText={setEmail}
+              value={emailInput}
+              onChangeText={setEmailInput}
               keyboardType="email-address"
               autoCapitalize="none"
             />
@@ -129,14 +187,17 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Botão Principal de Login */}
         <View style={styles.footer}>
           <TouchableOpacity 
-          style={styles.loginButton} activeOpacity={0.8}>
+          style={styles.loginButton} activeOpacity={0.8}
+          onPress={handleEmailLogin}
+          >
             <Text style={styles.loginButtonText}>Log In</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.forgotPasswordContainer}>
+          <TouchableOpacity 
+          style={styles.forgotPasswordContainer}
+          onPress={() => navigation.navigate('LoginEmail')} >
             <Text style={styles.forgotPasswordText}>Esqueceu a senha?</Text>
           </TouchableOpacity>
         </View>

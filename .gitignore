@@ -1,4 +1,13 @@
+
 # Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+*.keystore
+google-services.json
+GoogleService-Info.plist
+.claude/
+.vscode/
+.idea/
+./config
 
 # dependencies
 node_modules/
