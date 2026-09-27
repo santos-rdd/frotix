@@ -16,7 +16,7 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.imageContainer}>
           <Image
-            source={require('../../assets/image/truck.png')}
+            source={require('../../../assets/image/truck.png')}
             style={styles.imageTruck}
             resizeMode="cover"
           />

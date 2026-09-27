@@ -9,23 +9,17 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.frotix.android",
-      "plugins": [
-        [
-          "expo-navigation-bar",
-          {
-            "backgroundColor": "#121212",
-            "barStyle": "light"
-          }
-        ],
-        [
-          "@react-native-google-signin/google-signin",
-          {
-            "androidClientId": "716901513376-555june9ubufoab9fjm4gokcchmep3d0.apps.googleusercontent.com",
-            "iosUrlScheme": "com.googleusercontent.apps._some_id_here_"
-          }
-        ]
-      ]
-    }
+      "package": "com.frotix.android"
+    },
+    "plugins": [
+      [
+        "expo-navigation-bar",
+        {
+          "backgroundColor": "#121212",
+          "barStyle": "light"
+        }
+      ],
+      "@react-native-google-signin/google-signin"
+    ]
   }
 }
