@@ -7,6 +7,7 @@ import LoginScreen from './src/screens/login/loginScreen.js';
 import HomePage from './src/screens/home/homePage.js';
 import ForgotPasswordScreen from './src/screens/loginEmailScreen/loginEmailScreen.js';
 import VerifyCodeScreen from './src/screens/verifyCodeScreen/verifyCodeScreen.js';
+import AdmFormaPag from './src/screens/admFormaPag/admFormaPag.js';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,15 +23,12 @@ export default function App() {
         <Stack.Screen name="HomePage" component={HomePage} />
         <Stack.Screen name="LoginEmail" component={ForgotPasswordScreen} />
         <Stack.Screen name="VerifyCodeScreen" component={VerifyCodeScreen} />
+        <Stack.Screen name="AdmFormaPag" component={AdmFormaPag} />
       </Stack.Navigator>
     </NavigationContainer>
   );
-<<<<<<< HEAD
 }
 
 // adb reverse tcp:3000 tcp:3000
 // npx expo run:android
-// node --watch ./backend/server.js 
-=======
-}
->>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
+// node --watch ./backend/server.js
