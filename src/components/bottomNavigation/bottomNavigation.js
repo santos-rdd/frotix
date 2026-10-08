@@ -6,14 +6,20 @@ import {
 } from 'react-native';
 import { Ionicons, Feather, MaterialCommunityIcons } from '@expo/vector-icons'; 
 
-export default function BottomNavigation(){
+export default function BottomNavigation(props){
+
+    const navigation = props.navigation;
+
     return (
         <View style={stylesBottomNavigation.bottomNav}>
             <TouchableOpacity style={stylesBottomNavigation.navItem}>
                 <Ionicons name="home-outline" size={24} color="#3b59ff" />
             </TouchableOpacity>
     
-            <TouchableOpacity style={stylesBottomNavigation.navItem}>
+            <TouchableOpacity 
+                style={stylesBottomNavigation.navItem}
+                onPress={() => navigation.navigate('uploadProof')}
+                >
                 <Ionicons name="car-outline" size={24} color="#3b59ff" />
             </TouchableOpacity>
     
@@ -21,7 +27,10 @@ export default function BottomNavigation(){
                 <Ionicons name="construct-outline" size={24} color="#3b59ff" />
             </TouchableOpacity>
     
-            <TouchableOpacity style={stylesBottomNavigation.navItem}>
+            <TouchableOpacity 
+                onPress={() => navigation.navigate('userProfile')}
+                style={stylesBottomNavigation.navItem}
+            >
                 <Ionicons name="person-outline" size={24} color="#3b59ff" />
             </TouchableOpacity>
         </View>

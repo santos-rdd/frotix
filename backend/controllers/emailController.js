@@ -38,7 +38,7 @@ export default async function emailController(req, res) {
             });
         }
 
-        if (usuarioDoBanco.password !== password) {
+        if (String(usuarioDoBanco.password).trim() !== String(password).trim()) {
             return res.status(401).json({ 
                 erro: 'Senha incorreta.' 
             });

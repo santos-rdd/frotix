@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "extra": {
       "googleClientId": "716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com",
-      "apiUrl": "https://frotix.onrender.com/"
+      "apiUrl": "http://10.0.2.2:3000"
     },
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -28,3 +28,4 @@
     ]
   }
 }
+

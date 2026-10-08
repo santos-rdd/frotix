@@ -1,6 +1,5 @@
 import express from 'express';
 import authRoutes from './routes/authRoutes.js';
-import 'dotenv/config';
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,6 +13,6 @@ app.use((err, req, res, next) => {
 
 app.use('/auth', authRoutes);
 
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log('Servidor rodando na porta 3000 🚀');
 });

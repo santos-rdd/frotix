@@ -9,7 +9,7 @@ import {
   Alert
 } from 'react-native';
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
-import GOOGLE_CONFIG from '../../config/google';
+import GOOGLE_CONFIG from '../../config/google.js';
 import { API_URL } from '../../config/api.js';
 
 export default function LoginScreen({ navigation }) {
@@ -17,7 +17,7 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
-  useEffect(() => {
+  useEffect(() => { 
     GoogleSignin.configure({
       webClientId: GOOGLE_CONFIG.webClientId,
       offlineAccess: true,
