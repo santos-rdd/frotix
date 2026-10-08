@@ -1,12 +1,8 @@
-import pkg from 'pg';
-const { Pool } = pkg;
+import { createClient } from '@supabase/supabase-js';
 
-const pool = new Pool({
-  user: 'postgres',      
-  host: 'localhost',
-  database: 'frotix',         
-  password: '7688',
-  port: 5432,                          
-});
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
 
-export default pool;
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+export default supabase;

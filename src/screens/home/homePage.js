@@ -20,6 +20,17 @@ export default function HomePage(props) {
   const userName = authGoogle?.user?.givenName || bankUser?.name || 'Usuário';
   const userPhoto = authGoogle?.user?.photo || null; 
   const userRole = bankUser?.role || authGoogle?.user?.role || 'Membro';
+<<<<<<< HEAD
+  console.log(userPhoto)
+
+  const reference = {
+    1 : 'Admin',
+    2 : 'Gestor de Frota',
+    3 : 'Financeiro',
+    4 : 'Motorista' 
+  };
+=======
+>>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
 
   return (
     <>
@@ -31,9 +42,17 @@ export default function HomePage(props) {
           <View>
             <Text style={styles.greeting}>Boa Tarde</Text>
             <Text style={styles.username}> { userName } </Text>
+<<<<<<< HEAD
+            <Text style={styles.userRole}> { reference[userRole] } </Text>
+          </View>
+          <Image 
+          source={userPhoto == null ? require('../../../assets/icons/user.png') : { uri: userPhoto }} 
+          style={styles.avatar} />
+=======
             <Text style={styles.userRole}> { userRole } </Text>
           </View>
           {userPhoto && <Image source={{ uri: userPhoto }} style={styles.avatar} />}
+>>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
         </View>
 
         <View style={styles.sectionContainer}>
