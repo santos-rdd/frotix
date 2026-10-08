@@ -3,13 +3,10 @@
     "name": "frotix",
     "slug": "frotix",
     "version": "1.0.0",
-<<<<<<< HEAD
     "extra": {
       "googleClientId": "716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com",
       "apiUrl": "https://frotix.onrender.com/"
     },
-=======
->>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "ios": {
@@ -26,15 +23,8 @@
           "barStyle": "light"
         }
       ],
-<<<<<<< HEAD
       "@react-native-google-signin/google-signin",
       "expo-secure-store"
     ]
   }
 }
-=======
-      "@react-native-google-signin/google-signin"
-    ]
-  }
-}
->>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
