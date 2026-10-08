@@ -25,8 +25,12 @@ export default function App() {
       </Stack.Navigator>
     </NavigationContainer>
   );
+<<<<<<< HEAD
 }
 
 // adb reverse tcp:3000 tcp:3000
 // npx expo run:android
 // node --watch ./backend/server.js 
+=======
+}
+>>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4

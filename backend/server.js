@@ -1,5 +1,6 @@
 import express from 'express';
 import authRoutes from './routes/authRoutes.js';
+<<<<<<< HEAD
 import 'dotenv/config';
 
 const app = express();
@@ -15,5 +16,14 @@ app.use((err, req, res, next) => {
 app.use('/auth', authRoutes);
 
 app.listen(port, () => {
+=======
+
+const app = express();
+app.use(express.json()); 
+
+app.use('/auth', authRoutes);
+
+app.listen(3000, () => {
+>>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
   console.log('Servidor rodando na porta 3000 🚀');
 });
