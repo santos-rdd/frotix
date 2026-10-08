@@ -1,196 +1,159 @@
-import React from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  Image,
-  TouchableOpacity,
-  ScrollView
-} from 'react-native';
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons'; 
+import React, { useState } from 'react';
+import { View, StyleSheet, SafeAreaView, Text, TouchableOpacity } from 'react-native';
 
+import AdminHomeScreen from '../adminHome/adminHomeScreen';
+import GestorHomeScreen from '../gestorHome/gestorHomeScreen';
+import FinanceiroHomeScreen from '../financeiroHome/financeiroHomeScreen';
+import MotoristaHomeScreen from '../motoristaHome/motoristaHomeScreen';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation';
-import QuickActions from '../../components/quickActions/quickActions';
+
+// Mapeamento dos perfis numéricos e textuais conforme a lógica original do FrotiX
+// 1 = Admin, 2 = Gestor de Frota, 3 = Financeiro, 4 = Motorista
+const normalizeRole = (role) => {
+  if (role === 1 || role === '1' || role === 'Admin' || role === 'ADMIN') return 'ADMIN';
+  if (role === 2 || role === '2' || role === 'Gestor de Frota' || role === 'GESTOR') return 'GESTOR';
+  if (role === 3 || role === '3' || role === 'Financeiro' || role === 'FINANCEIRO') return 'FINANCEIRO';
+  if (role === 4 || role === '4' || role === 'Motorista' || role === 'MOTORISTA') return 'MOTORISTA';
+  return 'ADMIN'; // Padrão
+};
 
 export default function HomePage(props) {
-
-  const authGoogle = props.route.params?.auth || null;
-  const bankUser = props.route.params?.bankUser || null;
+  const authGoogle = props.route?.params?.auth || null;
+  const bankUser = props.route?.params?.bankUser || null;
 
   const userName = authGoogle?.user?.givenName || bankUser?.name || 'Usuário';
   const userPhoto = authGoogle?.user?.photo || null; 
-  const userRole = bankUser?.role || authGoogle?.user?.role || 'Membro';
-<<<<<<< HEAD
-  console.log(userPhoto)
+  const userRoleFromBackend = bankUser?.role || authGoogle?.user?.role || 1;
 
-  const reference = {
-    1 : 'Admin',
-    2 : 'Gestor de Frota',
-    3 : 'Financeiro',
-    4 : 'Motorista' 
+  const [activeRole, setActiveRole] = useState(normalizeRole(userRoleFromBackend));
+  const [showTesterBar, setShowTesterBar] = useState(true);
+
+  const screenProps = {
+    ...props,
+    userName,
+    userPhoto,
+    userRole: activeRole,
   };
-=======
->>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
+
+  const renderRoleScreen = () => {
+    switch (activeRole) {
+      case 'ADMIN':
+        return <AdminHomeScreen {...screenProps} />;
+      case 'GESTOR':
+        return <GestorHomeScreen {...screenProps} />;
+      case 'FINANCEIRO':
+        return <FinanceiroHomeScreen {...screenProps} />;
+      case 'MOTORISTA':
+        return <MotoristaHomeScreen {...screenProps} />;
+      default:
+        return <AdminHomeScreen {...screenProps} />;
+    }
+  };
 
   return (
-    <>
-      <ScrollView 
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
-      >
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Boa Tarde</Text>
-            <Text style={styles.username}> { userName } </Text>
-<<<<<<< HEAD
-            <Text style={styles.userRole}> { reference[userRole] } </Text>
+    <SafeAreaView style={styles.container}>
+      {/* SELETOR DE PERFIL PARA TESTES E DESENVOLVIMENTO (pode ser ocultado com 1 toque) */}
+      {showTesterBar && (
+        <View style={styles.testerBar}>
+          <View style={styles.testerHeader}>
+            <Text style={styles.testerLabel}>FrotiX - Alternar Perfil:</Text>
+            <TouchableOpacity onPress={() => setShowTesterBar(false)}>
+              <Text style={styles.hideText}>Ocultar</Text>
+            </TouchableOpacity>
           </View>
-          <Image 
-          source={userPhoto == null ? require('../../../assets/icons/user.png') : { uri: userPhoto }} 
-          style={styles.avatar} />
-=======
-            <Text style={styles.userRole}> { userRole } </Text>
-          </View>
-          {userPhoto && <Image source={{ uri: userPhoto }} style={styles.avatar} />}
->>>>>>> e110326ceb7b63258327fd89dc1b2591e7a009b4
-        </View>
+          <View style={styles.btnRow}>
+            <TouchableOpacity 
+              style={[styles.btn, activeRole === 'ADMIN' && styles.btnActive]} 
+              onPress={() => setActiveRole('ADMIN')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnText}>1. ADM</Text>
+            </TouchableOpacity>
 
-        <View style={styles.sectionContainer}>
-          <Text style={styles.sectionTitle}>Resumo Geral</Text>
+            <TouchableOpacity 
+              style={[styles.btn, activeRole === 'GESTOR' && styles.btnActive]} 
+              onPress={() => setActiveRole('GESTOR')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnText}>2. Gestor</Text>
+            </TouchableOpacity>
 
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View>
-                <Text style={styles.balanceValue}>+ R$ 394.23</Text>
-                <Text style={styles.balanceLabel}>Balanço Atual</Text>
-              </View>
-              <TouchableOpacity>
-                <Feather name="more-horizontal" size={24} color="#FFF" />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity 
+              style={[styles.btn, activeRole === 'FINANCEIRO' && styles.btnActive]} 
+              onPress={() => setActiveRole('FINANCEIRO')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnText}>3. Finan</Text>
+            </TouchableOpacity>
 
-            <View style={styles.legendContainer}>
-              <View style={styles.legendItem}>
-                <View style={[styles.dot, { backgroundColor: '#000' }]} />
-                <Text style={styles.legendText}>Entradas</Text>
-              </View>
-              <View style={styles.legendItem}>
-                <View style={[styles.dot, { backgroundColor: '#FFF' }]} />
-                <Text style={styles.legendText}>Saídas</Text>
-              </View>
-            </View>
-
-            <View style={styles.chartPlaceholder}>
-              <Text style={styles.placeholderText}>[ Espaço para o Gráfico / Imagem ]</Text>
-            </View>
+            <TouchableOpacity 
+              style={[styles.btn, activeRole === 'MOTORISTA' && styles.btnActive]} 
+              onPress={() => setActiveRole('MOTORISTA')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnText}>4. Motor.</Text>
+            </TouchableOpacity>
           </View>
         </View>
+      )}
 
-        <QuickActions />
-      </ScrollView>
+      {/* Tela ativa do perfil */}
+      <View style={{ flex: 1 }}>
+        {renderRoleScreen()}
+      </View>
 
-      <BottomNavigation/>
-    </>
+      {/* Barra de Navegação Inferior Padrão do FrotiX */}
+      <BottomNavigation />
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212', 
+    backgroundColor: '#121212',
   },
-  contentContainer: {
-    paddingBottom: 100,
+  testerBar: {
+    backgroundColor: '#1E1E22',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
   },
-  header: {
+  testerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 50,
+    marginBottom: 6,
   },
-  greeting: {
-    color: '#888',
-    fontSize: 14,
-  },
-  username: {
-    color: '#FFF',
-    fontSize: 22,
+  testerLabel: {
+    color: '#8E8E93',
+    fontSize: 11,
     fontWeight: 'bold',
   },
-  avatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+  hideText: {
+    color: '#3B56FF',
+    fontSize: 11,
+    fontWeight: '600',
   },
-  sectionContainer: {
-    paddingHorizontal: 20,
-    marginTop: 20,
-  },
-  sectionTitle: {
-    color: '#FFF',
-    fontSize: 18,
-    marginBottom: 15,
-  },
-  card: {
-    backgroundColor: '#2541ff',
-    borderRadius: 20,
-    padding: 20,
-    height: 409,
-    width: 345,
-    justifyContent: 'space-between',
-  },
-  cardHeader: {
+  btnRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  balanceValue: {
-    color: '#FFF',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  balanceLabel: {
-    color: '#d0d7ff',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    gap: 20,
-    marginTop: 10,
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 6,
   },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    color: '#FFF',
-    fontSize: 12,
-  },
-  chartPlaceholder: {
+  btn: {
     flex: 1,
-    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#27272A',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    borderStyle: 'dashed',
-    borderRadius: 12,
-    marginTop: 15,
   },
-  placeholderText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    fontSize: 12,
-    textAlign: 'center',
+  btnActive: {
+    backgroundColor: '#3B56FF',
   },
-  userRole: {
-    color: '#888',
-    fontSize: 14,
-  }
+  btnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
 });

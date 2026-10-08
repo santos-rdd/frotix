@@ -1821,3 +1821,74 @@
 {"_e":"metro:bundling:progress","_t":1791484732779,"id":"1","progress":0.5927993506770901,"total":765,"current":589}
 {"_e":"metro:bundling:progress","_t":1791484732884,"id":"1","progress":0.8179606401384083,"total":952,"current":861}
 {"_e":"metro:bundling:done","_t":1791484733011,"id":"1","total":952,"ms":541.4604}
+{"_e":"root:init","_t":1791492295477,"format":"v0-jsonl","version":"57.0.24"}
+{"_e":"devserver:start","_t":1791492295504,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1791492295878,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1791492296086,"plugins":[]}
+{"_e":"metro:instantiate","_t":1791492301596,"atlas":false,"workers":8,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1791492329206,"id":"1","platform":"android","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:progress","_t":1791492329206,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1791492329209,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:failed","_t":1791492329813,"id":"1","message":"SyntaxError: C:\\Users\\rodri\\Downloads\\projeto_extencionista\\frotix\\index.js: Unexpected token (5:1)\n\n  3 | import App from './App';\n  4 |\n> 5 | <<<<<<< HEAD\n    |  ^\n  6 | =======\n  7 | // registerRootComponent calls AppRegistry.registerComponent('main', () => App);\n  8 | // It also ensures that whether you load the app in Expo Go or in a native build,","importStack":null,"filename":"index.js","targetModuleName":null,"originModulePath":null}
+{"_e":"root:init","_t":1791492392948,"format":"v0-jsonl","version":"57.0.24"}
+{"_e":"devserver:start","_t":1791492392969,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1791492393275,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1791492393451,"plugins":[]}
+{"_e":"metro:instantiate","_t":1791492398354,"atlas":false,"workers":8,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1791492470528,"id":"1","platform":"android","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:progress","_t":1791492470528,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1791492470533,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1791492470633,"id":"1","progress":0.11680820381349143,"total":237,"current":81}
+{"_e":"metro:bundling:progress","_t":1791492470733,"id":"1","progress":0.4335114204489756,"total":404,"current":266}
+{"_e":"metro:bundling:progress","_t":1791492470833,"id":"1","progress":0.6849963307668114,"total":586,"current":485}
+{"_e":"metro:bundling:progress","_t":1791492470935,"id":"1","progress":0.868723122473158,"total":677,"current":631}
+{"_e":"metro:bundling:progress","_t":1791492471046,"id":"1","progress":0.9971691450858285,"total":706,"current":705}
+{"_e":"metro:bundling:progress","_t":1791492471153,"id":"1","progress":0.999,"total":706,"current":706}
+{"_e":"metro:bundling:progress","_t":1791492471253,"id":"1","progress":0.999,"total":939,"current":882}
+{"_e":"metro:bundling:progress","_t":1791492471361,"id":"1","progress":0.999,"total":1052,"current":1047}
+{"_e":"metro:bundling:progress","_t":1791492471902,"id":"1","progress":0.999,"total":1052,"current":1048}
+{"_e":"metro:bundling:progress","_t":1791492472019,"id":"1","progress":0.999,"total":1052,"current":1049}
+{"_e":"metro:bundling:progress","_t":1791492472127,"id":"1","progress":0.999,"total":1057,"current":1056}
+{"_e":"metro:bundling:done","_t":1791492472199,"id":"1","total":1057,"ms":1670.931}
+{"_e":"metro:client_log","_t":1791492477299,"level":"log","data":["Botão clicado: checando Play Services..."]}
+{"_e":"metro:client_log","_t":1791492486206,"level":"log","data":["Google login OK:","abner.rodrigues@alunos.unis.edu.br"]}
+{"_e":"metro:client_log","_t":1791492486220,"level":"log","data":["Enviando requisição para:","http://localhost:3000/auth/login-google"]}
+{"_e":"metro:client_log","_t":1791492488347,"level":"error","data":["Erro de conexão com o servidor","[Error: fetch failed: java.io.IOException: unexpected end of stream on http://localhost:3000/...]"]}
+{"_e":"metro:bundling:failed","_t":1791492567617,"id":null,"message":"Unable to resolve \"../../config/google\" from \"src\\screens\\login\\loginScreen.js\"\n  10 | } from 'react-native';\n  11 | import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';\n> 12 | import GOOGLE_CONFIG from '../../config/google';\n     |                            ^\n  13 | import { API_URL } from '../../config/api.js';\n  14 |\n  15 | export default function LoginScreen({ navigation }) {","importStack":"\u001b[1mImport stack:\u001b[22m\n\n\u001b[90m \u001b[39msrc\\screens\\login\\loginScreen.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"../../config/google\"\u001b[39m\n\n\u001b[90m \u001b[39mApp.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./src/screens/login/loginScreen.js\"\u001b[39m\n\n\u001b[90m \u001b[39mindex.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./App\"\u001b[39m\n\n\u001b[90m \u001b[39m\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./index\"\u001b[39m\n","filename":null,"targetModuleName":"../../config/google","originModulePath":"src\\screens\\login\\loginScreen.js"}
+{"_e":"metro:bundling:failed","_t":1791492571817,"id":null,"message":"Unable to resolve \"../../config/google\" from \"src\\screens\\login\\loginScreen.js\"\n  10 | } from 'react-native';\n  11 | import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';\n> 12 | import GOOGLE_CONFIG from '../../config/google';\n     |                            ^\n  13 | import { API_URL } from '../../config/api.js';\n  14 |\n  15 | export default function LoginScreen({ navigation }) {","importStack":"\u001b[1mImport stack:\u001b[22m\n\n\u001b[90m \u001b[39msrc\\screens\\login\\loginScreen.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"../../config/google\"\u001b[39m\n\n\u001b[90m \u001b[39mApp.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./src/screens/login/loginScreen.js\"\u001b[39m\n\n\u001b[90m \u001b[39mindex.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./App\"\u001b[39m\n\n\u001b[90m \u001b[39m\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./index\"\u001b[39m\n","filename":null,"targetModuleName":"../../config/google","originModulePath":"src\\screens\\login\\loginScreen.js"}
+{"_e":"metro:bundling:failed","_t":1791492614292,"id":null,"message":"Unable to resolve \"../../config/google\" from \"src\\screens\\login\\loginScreen.js\"\n  10 | } from 'react-native';\n  11 | import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';\n> 12 | import GOOGLE_CONFIG from '../../config/google';\n     |                            ^\n  13 | import { API_URL } from '../../config/api.js';\n  14 |\n  15 | export default function LoginScreen({ navigation }) {","importStack":"\u001b[1mImport stack:\u001b[22m\n\n\u001b[90m \u001b[39msrc\\screens\\login\\loginScreen.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"../../config/google\"\u001b[39m\n\n\u001b[90m \u001b[39mApp.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./src/screens/login/loginScreen.js\"\u001b[39m\n\n\u001b[90m \u001b[39mindex.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./App\"\u001b[39m\n\n\u001b[90m \u001b[39m\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./index\"\u001b[39m\n","filename":null,"targetModuleName":"../../config/google","originModulePath":"src\\screens\\login\\loginScreen.js"}
+{"_e":"metro:bundling:failed","_t":1791492633806,"id":null,"message":"Unable to resolve \"../../config/google\" from \"src\\screens\\login\\loginScreen.js\"\n  10 | } from 'react-native';\n  11 | import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';\n> 12 | import GOOGLE_CONFIG from '../../config/google';\n     |                            ^\n  13 | import { API_URL } from '../../config/api.js';\n  14 |\n  15 | export default function LoginScreen({ navigation }) {","importStack":"\u001b[1mImport stack:\u001b[22m\n\n\u001b[90m \u001b[39msrc\\screens\\login\\loginScreen.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"../../config/google\"\u001b[39m\n\n\u001b[90m \u001b[39mApp.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./src/screens/login/loginScreen.js\"\u001b[39m\n\n\u001b[90m \u001b[39mindex.js\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./App\"\u001b[39m\n\n\u001b[90m \u001b[39m\n\u001b[90m |\u001b[39m \u001b[36mimport\u001b[39m \u001b[32m\"./index\"\u001b[39m\n","filename":null,"targetModuleName":"../../config/google","originModulePath":"src\\screens\\login\\loginScreen.js"}
+{"_e":"metro:client_log","_t":1791492645374,"level":"error","data":["[Error: RNGoogleSignin: offline use requires server web ClientID]"]}
+{"_e":"metro:bundling:failed","_t":1791492710624,"id":null,"message":"SyntaxError: C:\\Users\\rodri\\Downloads\\projeto_extencionista\\frotix\\src\\config\\google.js: Only expressions, functions or classes are allowed as the `default` export. (1:15)\n\n> 1 | export default const GOOGLE_CONFIG = '716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com';\n    |                ^","importStack":null,"filename":"src\\config\\google.js","targetModuleName":null,"originModulePath":null}
+{"_e":"metro:client_log","_t":1791492762255,"level":"error","data":["[Error: RNGoogleSignin: offline use requires server web ClientID]"]}
+{"_e":"metro:client_log","_t":1791492799300,"level":"log","data":["Botão clicado: checando Play Services..."]}
+{"_e":"metro:client_log","_t":1791492802577,"level":"log","data":["Google login OK:","abner.rodrigues@alunos.unis.edu.br"]}
+{"_e":"metro:client_log","_t":1791492802579,"level":"log","data":["Enviando requisição para:","https://frotix.onrender.com//auth/login-google"]}
+{"_e":"metro:client_log","_t":1791492826646,"level":"error","data":["Erro de conexão com o servidor","[SyntaxError: JSON Parse error: Unexpected character: <]"]}
+{"_e":"root:init","_t":1791493029767,"format":"v0-jsonl","version":"57.0.24"}
+{"_e":"devserver:start","_t":1791493029791,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1791493030102,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1791493030300,"plugins":[]}
+{"_e":"metro:instantiate","_t":1791493035379,"atlas":false,"workers":8,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1791493114329,"id":"1","platform":"android","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:progress","_t":1791493114330,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1791493114332,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1791493114432,"id":"1","progress":0.10142399285975089,"total":314,"current":100}
+{"_e":"metro:bundling:progress","_t":1791493114534,"id":"1","progress":0.24823633707500403,"total":566,"current":282}
+{"_e":"metro:bundling:progress","_t":1791493114634,"id":"1","progress":0.5479359909930683,"total":793,"current":587}
+{"_e":"metro:bundling:progress","_t":1791493114738,"id":"1","progress":0.819402126736111,"total":960,"current":869}
+{"_e":"metro:bundling:done","_t":1791493114871,"id":"1","total":960,"ms":541.6176}
+{"_e":"metro:client_log","_t":1791493119932,"level":"log","data":["Botão clicado: checando Play Services..."]}
+{"_e":"metro:client_log","_t":1791493123012,"level":"log","data":["Google login OK:","abner.rodrigues@alunos.unis.edu.br"]}
+{"_e":"metro:client_log","_t":1791493123026,"level":"log","data":["Enviando requisição para:","https://frotix.onrender.com//auth/login-google"]}
+{"_e":"metro:client_log","_t":1791493124126,"level":"error","data":["Erro de conexão com o servidor","[SyntaxError: JSON Parse error: Unexpected character: <]"]}
+{"_e":"metro:client_log","_t":1791493204825,"level":"log","data":["Botão clicado: checando Play Services..."]}
+{"_e":"metro:client_log","_t":1791493207913,"level":"log","data":["Google login OK:","abner.rodrigues@alunos.unis.edu.br"]}
+{"_e":"metro:client_log","_t":1791493207917,"level":"log","data":["Enviando requisição para:","https://frotix.onrender.com/auth/login-google"]}
+{"_e":"metro:client_log","_t":1791493208393,"level":"log","data":["Acesso negado pelo backend:","undefined"]}
+{"_e":"metro:client_log","_t":1791493212051,"level":"log","data":["Botão clicado: checando Play Services..."]}
+{"_e":"metro:client_log","_t":1791493215325,"level":"log","data":["Google login OK:","rodriguespt59@gmail.com"]}
+{"_e":"metro:client_log","_t":1791493215330,"level":"log","data":["Enviando requisição para:","https://frotix.onrender.com/auth/login-google"]}
+{"_e":"metro:client_log","_t":1791493215534,"level":"log","data":["Acesso negado pelo backend:","undefined"]}
+{"_e":"metro:client_log","_t":1791493294524,"level":"log","data":["Enviando login por email para:","https://frotix.onrender.com/auth/login-email"]}
+{"_e":"metro:client_log","_t":1791493303917,"level":"log","data":["Enviando login por email para:","https://frotix.onrender.com/auth/login-email"]}
