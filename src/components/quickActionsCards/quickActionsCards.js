@@ -1,36 +1,60 @@
-import react from 'react';
-import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
+import React from 'react';
+import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 
-export default function QuickActionsCards(props){
+export default function QuickActionsCards({ id, name, onPress, selectCardPass }) {
+    const isSelected = selectCardPass !== null;
 
-    const name = props.name;
-    const selectCardPass = props.selectCardPass;
-    const onPress = props.onPress;
-    if(selectCardPass){
-        console.log('Verdadeiro')
-    }
+    const renderIcon = () => {
+        const iconColor = '#121212';
+        if (id === 'finance') return <Feather name="file-text" size={24} color={iconColor} />;
+        if (id === 'payment') return <MaterialCommunityIcons name="card-outline" size={24} color={iconColor} />;
+        return <Feather name="users" size={24} color={iconColor} />;
+    };
 
     return (
         <TouchableOpacity 
-            style={stylesQuickActionsCards.container} 
-            onPress={onPress} 
-            activeOpacity={0.7}
+            onPress={onPress}
+            style={[
+                styles.card, 
+                { backgroundColor: isSelected ? '#2541ff' : 'white' },
+                { height: isSelected ? 120 : 90 },
+            ]}
         >
-            <Text style={ stylesQuickActionsCards.textCardExplain }> { name } </Text>
+            <View style={[
+                styles.iconCircle, 
+                { marginBottom: isSelected ? 10 : 0 },
+            ]}>
+                {renderIcon()}
+            </View>
+            <Text style={[
+                styles.cardText, 
+                { color: isSelected ? 'white' : 'black' }
+            ]}>{name}</Text>
         </TouchableOpacity>
-    )
-};
+    );
+}
 
-const stylesQuickActionsCards = StyleSheet.create({
-    container: {
+const styles = StyleSheet.create({
+    card: {
         width: 90,
-        height: 90,
-        flexDirection: 'column',
-        backgroundColor: 'white',
-        borderRadius: 20
-
+        borderRadius: 20,
+        padding: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    textCardExplain: {
-        color: 'black'
-    }
-})
+    iconCircle: {
+        width: 50,
+        height: 50,
+        backgroundColor: 'white',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: 5,
+        borderRadius: 20
+    },
+    cardText: {
+        fontSize: 12,
+        textAlign: 'center',
+        fontWeight: '500',
+    },
+});

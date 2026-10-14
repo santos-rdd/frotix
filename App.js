@@ -9,6 +9,10 @@ import ForgotPasswordScreen from './src/screens/loginEmailScreen/loginEmailScree
 import VerifyCodeScreen from './src/screens/verifyCodeScreen/verifyCodeScreen.js';
 import UserProfileScreen from './src/screens/user/userOptions.js';
 import uploadProofScreen from './src/screens/upload/uploadProof.js';
+import TransactionFormScreen from './src/screens/transactionFormScreen/transactionFormScreen.js';
+import RegisterUserScreen from './src/screens/registerUserScreen/registerUserScreen.js';
+import ManageUserScreen from './src/screens/manageUserScreen/manageUserScreen.js';
+import UserDetailScreen from './src/screens/userDetailScreen/userDetailScreen.js';
 
 const Stack = createNativeStackNavigator();
 
@@ -26,6 +30,10 @@ export default function App() {
         <Stack.Screen name="VerifyCodeScreen" component={VerifyCodeScreen} />
         <Stack.Screen name="userProfile" component={UserProfileScreen} />
         <Stack.Screen name="uploadProof" component={uploadProofScreen} />
+        <Stack.Screen name="TransactionForm" component={TransactionFormScreen} />
+        <Stack.Screen name="RegisterUser" component={RegisterUserScreen} />
+        <Stack.Screen name="ManageUser" component={ManageUserScreen} />
+        <Stack.Screen name="UserDetail" component={UserDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

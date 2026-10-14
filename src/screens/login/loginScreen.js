@@ -16,6 +16,7 @@ export default function LoginScreen({ navigation }) {
   const [emailInput, setEmailInput] = useState(''); 
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => { 
     GoogleSignin.configure({
@@ -165,14 +166,22 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Senha</Text>
-            <TextInput
-              style={styles.input}
-              placeholder=""
-              placeholderTextColor="#666"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder=""
+                placeholderTextColor="#666"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeButton} 
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={styles.eyeText}>{showPassword ? 'O' : 'Ø'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity 
@@ -304,6 +313,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333333',
     paddingBottom: 8,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  passwordInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 15,
+    paddingBottom: 8,
+  },
+  eyeButton: {
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeText: {
+    color: '#888888',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   checkboxContainer: {
     flexDirection: 'row',
