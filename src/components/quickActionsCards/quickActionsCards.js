@@ -2,10 +2,11 @@ import React from 'react';
 import { TouchableOpacity, Text, View, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 
-export default function QuickActionsCards({ id, name, onPress, selectCardPass }) {
+export default function QuickActionsCards({ id, name, onPress, selectCardPass = null, icon }) {
     const isSelected = selectCardPass !== null;
 
     const renderIcon = () => {
+        if (icon) return icon; // ícone customizado (ex.: ações rápidas do Gestor)
         const iconColor = '#121212';
         if (id === 'finance') return <Feather name="file-text" size={24} color={iconColor} />;
         if (id === 'payment') return <MaterialCommunityIcons name="card-outline" size={24} color={iconColor} />;

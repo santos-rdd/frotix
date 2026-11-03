@@ -2,26 +2,40 @@ import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
-export default function BottomNavigation({ navigation }) {
+// Perfis: 2 = Gestor de Frota, 4 = Motorista (mesmo mapeamento da HomePage).
+export default function BottomNavigation({ navigation, userRole, usuario }) {
+  const abrirCaminhao = () => {
+    if (userRole === 2) return navigation.navigate('Veiculos', { usuario });
+    if (userRole === 4) return navigation.navigate('Viagens', { usuario });
+    return navigation.navigate('uploadProof');
+  };
+
+  const abrirFerramenta = () => {
+    if (userRole === 2) return navigation.navigate('Rotas', { usuario });
+    return console.log('Ferramenta clicada');
+  };
+
   return (
     <View style={styles.container}>
-      <TouchableOpacity 
-        style={styles.navButton} 
-        onPress={() => navigation.navigate('uploadProof')}
+      <TouchableOpacity
+        style={styles.navButton}
+        onPress={abrirCaminhao}
       >
         <MaterialCommunityIcons name="truck-delivery-outline" size={24} color="#2541ff" />
       </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={styles.navButton} 
-        onPress={() => navigation.navigate('HomePage')}
+      <TouchableOpacity
+        style={styles.navButton}
+        // popTo volta para a HomePage já aberta (com os dados do login);
+        // navigate empilharia uma HomePage nova, sem parâmetros.
+        onPress={() => navigation.popTo('HomePage')}
       >
         <Feather name="home" size={24} color="#2541ff" />
       </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={styles.navButton} 
-        onPress={() => console.log('Ferramenta clicada')}
+      <TouchableOpacity
+        style={styles.navButton}
+        onPress={abrirFerramenta}
       >
         <Feather name="tool" size={24} color="#2541ff" />
       </TouchableOpacity>

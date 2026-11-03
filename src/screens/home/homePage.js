@@ -7,6 +7,7 @@ import {
   Image,
   Text,
   ScrollView,
+  TouchableOpacity,
   Dimensions,
   Animated
 } from 'react-native';
@@ -23,6 +24,7 @@ import InteractiveCarousel from '../../components/interactiveCarousel/interactiv
 import UserControlPanel from '../../components/userControlPanel/userControlPanel.js';
 import ViagemAtualCard from '../../components/viagemAtualCard/viagemAtualCard.js';
 import RegistrarHodometroButton from '../../components/registrarHodometroButton/registrarHodometroButton.js';
+import GestorHome from '../gestorHome/gestorHome.js';
 
 const { height } = Dimensions.get('window');
 
@@ -113,8 +115,16 @@ export default function HomePage({ navigation, route }) {
     1 : 'Admin',
     2 : 'Gestor de Frota',
     3 : 'Financeiro',
-    4 : 'Motorista' 
+    4 : 'Motorista'
   };
+
+  // Dados do usuário repassados às telas de frota (cabeçalho e barra inferior).
+  const usuario = { nome: userName, foto: userPhoto, role: userRole };
+
+  // Gestor de Frota tem uma Home própria.
+  if (userRole === 2) {
+    return <GestorHome navigation={navigation} route={route} usuario={usuario} />;
+  }
 
   return (
     <>
@@ -176,6 +186,15 @@ export default function HomePage({ navigation, route }) {
           </View>
         )}
 
+        {userRole === 4 && (
+          <TouchableOpacity
+            style={styles.minhasViagens}
+            onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
+          >
+            <Text style={styles.minhasViagensTexto}>Minhas Viagens</Text>
+          </TouchableOpacity>
+        )}
+
       </ScrollView>
 
       <ValueSliderModal
@@ -190,7 +209,7 @@ export default function HomePage({ navigation, route }) {
         onNext={handleNextStep}
       />
 
-      <BottomNavigation navigation={navigation} />
+      <BottomNavigation navigation={navigation} userRole={userRole} usuario={usuario} />
     </>
   );
 }
@@ -231,6 +250,19 @@ const styles = StyleSheet.create({
   sectionContainer: {
     paddingHorizontal: 20,
     marginTop: 20,
+  },
+  minhasViagens: {
+    backgroundColor: '#3B56FF',
+    borderRadius: 12,
+    paddingVertical: 18,
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
+  minhasViagensTexto: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   sectionTitle: {
     color: '#FFF',
