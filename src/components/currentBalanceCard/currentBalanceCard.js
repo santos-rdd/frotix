@@ -2,11 +2,15 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
+// Data de hoje por extenso, ex.: "domingo, 8 de novembro".
+const hojePorExtenso = () =>
+  new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+
 export default function CurrentBalanceCard({ saldoAtual, totalSaidas }) {
   return (
     <View style={styles.sectionContainer}>
       <View style={styles.mainBalanceCard}>
-        <Text style={styles.mainDateText}>Segunda, 14 de setembro</Text>
+        <Text style={styles.mainDateText}>{hojePorExtenso()}</Text>
         <View style={styles.walletIconContainer}>
           <MaterialCommunityIcons name="piggy-bank-outline" size={28} color="#2541ff" />
         </View>
@@ -64,4 +68,4 @@ const styles = StyleSheet.create({
     color: '#b22222',
     fontSize: 12,
   },
-});
+});

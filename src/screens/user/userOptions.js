@@ -12,8 +12,10 @@ import BottomNavigation from '../../components/bottomNavigation/bottomNavigation
 
 
 export default function UserProfileScreen({ navigation, route }) {
-  const { auth, bankUser } = route?.params || {};
-  const userPhoto = auth?.user?.photo || bankUser?.fotoUrl;
+  // usuario vem da barra inferior: { nome, foto, role }.
+  const { auth, bankUser, usuario } = route?.params || {};
+  const userPhoto = auth?.user?.photo || bankUser?.fotoUrl || usuario?.foto;
+  const PERFIS = { 1: 'Admin', 2: 'Gestor de Frota', 3: 'Financeiro', 4: 'Motorista' };
 
   const handleLogout = async () => {
     try {
@@ -50,6 +52,9 @@ export default function UserProfileScreen({ navigation, route }) {
           )}
         </View>
 
+        {usuario?.nome ? <Text style={styles.nomeUsuario}>{usuario.nome}</Text> : null}
+        {PERFIS[usuario?.role] ? <Text style={styles.perfilUsuario}>{PERFIS[usuario.role]}</Text> : null}
+
         <View style={styles.footer}>
           <TouchableOpacity 
             style={styles.logoutButton} 
@@ -62,12 +67,14 @@ export default function UserProfileScreen({ navigation, route }) {
 
       </View>
 
-      <BottomNavigation navigation={navigation}/>
+      <BottomNavigation navigation={navigation} userRole={usuario?.role} usuario={usuario} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  nomeUsuario: { color: '#FFF', fontSize: 20, fontWeight: '600', textAlign: 'center', marginTop: 16 },
+  perfilUsuario: { color: '#888', fontSize: 14, textAlign: 'center', marginTop: 4 },
   container: {
     flex: 1,
     backgroundColor: '#121212',
@@ -135,4 +142,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+});

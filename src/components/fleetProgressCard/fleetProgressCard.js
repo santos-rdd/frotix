@@ -1,11 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { resumoFrota } from '../../constants/frotaMock.js';
+
+// Data de hoje por extenso, ex.: "domingo, 8 de novembro".
+const hojePorExtenso = () =>
+  new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 
 export default function FleetProgressCard({ 
-  date = 'Sexta-feira, 9 de outubro', 
-  currentKm = '350', 
-  totalKm = 'X', 
+  date = hojePorExtenso(),
+  currentKm = resumoFrota.kmRodadosMes.toLocaleString('pt-BR'),
+  totalKm = resumoFrota.metaKmMes.toLocaleString('pt-BR'),
   periodText = 'últimos 7 dias',
   onFilterPress 
 }) {
@@ -32,7 +37,7 @@ export default function FleetProgressCard({
           <View style={styles.arcProgress} />
 
           <View style={styles.gaugeContent}>
-            <MaterialCommunityIcons name="local-fire-department" size={24} color="#2541ff" />
+            <MaterialCommunityIcons name="fire" size={24} color="#2541ff" />
             <View style={styles.kmRow}>
               <Text style={styles.currentKmText}>{currentKm}</Text>
               <Text style={styles.unitText}> km</Text>
@@ -155,4 +160,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 2,
   },
-});
+});

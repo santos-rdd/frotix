@@ -9,7 +9,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
-  Animated
+  Animated,
+  Alert
 } from 'react-native';
 
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
@@ -25,11 +26,14 @@ import UserControlPanel from '../../components/userControlPanel/userControlPanel
 import ViagemAtualCard from '../../components/viagemAtualCard/viagemAtualCard.js';
 import RegistrarHodometroButton from '../../components/registrarHodometroButton/registrarHodometroButton.js';
 import GestorHome from '../gestorHome/gestorHome.js';
+import FormaPagamentoModal from '../../components/formaPagamentoModal/formaPagamentoModal.js';
+import { formasPagamentoIniciais, descreverForma } from '../../constants/formasPagamentoMock.js';
 
 const { height } = Dimensions.get('window');
 
 export default function HomePage({ navigation, route }) {
-  const [selectedQuickAction, setSelectedQuickAction] = useState('finance');
+  // null = ainda não escolhido; a ação inicial depende do perfil (ver acaoInicial abaixo).
+  const [selectedQuickAction, setSelectedQuickAction] = useState(null);
 
   const [saldoAtual, setSaldoAtual] = useState(53435.20);
   const [totalSaidas, setTotalSaidas] = useState(12143.50);
@@ -46,6 +50,41 @@ export default function HomePage({ navigation, route }) {
   const [isEditingAmount, setIsEditingAmount] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(height)).current;
+
+  // Formas de pagamento (dados de exemplo até o backend de FORMA_PAGAMENTO ficar pronto).
+  const [formasPagamento, setFormasPagamento] = useState(formasPagamentoIniciais);
+  const [indiceForma, setIndiceForma] = useState(0); // cartão visível no carrossel
+  const [isFormaModalVisible, setIsFormaModalVisible] = useState(false);
+
+  const handleSalvarForma = (novaForma) => {
+    setFormasPagamento((atual) => [...atual, { id: Date.now().toString(), ...novaForma }]);
+    setIsFormaModalVisible(false);
+    Alert.alert('Forma de pagamento adicionada', descreverForma(novaForma));
+  };
+
+  // Deleta a forma que está visível no carrossel, depois de confirmar.
+  const handleDeletarForma = () => {
+    const forma = formasPagamento[indiceForma];
+    if (!forma) {
+      Alert.alert('Nada para deletar', 'Não há formas de pagamento cadastradas.');
+      return;
+    }
+    Alert.alert(
+      'Deletar forma de pagamento',
+      `Deseja deletar "${descreverForma(forma)}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Deletar',
+          style: 'destructive',
+          onPress: () => {
+            setFormasPagamento((atual) => atual.filter((f) => f.id !== forma.id));
+            setIndiceForma(0);
+          },
+        },
+      ]
+    );
+  };
 
   const handleOpenSlider = (type) => {
     setActionType(type);
@@ -118,6 +157,15 @@ export default function HomePage({ navigation, route }) {
     4 : 'Motorista'
   };
 
+  // Os "⋯" e os filtros "últimos 7 dias" dos cards levam aos Relatórios,
+  // onde estão o detalhamento e o filtro de período de verdade.
+  const abrirRelatorios = () => navigation.navigate('Relatorios', { usuario });
+
+  // Admin e Financeiro abrem nos dashboards ("Categorias Financeiras"); os outros perfis
+  // não veem esse card, então abrem em "Rotas" (viagem atual), como no Figma do Motorista.
+  const acaoInicial = userRole === 1 || userRole === 3 ? 'finance' : 'rotes';
+  const acaoAtiva = selectedQuickAction ?? acaoInicial;
+
   // Dados do usuário repassados às telas de frota (cabeçalho e barra inferior).
   const usuario = { nome: userName, foto: userPhoto, role: userRole };
 
@@ -145,44 +193,68 @@ export default function HomePage({ navigation, route }) {
         </View>
 
          {(userRole === 1 || userRole === 3) &&(
-            <GeneralSummaryCard />
+            <GeneralSummaryCard onMenuPress={abrirRelatorios} />
          )}
 
         <QuickActions 
-          selectedAction={selectedQuickAction} 
+          selectedAction={acaoAtiva} 
           onSelectAction={setSelectedQuickAction} 
           userRole={userRole}
         />
 
-        {selectedQuickAction === 'finance' && (userRole === 1 || userRole === 3) && (
+        {acaoAtiva === 'finance' && (userRole === 1 || userRole === 3) && (
           <>
-            <FleetProgressCard />
+            <FleetProgressCard onFilterPress={abrirRelatorios} />
             <CurrentBalanceCard saldoAtual={saldoAtual} totalSaidas={totalSaidas} />
-            <FleetExpensesOverview />
+            <FleetExpensesOverview onFilterPress={abrirRelatorios} onMenuPress={abrirRelatorios} />
+            <View style={styles.atalhosFinanceiro}>
+              <TouchableOpacity
+                style={styles.atalhoFinanceiro}
+                onPress={() => navigation.navigate('Categorias', { usuario })}
+              >
+                <Text style={styles.atalhoFinanceiroTexto}>Gerenciar categorias</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.atalhoFinanceiro}
+                onPress={() => navigation.navigate('Relatorios', { usuario })}
+              >
+                <Text style={styles.atalhoFinanceiroTexto}>Relatórios</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
 
-        {selectedQuickAction === 'payment' && (
+        {acaoAtiva === 'payment' && (
           <View style={styles.sectionContainer}>
-            <PaymentCardsCarousel />
+            {/* key muda ao deletar, para o carrossel voltar ao primeiro cartão */}
+            <PaymentCardsCarousel
+              key={formasPagamento.length}
+              formas={formasPagamento}
+              onChangeIndex={setIndiceForma}
+            />
             <InteractiveCarousel 
               onOpenSlider={handleOpenSlider} 
               atividades={atividades} 
+              onAddForma={() => setIsFormaModalVisible(true)}
+              onDeleteForma={handleDeletarForma}
+              onMenuAtividades={abrirRelatorios}
             />
           </View>
         )}
 
-        {selectedQuickAction === 'users' && (userRole === 1 || userRole === 3) &&(
+        {acaoAtiva === 'users' && (userRole === 1 || userRole === 3) &&(
           <View style={styles.sectionContainer}>
             <UserControlPanel />
           </View>
         )}
 
-        {selectedQuickAction === 'rotes' && (
+        {acaoAtiva === 'rotes' && (
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Gerenciamento de Rotas</Text>
             <ViagemAtualCard />
-            <RegistrarHodometroButton />
+            <RegistrarHodometroButton
+              onButtonPress={() => navigation.navigate('Viagens', { usuario })}
+            />
           </View>
         )}
 
@@ -207,6 +279,13 @@ export default function HomePage({ navigation, route }) {
         slideAnim={slideAnim}
         onClose={handleCloseSlider}
         onNext={handleNextStep}
+        formasPagamento={formasPagamento}
+      />
+
+      <FormaPagamentoModal
+        visible={isFormaModalVisible}
+        onClose={() => setIsFormaModalVisible(false)}
+        onSalvar={handleSalvarForma}
       />
 
       <BottomNavigation navigation={navigation} userRole={userRole} usuario={usuario} />
@@ -251,6 +330,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 20,
   },
+  atalhosFinanceiro: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 20,
+    marginTop: 20,
+  },
+  atalhoFinanceiro: {
+    flex: 1,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  atalhoFinanceiroTexto: {
+    color: '#121212',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   minhasViagens: {
     backgroundColor: '#3B56FF',
     borderRadius: 12,
@@ -281,4 +378,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-});
+});

@@ -1,88 +1,63 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ImageBackground } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { formasPagamentoIniciais, labelTipo } from '../../constants/formasPagamentoMock.js';
 
-export default function PaymentCardsCarousel() {
-  const cardsData = [
-    {
-      id: '1',
-      type: 'vortex',
-      backgroundImage: require('../../../assets/image/firstCard.png'), 
-      name: 'DEBIT\nCARD',
-      holder: 'Suzane',
-      expires: '12/\n24',
-    },
-    {
-      id: '2',
-      type: 'debit', 
-      name: 'DEBIT\nCARD',
-      holder: 'Joy\nLaroy',
-      expires: '12/\n24',
-      backgroundImage: require('../../../assets/image/secondCard.png'), 
-    },
-    {
-      id: '3',
-      type: 'pix', 
-    },
-  ];
+// Largura do cartão + espaço entre cartões: usada para saber qual cartão está visível.
+const LARGURA_CARTAO = 319;
+const ESPACO = 15;
 
-  const renderCard = ({ item }) => {
-    if (item.type === 'vortex') {
-      return (
-        <View style={[styles.cardBase, styles.cardVortex]}>
-          <ImageBackground 
-            source={item.backgroundImage}
-            style={styles.cardImageRotated}
-            imageStyle={styles.cardImageStyle}
-            resizeMode="cover"
-          />
+const imagensCartao = [
+  require('../../../assets/image/firstCard.png'),
+  require('../../../assets/image/secondCard.png'),
+];
 
-            <View style={styles.cardInnerContent}>
-            <View style={styles.cardTopRight}>
-              <Feather name="wifi" size={25} color="black" />
-            </View>
-            <View style={styles.cardContentMiddle}>
-              <Text style={styles.debitTitleBlack}>{item.name}</Text>
-            </View>
-            <View style={styles.cardFooter}>
-              <View>
-                <Text style={styles.cardLabelSmallBlack}>Titular</Text>
-                <Text style={styles.cardValueBoldBlack}>{item.holder}</Text>
-              </View>
-              <View>
-                <Text style={styles.cardLabelSmallBlack}>Validade</Text>
-                <Text style={styles.cardValueBoldBlack}>{item.expires}</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      );
+/**
+ * Carrossel das formas de pagamento cadastradas.
+ * formas: lista de formas (ver constants/formasPagamentoMock.js)
+ * onChangeIndex(indice): avisa qual cartão está visível (usado pelo "Deletar").
+ */
+export default function PaymentCardsCarousel({ formas = formasPagamentoIniciais, onChangeIndex }) {
+  const [indiceAtual, setIndiceAtual] = useState(0);
+
+  const handleScroll = (event) => {
+    const x = event.nativeEvent.contentOffset.x;
+    const indice = Math.min(Math.max(Math.round(x / (LARGURA_CARTAO + ESPACO)), 0), formas.length - 1);
+    if (indice !== indiceAtual) {
+      setIndiceAtual(indice);
+      onChangeIndex?.(indice);
     }
+  };
 
-    if (item.type === 'debit') {
+  const renderCard = ({ item, index }) => {
+    if (item.tipo === 'debito' || item.tipo === 'credito') {
+      // O primeiro estilo (imagem clara) usa texto preto; o segundo, texto branco.
+      const claro = index % 2 === 0;
       return (
-        <View style={[styles.cardBase, styles.cardDebit]}>
-          <ImageBackground 
-            source={item.backgroundImage}
+        <View style={[styles.cardBase, claro ? styles.cardVortex : styles.cardDebit]}>
+          <ImageBackground
+            source={imagensCartao[index % imagensCartao.length]}
             style={styles.cardImageRotated}
             imageStyle={styles.cardImageStyle}
             resizeMode="cover"
           />
           <View style={styles.cardInnerContent}>
             <View style={styles.cardTopRight}>
-              <Feather name="wifi" size={20} color="rgba(255,255,255,0.8)" />
+              <Feather name="wifi" size={claro ? 25 : 20} color={claro ? 'black' : 'rgba(255,255,255,0.8)'} />
             </View>
             <View style={styles.cardContentMiddle}>
-              <Text style={styles.debitTitle}>{item.name}</Text>
+              <Text style={claro ? styles.debitTitleBlack : styles.debitTitle}>
+                {item.tipo === 'debito' ? 'DEBIT\nCARD' : 'CREDIT\nCARD'}
+              </Text>
             </View>
             <View style={styles.cardFooter}>
               <View>
-                <Text style={styles.cardLabelSmall}>Titular</Text>
-                <Text style={styles.cardValueBold}>{item.holder}</Text>
+                <Text style={claro ? styles.cardLabelSmallBlack : styles.cardLabelSmall}>Titular</Text>
+                <Text style={claro ? styles.cardValueBoldBlack : styles.cardValueBold}>{item.titular}</Text>
               </View>
               <View>
-                <Text style={styles.cardLabelSmall}>Validade</Text>
-                <Text style={styles.cardValueBold}>{item.expires}</Text>
+                <Text style={claro ? styles.cardLabelSmallBlack : styles.cardLabelSmall}>Validade</Text>
+                <Text style={claro ? styles.cardValueBoldBlack : styles.cardValueBold}>{item.validade}</Text>
               </View>
             </View>
           </View>
@@ -90,7 +65,7 @@ export default function PaymentCardsCarousel() {
       );
     }
 
-    if (item.type === 'pix') {
+    if (item.tipo === 'pix') {
       return (
         <View style={[styles.cardBase, styles.cardPix]}>
           <View style={styles.pixLogoContainer}>
@@ -98,25 +73,51 @@ export default function PaymentCardsCarousel() {
             <View style={styles.pixDiamondShape} />
             <Text style={styles.pixTextLogo}>pix</Text>
           </View>
+          {item.chave ? <Text style={styles.pixChave}>{item.chave}</Text> : null}
         </View>
       );
     }
+
+    // Boleto, dinheiro e "Outros": cartão simples com ícone e descrição.
+    const icones = { boleto: 'barcode', dinheiro: 'cash-multiple', outros: 'dots-horizontal-circle-outline' };
+    return (
+      <View style={[styles.cardBase, styles.cardPix]}>
+        <MaterialCommunityIcons name={icones[item.tipo] || 'cash-multiple'} size={48} color="#FFF" />
+        <Text style={styles.outroTitulo}>{labelTipo(item.tipo)}</Text>
+        {item.descricao ? <Text style={styles.pixChave}>{item.descricao}</Text> : null}
+      </View>
+    );
   };
+
+  if (formas.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.cardBase, styles.cardVazio]}>
+          <Feather name="credit-card" size={36} color="#888" />
+          <Text style={styles.vazioTexto}>Nenhuma forma de pagamento cadastrada</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <FlatList
-        data={cardsData}
+        data={formas}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.carouselContainer}
         keyExtractor={(item) => item.id}
         renderItem={renderCard}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        snapToInterval={LARGURA_CARTAO + ESPACO}
+        decelerationRate="fast"
       />
       <View style={styles.paginationDots}>
-        <View style={styles.dotInactive} />
-        <View style={styles.dotActive} />
-        <View style={styles.dotInactive} />
+        {formas.map((forma, i) => (
+          <View key={forma.id} style={i === indiceAtual ? styles.dotActive : styles.dotInactive} />
+        ))}
       </View>
     </View>
   );
@@ -236,9 +237,31 @@ const styles = StyleSheet.create({
   paginationDots: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    marginLeft: '42%',
     marginTop: 20,
+  },
+  pixChave: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 12,
+    marginTop: 14,
+  },
+  outroTitulo: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '300',
+    marginTop: 10,
+  },
+  cardVazio: {
+    marginHorizontal: 20,
+    backgroundColor: '#1E1E1E',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  vazioTexto: {
+    color: '#888',
+    fontSize: 13,
   },
   dotActive: {
     width: 20,
@@ -275,4 +298,4 @@ const styles = StyleSheet.create({
     color: 'black',
     fontSize: 9,
   },
-});
+});

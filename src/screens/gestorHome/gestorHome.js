@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import ScreenHeader from '../../components/screenHeader/screenHeader.js';
@@ -17,8 +17,6 @@ const FATIAS = [
   { id: 'manutencao', label: 'Manutenção', color: '#D32F2F' },
   { id: 'disponivel', label: 'Disponível', color: '#1E2A78' },
 ];
-
-const emBreve = (nome) => Alert.alert(nome, 'Esta funcionalidade ainda está em desenvolvimento.');
 
 // Rótulo "últimos 7 dias ≡" do Figma (filtro de período, ainda só visual).
 const Periodo = ({ style }) => (
@@ -51,11 +49,11 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
   ];
 
   const grade = [
-    { id: 'cadVeiculo', name: 'Cadastrar\nVeículo', icon: <MaterialCommunityIcons name="truck-outline" size={28} color="#121212" />, onPress: () => emBreve('Cadastrar Veículo') },
-    { id: 'novaRota', name: 'Nova\nRota', icon: <Feather name="map" size={24} color="#121212" />, onPress: () => emBreve('Nova Rota') },
+    { id: 'cadVeiculo', name: 'Cadastrar\nVeículo', icon: <MaterialCommunityIcons name="truck-outline" size={28} color="#121212" />, onPress: () => ir('CadastroVeiculo') },
+    { id: 'novaRota', name: 'Nova\nRota', icon: <Feather name="map" size={24} color="#121212" />, onPress: () => ir('CadastroRota') },
     { id: 'viagem', name: 'Registrar\nViagem', icon: <Feather name="navigation" size={24} color="#121212" />, onPress: () => ir('Viagens') },
-    { id: 'relatorios', name: 'Relatórios', icon: <Feather name="edit" size={24} color="#121212" />, onPress: () => emBreve('Relatórios') },
-    { id: 'manutencao', name: 'Agendar\nManutenção', icon: <MaterialCommunityIcons name="calendar-clock-outline" size={26} color="#121212" />, onPress: () => emBreve('Agendar Manutenção') },
+    { id: 'relatorios', name: 'Relatórios', icon: <Feather name="edit" size={24} color="#121212" />, onPress: () => ir('Relatorios') },
+    { id: 'manutencao', name: 'Agendar\nManutenção', icon: <MaterialCommunityIcons name="calendar-clock-outline" size={26} color="#121212" />, onPress: () => ir('Manutencao') },
   ];
 
   return (

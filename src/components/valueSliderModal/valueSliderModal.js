@@ -12,6 +12,18 @@ import {
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import PaymentCardsCarousel from '../paymentCardsCarousel/paymentCardsCarousel.js';
+import { descreverForma } from '../../constants/formasPagamentoMock.js';
+
+// Textos do passo de seleção (Figma: "Registrar Entrada3 opção 2/3" e "Registrar Saída3 opção 2").
+const TEXTOS = {
+  entrada: { titulo: 'Registrar Entrada', subtitulo: 'Selecione o meio de recebimento', justificar: 'Justificar entrada:' },
+  saida: { titulo: 'Registrar Saída', subtitulo: 'Selecione o local de saída', justificar: 'Justificar saída:' },
+  divida: { titulo: 'Nova Dívida', subtitulo: 'Selecione a forma de pagamento', justificar: 'Justificar dívida:' },
+};
+
+// Cartão extra no fim do carrossel: deixa a forma em branco para escolher no formulário.
+const OPCAO_OUTROS = { id: 'outros', tipo: 'outros' };
 
 export default function ValueSliderModal({
   visible,
@@ -23,6 +35,7 @@ export default function ValueSliderModal({
   slideAnim,
   onClose,
   onNext,
+  formasPagamento = [],
 }) {
 
   const navigation = useNavigation();
@@ -30,16 +43,21 @@ export default function ValueSliderModal({
   const cardHeightAnim = useRef(new Animated.Value(340)).current;
 
   const [modalStep, setModalStep] = useState('slider');
+  // Posição do cartão visível no carrossel: é a forma escolhida.
+  const [indiceForma, setIndiceForma] = useState(0);
+  const opcoesCarrossel = [...formasPagamento, OPCAO_OUTROS];
+  const textos = TEXTOS[actionType] || TEXTOS.entrada;
 
   useEffect(() => {
     if (!visible) {
       setModalStep('slider');
+      setIndiceForma(0);
     }
   }, [visible]);
 
   useEffect(() => {
     Animated.timing(cardHeightAnim, {
-      toValue: isEditingAmount ? 640 : (modalStep === 'justification' ? 320 : 360), 
+      toValue: isEditingAmount ? 640 : (modalStep === 'justification' ? 300 : 360), 
       duration: 250,
       useNativeDriver: false, 
     }).start();
@@ -62,12 +80,15 @@ export default function ValueSliderModal({
   };
 
   const handleProceed = () => {
-  onClose(); 
-  navigation.navigate('TransactionForm', { 
-    actionType: actionType, 
-    amountValue: amountValue 
-  });
-};
+    // "Outros" deixa o campo em branco, para escolher no formulário.
+    const forma = opcoesCarrossel[indiceForma];
+    onClose();
+    navigation.navigate('TransactionForm', {
+      actionType: actionType,
+      amountValue: amountValue,
+      formaPagamento: forma && forma.tipo !== 'outros' ? descreverForma(forma) : '',
+    });
+  };
 
   return (
     <Modal
@@ -77,9 +98,22 @@ export default function ValueSliderModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <TouchableWithoutFeedback onPress={onClose}>
-          <View style={styles.modalDismissArea} />
-        </TouchableWithoutFeedback>
+        {modalStep === 'justification' ? (
+          // Parte de cima: título e carrossel para escolher o meio de recebimento/pagamento.
+          <View style={styles.selecaoArea}>
+            <TouchableOpacity style={styles.selecaoVoltar} onPress={handleBackPress} hitSlop={10}>
+              <Feather name="chevron-left" size={24} color="#FFF" />
+            </TouchableOpacity>
+            <Text style={styles.selecaoTitulo}>{textos.titulo}</Text>
+            <Text style={styles.selecaoSubtitulo}>{textos.subtitulo}</Text>
+            <PaymentCardsCarousel formas={opcoesCarrossel} onChangeIndex={setIndiceForma} />
+            <Text style={styles.selecaoValor}>R$ {amountValue}</Text>
+          </View>
+        ) : (
+          <TouchableWithoutFeedback onPress={onClose}>
+            <View style={styles.modalDismissArea} />
+          </TouchableWithoutFeedback>
+        )}
 
         <Animated.View 
           style={[
@@ -136,9 +170,7 @@ export default function ValueSliderModal({
               </>
             ) : (
               <View style={styles.justificationContainer}>
-                <Text style={styles.justificationTitle}>
-                  {actionType === 'entrada' ? 'Justificar entrada:' : 'Justificar saída:'}
-                </Text>
+                <Text style={styles.justificationTitle}>{textos.justificar}</Text>
 
                 <TouchableOpacity 
                   style={styles.actionButtonCustom}
@@ -261,6 +293,33 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginBottom: 50
   },
+  selecaoArea: {
+    flex: 1,
+    backgroundColor: '#121212',
+    paddingTop: 50,
+  },
+  selecaoVoltar: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  selecaoTitulo: {
+    color: '#FFF',
+    fontSize: 22,
+    paddingHorizontal: 20,
+  },
+  selecaoSubtitulo: {
+    color: '#AAA',
+    fontSize: 13,
+    paddingHorizontal: 20,
+    marginTop: 6,
+  },
+  selecaoValor: {
+    color: '#FFF',
+    fontSize: 28,
+    fontWeight: '300',
+    textAlign: 'center',
+    marginTop: 4,
+  },
   justificationTitle: {
     color: '#FFF',
     fontSize: 16,
@@ -296,4 +355,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+});

@@ -9,7 +9,7 @@ export default function FleetExpensesOverview({ onFilterPress, onMenuPress }) {
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.title}>Despesas</Text>
-            <Text style={styles.subtitle}>percentgem atual</Text>
+            <Text style={styles.subtitle}>porcentagem atual</Text>
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity style={styles.filterContainer} onPress={onFilterPress}>
@@ -265,4 +265,4 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#555',
   },
-});
+});

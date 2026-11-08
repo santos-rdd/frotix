@@ -16,16 +16,17 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { nomesCategorias } from '../../constants/categoriasMock.js';
 
 export default function TransactionFormScreen({ route, navigation }) {
-  const { actionType, amountValue } = route.params || { actionType: 'entrada', amountValue: '0' };
+  const { actionType, amountValue, formaPagamento } = route.params || { actionType: 'entrada', amountValue: '0' };
 
   const [step, setStep] = useState('form');
 
   const [formData, setFormData] = useState({
     descricao: '',
     categoria: '',
-    formaPagamento: '',
+    formaPagamento: formaPagamento || '', // vem do passo de seleção do slider
     data: '',
     clienteOuVeiculo: '',
     estadoOuStatus: '',
@@ -60,9 +61,8 @@ export default function TransactionFormScreen({ route, navigation }) {
   const openSelectionModal = (type) => {
     let options = [];
     if (type === 'categoria') {
-      options = actionType === 'entrada' 
-        ? ['Frete', 'Serviço Extra', 'Reembolso', 'Outros'] 
-        : ['Combustível', 'Manutenção', 'Pedágio', 'Alimentação', 'Outros'];
+      // Vem da tela Categorias Financeiras (dívida usa as categorias de saída).
+      options = nomesCategorias(actionType === 'entrada' ? 'entrada' : 'saida');
     } else if (type === 'formaPagamento') {
       options = ['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto', 'Transferência'];
     } else if (type === 'estadoOuStatus') {
@@ -836,4 +836,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+});

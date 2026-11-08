@@ -2,12 +2,12 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-export default function RecentActivity({ atividades }) {
+export default function RecentActivity({ atividades, onMenuPress }) {
   return (
     <View style={styles.sectionContainer}>
       <View style={styles.activityHeaderRow}>
         <Text style={styles.sectionTitle}>Atividade Recente</Text>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={onMenuPress} hitSlop={10}>
           <Feather name="more-horizontal" size={20} color="#FFF" />
         </TouchableOpacity>
       </View>
@@ -100,4 +100,4 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 2,
   },
-});
+});

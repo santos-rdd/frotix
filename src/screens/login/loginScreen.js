@@ -11,6 +11,12 @@ import {
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import GOOGLE_CONFIG from '../../config/google.js';
 import { API_URL } from '../../config/api.js';
+import { CommonActions } from '@react-navigation/native';
+
+// Depois do login a Home vira a única tela da pilha: assim o "voltar" do Android
+// não leva de novo para o login (para sair, use "Sair da Conta" no perfil).
+const irParaHome = (navigation, params) =>
+  navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'HomePage', params }] }));
 
 export default function LoginScreen({ navigation }) {
   const [emailInput, setEmailInput] = useState(''); 
@@ -42,7 +48,7 @@ export default function LoginScreen({ navigation }) {
 
       if (response.ok) {
         console.log('Usuário autorizado!', data.usuario);
-        navigation.navigate('HomePage', { auth: googleData, bankUser: data.usuario });
+        irParaHome(navigation, { auth: googleData, bankUser: data.usuario });
       } else {
         console.log('Acesso negado pelo backend:', data.erro);
         Alert.alert("Acesso Negado", data.erro || "E-mail não autorizado.");
@@ -100,7 +106,7 @@ export default function LoginScreen({ navigation }) {
 
       if (response.ok) {
           console.log('Login por email autorizado!', data.usuario);
-          navigation.navigate('HomePage', { bankUser: data.usuario });
+          irParaHome(navigation, { bankUser: data.usuario });
       } else {
         Alert.alert("Acesso Negado", data.erro || "Credenciais inválidas.");
       }
@@ -389,4 +395,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingBottom: 50
   },
-});
+});

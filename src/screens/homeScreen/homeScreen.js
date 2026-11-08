@@ -24,13 +24,12 @@ export default function HomeScreen({ navigation }) {
 
         <View style={styles.textContainer}>
           <Text style={styles.title}>
-            Simplify Your Life:{'\n'}
-            Smarthome Solutions
+            Gestão de Frota e{'\n'}
+            Finanças em um só lugar
           </Text>
 
           <Text style={styles.subtitle}>
-            Experience effortless living with our Smarthome solutions.
-            Control your home with ease and convenience.
+            Eficiência e controle para a sua operação logística.
           </Text>
         </View>
 

@@ -16,7 +16,7 @@ export default function uploadProofScreen({ navigation, route }) {
   const [imageUri, setImageUri] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { bankUser } = route?.params || {};
+  const { bankUser, usuario } = route?.params || {};
   const userId = bankUser?.id || bankUser?._id;
 
   // Função para tirar foto usando a Câmera
@@ -173,7 +173,7 @@ export default function uploadProofScreen({ navigation, route }) {
 
       </View>
 
-      <BottomNavigation navigation={navigation}/>
+      <BottomNavigation navigation={navigation} userRole={usuario?.role} usuario={usuario} />
     </View>
   );
 }
@@ -270,4 +270,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+});

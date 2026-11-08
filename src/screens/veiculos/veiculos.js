@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import ScreenHeader from '../../components/screenHeader/screenHeader.js';
@@ -17,6 +17,10 @@ export default function Veiculos({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
+  const [, setAtualizacao] = useState(0);
+
+  // Ao voltar do cadastro ou da manutenção, redesenha a lista com os dados novos.
+  useEffect(() => navigation.addListener('focus', () => setAtualizacao((n) => n + 1)), [navigation]);
 
   const contar = (status) => veiculos.filter((v) => v.status === status).length;
   const filtros = [
@@ -41,7 +45,7 @@ export default function Veiculos({ navigation, route }) {
     }
     return {
       label: 'Ordens de Serviço',
-      onPress: () => Alert.alert('Ordens de Serviço', 'Esta funcionalidade ainda está em desenvolvimento.'),
+      onPress: () => navigation.navigate('Manutencao', { usuario, veiculoId: v.id }),
     };
   };
 
@@ -58,7 +62,7 @@ export default function Veiculos({ navigation, route }) {
           onBuscar={setBusca}
           placeholder="Placa ou modelo..."
           botaoLabel="Cadastrar veículo"
-          onBotao={() => Alert.alert('Cadastrar veículo', 'Esta funcionalidade ainda está em desenvolvimento.')}
+          onBotao={() => navigation.navigate('CadastroVeiculo', { usuario })}
         />
 
         <Text style={styles.subtitulo}>Lista de Veículos</Text>

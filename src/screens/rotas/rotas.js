@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, ScrollView, StyleSheet, Alert } from 'react-native';
+import { Text, ScrollView, StyleSheet } from 'react-native';
 
 import ScreenHeader from '../../components/screenHeader/screenHeader.js';
 import FilterSearchBar from '../../components/filterSearchBar/filterSearchBar.js';
@@ -24,6 +24,19 @@ export default function Rotas({ navigation, route }) {
   const [rotas, setRotas] = useState(rotasIniciais);
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
+
+  // Ao voltar do cadastro, inclui na lista as rotas novas (CadastroRota grava no frotaMock).
+  useEffect(
+    () =>
+      navigation.addListener('focus', () => {
+        setRotas((atuais) => {
+          const ids = new Set(atuais.map((r) => r.id));
+          const novas = rotasIniciais.filter((r) => !ids.has(r.id));
+          return novas.length ? [...atuais, ...novas] : atuais;
+        });
+      }),
+    [navigation]
+  );
 
   // DetalhesRota devolve a rota editada por params (navigation.popTo('Rotas', ...)).
   useEffect(() => {
@@ -65,7 +78,7 @@ export default function Rotas({ navigation, route }) {
           onBuscar={setBusca}
           placeholder="Placa ou cidade..."
           botaoLabel="Cadastrar rota"
-          onBotao={() => Alert.alert('Cadastrar rota', 'Esta funcionalidade ainda está em desenvolvimento.')}
+          onBotao={() => navigation.navigate('CadastroRota', { usuario })}
         />
 
         <Text style={styles.subtitulo}>Lista de Rotas</Text>

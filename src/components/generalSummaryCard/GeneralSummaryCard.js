@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import Svg, { Circle, G } from 'react-native-svg';
 
-export default function GeneralSummaryCard() {
+export default function GeneralSummaryCard({ onMenuPress }) {
   const size = 160;
   const strokeWidth = 15;
   const radius = (size - strokeWidth) / 2;
@@ -21,7 +21,7 @@ export default function GeneralSummaryCard() {
             <Text style={styles.title}>Balanço Atual</Text>
             <Text style={styles.subtitle}>Balanço Atual</Text>
           </View>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={onMenuPress} hitSlop={10}>
             <Feather name="more-horizontal" size={24} color="#FFF" />
           </TouchableOpacity>
         </View>
@@ -158,4 +158,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-});
+});

@@ -2,21 +2,21 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
-export default function OptionsPanel({ onOpenSlider }) {
+export default function OptionsPanel({ onOpenSlider, onAddForma, onDeleteForma }) {
   return (
     <View style={styles.interactiveSection}>
       <View style={styles.optionsCard}>
         <Text style={styles.optionsTitle}>Opções</Text>
         
         <View style={styles.circleButtonsRow}>
-          <TouchableOpacity style={styles.circleButton}>
+          <TouchableOpacity style={styles.circleButton} onPress={onAddForma}>
             <View style={styles.circleButtonMaterial}>
               <MaterialCommunityIcons name="wallet-plus-outline" size={26} color="#121212" />
             </View>
             <Text style={styles.circleButtonText}>Adicionar Forma De Pagamento</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.circleButton}>
+          <TouchableOpacity style={styles.circleButton} onPress={onDeleteForma}>
             <View style={styles.circleButtonMaterial}>
               <Feather name="trash-2" size={24} color="#121212" />
             </View>
@@ -103,4 +103,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-});
+});
