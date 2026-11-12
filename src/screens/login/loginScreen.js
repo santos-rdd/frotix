@@ -11,13 +11,20 @@ import {
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import GOOGLE_CONFIG from '../../config/google.js';
 import { API_URL } from '../../config/api.js';
+import { CommonActions } from '@react-navigation/native';
+
+// Depois do login a Home vira a única tela da pilha: assim o "voltar" do Android
+// não leva de novo para o login (para sair, use "Sair da Conta" no perfil).
+const irParaHome = (navigation, params) =>
+  navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'HomePage', params }] }));
 
 export default function LoginScreen({ navigation }) {
   const [emailInput, setEmailInput] = useState(''); 
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
+  useEffect(() => { 
     GoogleSignin.configure({
       webClientId: GOOGLE_CONFIG.webClientId,
       offlineAccess: true,
@@ -41,7 +48,7 @@ export default function LoginScreen({ navigation }) {
 
       if (response.ok) {
         console.log('Usuário autorizado!', data.usuario);
-        navigation.navigate('HomePage', { auth: googleData, bankUser: data.usuario });
+        irParaHome(navigation, { auth: googleData, bankUser: data.usuario });
       } else {
         console.log('Acesso negado pelo backend:', data.erro);
         Alert.alert("Acesso Negado", data.erro || "E-mail não autorizado.");
@@ -99,7 +106,7 @@ export default function LoginScreen({ navigation }) {
 
       if (response.ok) {
           console.log('Login por email autorizado!', data.usuario);
-          navigation.navigate('HomePage', { bankUser: data.usuario });
+          irParaHome(navigation, { bankUser: data.usuario });
       } else {
         Alert.alert("Acesso Negado", data.erro || "Credenciais inválidas.");
       }
@@ -165,14 +172,22 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Senha</Text>
-            <TextInput
-              style={styles.input}
-              placeholder=""
-              placeholderTextColor="#666"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder=""
+                placeholderTextColor="#666"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeButton} 
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={styles.eyeText}>{showPassword ? 'O' : 'Ø'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity 
@@ -305,6 +320,29 @@ const styles = StyleSheet.create({
     borderBottomColor: '#333333',
     paddingBottom: 8,
   },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  passwordInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 15,
+    paddingBottom: 8,
+  },
+  eyeButton: {
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeText: {
+    color: '#888888',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,4 +395,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingBottom: 50
   },
-});
+});

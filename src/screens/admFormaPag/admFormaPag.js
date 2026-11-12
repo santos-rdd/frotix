@@ -18,10 +18,8 @@ const { width } = Dimensions.get('window');
 export default function AdmFormaPag({ onBack, navigation }) {
   const [selectedPaymentFilter, setSelectedPaymentFilter] = useState('all');
   
-  // Estado do sub-carrossel (0: Opções/Registros, 1: Histórico de Transações)
   const [activeSubTab, setActiveSubTab] = useState(0);
 
-  // Lista dinâmica de transações
   const [transactions, setTransactions] = useState([
     {
       id: '1',
