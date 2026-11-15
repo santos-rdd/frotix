@@ -16,8 +16,9 @@ export default function LoginScreen({ navigation }) {
   const [emailInput, setEmailInput] = useState(''); 
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
+  useEffect(() => { 
     GoogleSignin.configure({
       webClientId: GOOGLE_CONFIG.webClientId,
       offlineAccess: true,
@@ -40,7 +41,7 @@ export default function LoginScreen({ navigation }) {
       const data = await response.json();
 
       if (response.ok) {
-        console.log('Usuário autorizado!', data.usuario);
+        // console.log('Usuário autorizado!', data.usuario);
         navigation.navigate('HomePage', { auth: googleData, bankUser: data.usuario });
       } else {
         console.log('Acesso negado pelo backend:', data.erro);
@@ -54,7 +55,7 @@ export default function LoginScreen({ navigation }) {
 
   async function singIn(){
     try {
-      console.log('Botão clicado: checando Play Services...');
+      // console.log('Botão clicado: checando Play Services...');
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
       try {
@@ -67,7 +68,7 @@ export default function LoginScreen({ navigation }) {
       
       if(isSuccessResponse(response)){
         const emailGoogle = response.data.user.email;
-        console.log('Google login OK:', emailGoogle);
+        // console.log('Google login OK:', emailGoogle);
         await logIn(emailGoogle, response.data);
       } else {
         console.log('Login do Google não retornou sucesso (cancelado?).');
@@ -165,14 +166,22 @@ export default function LoginScreen({ navigation }) {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Senha</Text>
-            <TextInput
-              style={styles.input}
-              placeholder=""
-              placeholderTextColor="#666"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder=""
+                placeholderTextColor="#666"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity 
+                style={styles.eyeButton} 
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={styles.eyeText}>{showPassword ? 'O' : 'Ø'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity 
@@ -304,6 +313,29 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#333333',
     paddingBottom: 8,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  passwordInput: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 15,
+    paddingBottom: 8,
+  },
+  eyeButton: {
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  eyeText: {
+    color: '#888888',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   checkboxContainer: {
     flexDirection: 'row',
