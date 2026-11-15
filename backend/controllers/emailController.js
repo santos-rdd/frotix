@@ -1,60 +1,91 @@
-import supabase from '../database/db.js';
+import supabase, { createSupabaseAuthClient } from '../database/db.js';
 
 export default async function emailController(req, res) {
     try {
-        if (!req.body) {
-            return res.status(400).json({ erro: 'O corpo da requisição está vazio.' });
-        }
-
-        const { email, password } = req.body;
+        const { email, password } = req.body || {};
 
         if (!email || !password) {
-            return res.status(400).json({ erro: 'E-mail e senha são obrigatórios.' });
+            return res.status(400).json({
+                erro: 'E-mail e senha são obrigatórios.'
+            });
         }
 
-        console.log('Buscando no banco o e-mail:', email);
-        const { data, error } = await supabase
+        const authClient = createSupabaseAuthClient();
+
+        // 1. Autentica utilizando o Supabase Auth.
+        const { data: authData, error: authError } =
+            await authClient.auth.signInWithPassword({
+                email: email.trim().toLowerCase(),
+                password
+            });
+
+        if (authError) {
+            console.error('ERRO NO LOGIN SUPABASE:', authError);
+
+            if (authError.code === 'email_not_confirmed') {
+                return res.status(403).json({
+                    erro: 'Confirme seu endereço de e-mail antes de entrar.'
+                });
+            }
+
+            return res.status(401).json({
+                erro: 'E-mail ou senha incorretos.'
+            });
+        }
+
+        if (!authData.user || !authData.session) {
+            return res.status(401).json({
+                erro: 'Não foi possível autenticar o usuário.'
+            });
+        }
+
+        // 2. Busca os dados complementares na tabela usuarios.
+        const { data: usuario, error: userError } = await supabase
             .from('usuarios')
-            .select('*')
-            .eq('email', email);
+            .select('id, nome, email, id_perfil, ativo')
+            .eq('id', authData.user.id)
+            .maybeSingle();
 
-        if (error) {
-            throw error;
+        if (userError) {
+            throw userError;
         }
 
-        console.log('Resultado da busca:', data);
-
-        if (data.length === 0) {
-            return res.status(403).json({ 
-                erro: 'E-mail não cadastrado no sistema.' 
+        if (!usuario) {
+            return res.status(403).json({
+                erro: 'Usuário não encontrado no sistema.'
             });
         }
 
-        const usuarioDoBanco = data[0];
-
-        if (!usuarioDoBanco.password) {
-            return res.status(401).json({ 
-                erro: 'Este e-mail utiliza login com o Google.' 
+        if (!usuario.ativo) {
+            return res.status(403).json({
+                erro: 'Esta conta está desativada.'
             });
         }
 
-        if (String(usuarioDoBanco.password).trim() !== String(password).trim()) {
-            return res.status(401).json({ 
-                erro: 'Senha incorreta.' 
-            });
-        }
-
+        // 3. Retorna os dados para o aplicativo.
         return res.status(200).json({
-            mensagem: 'Login com senha autorizado com sucesso!',
+            mensagem: 'Login realizado com sucesso!',
+
             usuario: {
-                id: usuarioDoBanco.id,
-                email: usuarioDoBanco.email,    
-                name: usuarioDoBanco.nome,
-                role: usuarioDoBanco.id_perfil
+                id: usuario.id,
+                email: usuario.email,
+                name: usuario.nome,
+                role: usuario.id_perfil
+            },
+
+            // Tokens da sessão para utilização pelo aplicativo.
+            sessao: {
+                access_token: authData.session.access_token,
+                refresh_token: authData.session.refresh_token,
+                expires_at: authData.session.expires_at
             }
         });
+
     } catch (err) {
-        console.error('Erro ao logar com email e senha:', err);
-        return res.status(500).json({ erro: 'Erro interno no servidor.' });
+        console.error('ERRO AO REALIZAR LOGIN:', err);
+
+        return res.status(500).json({
+            erro: 'Erro interno no servidor.'
+        });
     }
 }

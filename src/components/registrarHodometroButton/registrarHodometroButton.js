@@ -1,169 +1,337 @@
-import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Dimensions, Image } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import React, { useMemo } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  Dimensions,
+  Platform,
+} from 'react-native';
+import { WebView } from 'react-native-webview';
 
 const { width } = Dimensions.get('window');
-const MAP_WIDTH = width - 32;
+const MAP_WIDTH = width - 40;
 const MAP_HEIGHT = 480;
 
-const CITY_COORDS = {
-  'campinas - sp': { x: 0.25, y: 0.56 },
-  'campinas': { x: 0.25, y: 0.56 },
-  'rio de janeiro - rj': { x: 0.76, y: 0.44 },
-  'rio de janeiro': { x: 0.76, y: 0.44 },
-  'são paulo - sp': { x: 0.36, y: 0.65 },
-  'sao paulo - sp': { x: 0.36, y: 0.65 },
-  'são paulo': { x: 0.36, y: 0.65 },
-  'sao paulo': { x: 0.36, y: 0.65 },
-  'belo horizonte - mg': { x: 0.66, y: 0.32 },
-  'belo horizonte': { x: 0.66, y: 0.32 },
-  'curitiba - pr': { x: 0.22, y: 0.78 },
-  'curitiba': { x: 0.22, y: 0.78 },
-  'santos - sp': { x: 0.62, y: 0.72 },
-  'santos': { x: 0.62, y: 0.72 },
+const DEFAULT_VIAGEM = {
+  id: 'd0000000-0000-0000-0000-000000000002',
+  origem: 'Campinas - SP',
+  destino: 'Rio de Janeiro - RJ',
+  motorista: 'Marcos Souza',
+  status: 'EM_ANDAMENTO',
+  placa: 'POX-XX',
 };
 
-const getCityCoordinates = (city, isDest = false) => {
-  if (!city) {
-    return isDest ? { x: MAP_WIDTH * 0.75, y: 260 } : { x: MAP_WIDTH * 0.25, y: 320 };
-  }
-  const key = city.trim().toLowerCase();
-  let base = CITY_COORDS[key];
+// Gera o HTML do mapa interativo com Leaflet e OpenStreetMap
+function generateLeafletHTML(origem, destino, motorista) {
+  const safeOrigem = (origem || 'Campinas - SP').replace(/'/g, "\\'");
+  const safeDestino = (destino || 'Rio de Janeiro - RJ').replace(/'/g, "\\'");
+  const safeMotorista = (motorista || 'Motorista').replace(/'/g, "\\'");
 
-  if (!base) {
-    for (const [k, v] of Object.entries(CITY_COORDS)) {
-      if (key.includes(k) || k.includes(key)) {
-        base = v;
-        break;
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    html, body, #map {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #121212;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .custom-marker-pin {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 16px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      border: 2px solid #FFFFFF;
+      font-size: 16px;
+    }
+    .pin-start {
+      background: #10B981;
+    }
+    .pin-end {
+      background: #EF4444;
+      animation: pulse 1.5s infinite;
+    }
+    .truck-icon {
+      font-size: 22px;
+      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.8));
+    }
+    @keyframes pulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .leaflet-popup-content-wrapper {
+      background: rgba(18, 18, 18, 0.95);
+      color: #FFFFFF;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      padding: 4px;
+    }
+    .leaflet-popup-tip {
+      background: rgba(18, 18, 18, 0.95);
+    }
+  </style>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script>
+    const KNOWN_COORDS = {
+      'campinas - sp': [-22.9056, -47.0608],
+      'campinas': [-22.9056, -47.0608],
+      'rio de janeiro - rj': [-22.9068, -43.1729],
+      'rio de janeiro': [-22.9068, -43.1729],
+      'sao paulo - sp': [-23.5505, -46.6333],
+      'são paulo - sp': [-23.5505, -46.6333],
+      'sao paulo': [-23.5505, -46.6333],
+      'são paulo': [-23.5505, -46.6333],
+      'belo horizonte - mg': [-19.9167, -43.9345],
+      'belo horizonte': [-19.9167, -43.9345],
+      'curitiba - pr': [-25.4284, -49.2731],
+      'curitiba': [-25.4284, -49.2731],
+      'santos - sp': [-23.9608, -46.3333],
+      'santos': [-23.9608, -46.3333],
+      'porto alegre - rs': [-30.0346, -51.2177],
+      'porto alegre': [-30.0346, -51.2177],
+      'brasilia - df': [-15.7975, -47.8919],
+      'brasilia': [-15.7975, -47.8919],
+      'salvador - ba': [-12.9777, -38.5016],
+      'salvador': [-12.9777, -38.5016],
+      'fortaleza - ce': [-3.7172, -38.5433],
+      'recife - pe': [-8.0476, -34.8770],
+      'goiania - go': [-16.6869, -49.2648],
+      'ribeirao preto - sp': [-21.1776, -47.8101],
+      'sorocaba - sp': [-23.5015, -47.4587],
+    };
+
+    function normalizeName(str) {
+      return (str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\\u0300-\\u036f]/g, '')
+        .trim();
+    }
+
+    async function geocode(location) {
+      const norm = normalizeName(location);
+      if (KNOWN_COORDS[norm]) return KNOWN_COORDS[norm];
+
+      for (const [key, coords] of Object.entries(KNOWN_COORDS)) {
+        if (norm.includes(key) || key.includes(norm)) {
+          return coords;
+        }
       }
-    }
-  }
 
-  if (!base) {
-    let hash = 0;
-    for (let i = 0; i < city.length; i++) {
-      hash = (hash << 5) - hash + city.charCodeAt(i);
-      hash |= 0;
-    }
-    const normX = 0.22 + (Math.abs(hash % 100) / 100) * 0.56;
-    const normY = 0.38 + (Math.abs((hash >> 3) % 100) / 100) * 0.42;
-    base = { x: normX, y: normY };
-  }
+      // Consulta à API pública OpenStreetMap Nominatim para aceitar qualquer cidade do mundo
+      try {
+        const query = encodeURIComponent(location + ', Brasil');
+        const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + query + '&limit=1', {
+          headers: { 'Accept': 'application/json' }
+        });
+        const data = await res.json();
+        if (data && data[0]) {
+          return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+        }
+      } catch (e) {
+        console.warn('Geocoding error:', e);
+      }
 
-  return {
-    x: Math.max(35, Math.min(MAP_WIDTH - 45, base.x * MAP_WIDTH)),
-    y: Math.max(140, Math.min(MAP_HEIGHT - 60, base.y * MAP_HEIGHT)),
-  };
-};
+      return [-23.5505, -46.6333];
+    }
+
+    async function getRoadRoute(startCoords, endCoords) {
+      // Consulta a rota real de estradas via OSRM (Open Source Routing Machine)
+      try {
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+          startCoords[1] + ',' + startCoords[0] + ';' +
+          endCoords[1] + ',' + endCoords[0] +
+          '?overview=full&geometries=geojson';
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data && data.routes && data.routes[0]) {
+          const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+          return coords;
+        }
+      } catch (e) {
+        console.warn('OSRM error, usando linha direta:', e);
+      }
+
+      // Linha interpolada suave como fallback
+      const pts = [];
+      const steps = 30;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const lat = startCoords[0] + (endCoords[0] - startCoords[0]) * t;
+        const lon = startCoords[1] + (endCoords[1] - startCoords[1]) * t;
+        pts.push([lat, lon]);
+      }
+      return pts;
+    }
+
+    async function init() {
+      const map = L.map('map', {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([-23.5505, -46.6333], 6);
+
+      // Camada de mapa real (OpenStreetMap)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      const start = await geocode('${safeOrigem}');
+      const end = await geocode('${safeDestino}');
+
+      // Marcador de Partida (Origem)
+      const startIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: '<div class="custom-marker-pin pin-start">🟢</div>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+      L.marker(start, { icon: startIcon })
+        .addTo(map)
+        .bindPopup('<b>Saída:</b> ${safeOrigem}<br><b>Motorista:</b> ${safeMotorista}')
+        .openPopup();
+
+      // Marcador de Chegada (Ponto Marcado)
+      const endIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: '<div class="custom-marker-pin pin-end">🏁</div>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+      });
+      L.marker(end, { icon: endIcon })
+        .addTo(map)
+        .bindPopup('<b>Ponto Marcado (Destino):</b> ${safeDestino}');
+
+      // Busca traçado real das rodovias
+      const routePoints = await getRoadRoute(start, end);
+
+      // Traçado do trajeto completo com halo brilhante
+      const haloLine = L.polyline(routePoints, {
+        color: 'rgba(37, 65, 239, 0.4)',
+        weight: 9,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      const mainLine = L.polyline(routePoints, {
+        color: '#2541EF',
+        weight: 5,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+
+      // Ajusta o zoom e centro do mapa automaticamente para caber toda a rota
+      const bounds = L.latLngBounds(routePoints);
+      map.fitBounds(bounds, { padding: [50, 50] });
+
+      // Animação do veículo (🚚) percorrendo a rota até o ponto marcado
+      const truckIcon = L.divIcon({
+        className: 'custom-div-icon',
+        html: '<div class="truck-icon">🚚</div>',
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+      const truckMarker = L.marker(routePoints[0], { icon: truckIcon }).addTo(map);
+
+      let step = 0;
+      const totalSteps = routePoints.length;
+      const speed = Math.max(1, Math.floor(totalSteps / 120)); // ~2 segundos para percorrer
+
+      function animateTruck() {
+        step += speed;
+        if (step < totalSteps) {
+          truckMarker.setLatLng(routePoints[step]);
+          requestAnimationFrame(animateTruck);
+        } else {
+          truckMarker.setLatLng(routePoints[totalSteps - 1]);
+        }
+      }
+
+      setTimeout(animateTruck, 400);
+    }
+
+    window.onload = init;
+  </script>
+</body>
+</html>
+`;
+}
 
 export default function MapCardWithButton({ onButtonPress, viagem }) {
-  const origemCoord = getCityCoordinates(viagem?.origem, false);
-  const destinoCoord = getCityCoordinates(viagem?.destino, true);
+  const viagemAtiva = viagem || DEFAULT_VIAGEM;
 
-  const startX = origemCoord.x;
-  const startY = origemCoord.y;
-  const endX = destinoCoord.x;
-  const endY = destinoCoord.y;
+  const htmlContent = useMemo(() => {
+    return generateLeafletHTML(
+      viagemAtiva.origem,
+      viagemAtiva.destino,
+      viagemAtiva.motorista
+    );
+  }, [viagemAtiva.id, viagemAtiva.origem, viagemAtiva.destino, viagemAtiva.motorista]);
 
-  const midX = (startX + endX) / 2;
-  const midY = (startY + endY) / 2 - 32;
-
-  const routePath = `M ${startX} ${startY} Q ${midX} ${midY} ${endX} ${endY}`;
-
-  // Ponto central da curva Bézier no instante t = 0.5 para o veículo
-  const t = 0.5;
-  const vehicleX = (1 - t) * (1 - t) * startX + 2 * (1 - t) * t * midX + t * t * endX;
-  const vehicleY = (1 - t) * (1 - t) * startY + 2 * (1 - t) * t * midY + t * t * endY;
+  const uniqueKey = `${viagemAtiva.id || 'v'}-${viagemAtiva.origem}-${viagemAtiva.destino}`;
 
   return (
     <View style={styles.mainContainer}>
       <View style={styles.mapCard}>
-        <Image 
-          source={require('../../../assets/image/map.png')} 
-          style={styles.mapImage}
-          resizeMode="cover"
-        />
+        {Platform.OS === 'web' ? (
+          <iframe
+            key={uniqueKey}
+            srcDoc={htmlContent}
+            title="Mapa da Rota"
+            style={{
+              width: '100%',
+              height: '100%',
+              border: 'none',
+              borderRadius: 24,
+            }}
+          />
+        ) : (
+          <WebView
+            key={uniqueKey}
+            source={{ html: htmlContent }}
+            style={styles.webView}
+            originWhitelist={['*']}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            mixedContentMode="always"
+            allowsInlineMediaPlayback={true}
+          />
+        )}
 
-        {/* HUD com informações do motorista e trajeto ativo */}
-        <View style={styles.hudOverlay}>
+        {/* HUD Superior sobre o mapa com informações da viagem selecionada */}
+        <View style={styles.hudOverlay} pointerEvents="box-none">
           <View style={styles.hudHeaderRow}>
             <View style={styles.statusBadge}>
               <View style={styles.liveDot} />
               <Text style={styles.statusText}>EM ANDAMENTO</Text>
             </View>
-            {viagem?.placa && (
-              <Text style={styles.plateText}>{viagem.placa}</Text>
-            )}
+            <Text style={styles.plateText}>{viagemAtiva?.placa || 'POX-XX'}</Text>
           </View>
 
           <Text style={styles.driverNameText} numberOfLines={1}>
-            {viagem?.motorista ? `Motorista: ${viagem.motorista}` : 'Selecione uma viagem acima'}
+            Motorista: {viagemAtiva?.motorista || 'Motorista'}
           </Text>
 
           <Text style={styles.routeText} numberOfLines={1}>
-            {viagem?.origem || 'Origem'} ➔ {viagem?.destino || 'Destino'}
-          </Text>
-        </View>
-
-        {/* Traçado da Rota sobre o Mapa */}
-        <Svg style={StyleSheet.absoluteFillObject} width={MAP_WIDTH} height={MAP_HEIGHT}>
-          {/* Brilho da rota */}
-          <Path
-            d={routePath}
-            stroke="rgba(37, 65, 239, 0.25)"
-            strokeWidth={10}
-            fill="none"
-          />
-          {/* Linha principal tracejada */}
-          <Path
-            d={routePath}
-            stroke="#2541EF"
-            strokeWidth={3.5}
-            strokeDasharray="8, 4"
-            fill="none"
-          />
-          {/* Ponto de partida (Origem) */}
-          <Circle cx={startX} cy={startY} r={12} fill="rgba(16, 185, 129, 0.25)" />
-          <Circle cx={startX} cy={startY} r={6} fill="#10B981" stroke="#FFFFFF" strokeWidth={2} />
-
-          {/* Veículo em trânsito no meio do trajeto */}
-          <Circle cx={vehicleX} cy={vehicleY} r={14} fill="rgba(37, 65, 239, 0.3)" />
-          <Circle cx={vehicleX} cy={vehicleY} r={7} fill="#2541EF" stroke="#FFFFFF" strokeWidth={2} />
-
-          {/* Ponto de chegada (Destino) */}
-          <Circle cx={endX} cy={endY} r={12} fill="rgba(239, 68, 68, 0.25)" />
-          <Circle cx={endX} cy={endY} r={6} fill="#EF4444" stroke="#FFFFFF" strokeWidth={2} />
-        </Svg>
-
-        {/* Marcador flutuante da Origem */}
-        <View
-          style={[
-            styles.pinCallout,
-            styles.pinCalloutOrigin,
-            {
-              top: Math.max(105, startY - 38),
-              left: Math.max(8, Math.min(MAP_WIDTH - 150, startX - 45))
-            }
-          ]}
-        >
-          <Text style={styles.pinCalloutText} numberOfLines={1}>
-            🟢 {viagem?.origem || 'Partida'}
-          </Text>
-        </View>
-
-        {/* Marcador flutuante do Destino */}
-        <View
-          style={[
-            styles.pinCallout,
-            styles.pinCalloutDest,
-            {
-              top: Math.max(105, endY - 38),
-              left: Math.max(8, Math.min(MAP_WIDTH - 150, endX - 45))
-            }
-          ]}
-        >
-          <Text style={styles.pinCalloutText} numberOfLines={1}>
-            🏁 {viagem?.destino || 'Chegada'}
+            {viagemAtiva?.origem} ➔ {viagemAtiva?.destino}
           </Text>
         </View>
       </View>
@@ -177,17 +345,16 @@ export default function MapCardWithButton({ onButtonPress, viagem }) {
 
 const styles = StyleSheet.create({
   mainContainer: {
-    flex: 1,
+    width: '100%',
     backgroundColor: '#121212',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    marginTop: 40,
+    marginTop: 30,
   },
   mapCard: {
     width: MAP_WIDTH,
     height: MAP_HEIGHT,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#1A2332',
     borderRadius: 24,
     overflow: 'hidden',
     marginBottom: 24,
@@ -195,26 +362,27 @@ const styles = StyleSheet.create({
     borderColor: '#333333',
     position: 'relative',
   },
-  mapImage: {
+  webView: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#121212',
   },
   hudOverlay: {
     position: 'absolute',
-    top: 14,
-    left: 14,
-    right: 14,
-    backgroundColor: 'rgba(18, 18, 18, 0.88)',
+    top: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: 'rgba(18, 18, 18, 0.90)',
     borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.4,
     shadowRadius: 6,
-    elevation: 6,
+    elevation: 8,
     zIndex: 10,
   },
   hudHeaderRow: {
@@ -241,9 +409,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   plateText: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255, 255, 255, 0.8)',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '700',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
   },
   driverNameText: {
     color: '#FFFFFF',
@@ -252,34 +424,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   routeText: {
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 13,
     marginTop: 2,
-  },
-  pinCallout: {
-    position: 'absolute',
-    backgroundColor: 'rgba(18, 18, 18, 0.92)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-    zIndex: 8,
-  },
-  pinCalloutOrigin: {
-    borderColor: '#10B981',
-  },
-  pinCalloutDest: {
-    borderColor: '#EF4444',
-  },
-  pinCalloutText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
   },
   button: {
     width: MAP_WIDTH,
