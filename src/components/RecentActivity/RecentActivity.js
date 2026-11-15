@@ -1,25 +1,76 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { API_URL } from '../../config/api.js';
 
-export default function RecentActivity({ atividades }) {
+const INTERVALO_MS = 30000; 
+
+export default function RecentActivity({ limite = 4 }) {
+  const [atividades, setAtividades] = useState([]);
+  const [carregando, setCarregando] = useState(false);
+  const montado = useRef(true);
+  const buscando = useRef(false); 
+
+  const carregar = useCallback(async () => {
+    if (buscando.current) return;
+    buscando.current = true;
+    setCarregando(true);
+    try {
+      const r = await fetch(
+        `${API_URL}/resumo/atividades-recentes?limite=${limite}&t=${Date.now()}`,
+        { headers: { 'Cache-Control': 'no-cache' } }
+      );
+      const json = await r.json();
+      if (montado.current && json.sucesso) setAtividades(json.atividades);
+    } catch (e) {
+      console.error('Erro ao buscar atividades:', e);
+    } finally {
+      buscando.current = false;
+      if (montado.current) setCarregando(false);
+    }
+  }, [limite]);
+
+  useEffect(() => {
+    montado.current = true;
+    carregar(); 
+    const timer = setInterval(carregar, INTERVALO_MS);
+    return () => {
+      montado.current = false;
+      clearInterval(timer); 
+    };
+  }, [carregar]);
+
   return (
     <View style={styles.sectionContainer}>
       <View style={styles.activityHeaderRow}>
         <Text style={styles.sectionTitle}>Atividade Recente</Text>
-        <TouchableOpacity>
-          <Feather name="more-horizontal" size={20} color="#FFF" />
+
+        <TouchableOpacity
+          onPress={carregar}
+          disabled={carregando}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel="Atualizar atividades"
+        >
+          {carregando ? (
+            <ActivityIndicator size="small" color="#FFF" />
+          ) : (
+            <Feather name="rotate-cw" size={18} color="#FFF" />
+          )}
         </TouchableOpacity>
       </View>
+
+      {atividades.length === 0 && !carregando && (
+        <Text style={styles.activityDate}>Nenhuma atividade recente.</Text>
+      )}
 
       {atividades.map((item) => (
         <View key={item.id} style={styles.activityCard}>
           <View style={styles.activityLeft}>
             <View style={styles.activityIconBox}>
-              <Feather 
-                name={item.tipo === 'entrada' ? 'arrow-up' : 'arrow-down'} 
-                size={16} 
-                color={item.tipo === 'entrada' ? '#2541ff' : '#b22222'} 
+              <Feather
+                name={item.tipo === 'entrada' ? 'arrow-up' : 'arrow-down'}
+                size={16}
+                color={item.tipo === 'entrada' ? '#2541ff' : '#b22222'}
               />
             </View>
             <View>

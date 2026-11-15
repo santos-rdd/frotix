@@ -8,7 +8,7 @@ export default function RecentActivity({ atividades }) {
       <View style={styles.activityHeaderRow}>
         <Text style={styles.sectionTitle}>Atividade Recente</Text>
         <TouchableOpacity>
-          <Feather name="more-horizontal" size={20} color="#FFF" />
+          <Feather name="rotate-cw" size={20} color="#FFF" />
         </TouchableOpacity>
       </View>
 

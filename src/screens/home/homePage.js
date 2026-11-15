@@ -14,9 +14,9 @@ import {
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import QuickActions from '../../components/quickActions/quickActions.js';
 import GeneralSummaryCard from '../../components/generalSummaryCard/GeneralSummaryCard.js';
-import CurrentBalanceCard from '../../components/currentBalanceCard/currentBalanceCard.js';
+// import CurrentBalanceCard from '../../components/currentBalanceCard/currentBalanceCard.js';
 import ValueSliderModal from '../../components/valueSliderModal/valueSliderModal.js';
-import FleetProgressCard from '../../components/fleetProgressCard/fleetProgressCard.js';
+// import FleetProgressCard from '../../components/fleetProgressCard/fleetProgressCard.js';
 import FleetExpensesOverview from '../../components/fleetExpensesOverview/fleetExpensesOverview.js';
 import PaymentCardsCarousel from '../../components/paymentCardsCarousel/paymentCardsCarousel.js';
 import InteractiveCarousel from '../../components/interactiveCarousel/interactiveCarousel.js';
@@ -28,6 +28,7 @@ const { height } = Dimensions.get('window');
 
 export default function HomePage({ navigation, route }) {
   const [selectedQuickAction, setSelectedQuickAction] = useState('finance');
+  const [viagemSelecionada, setViagemSelecionada] = useState(null);
 
   const [saldoAtual, setSaldoAtual] = useState(53435.20);
   const [totalSaidas, setTotalSaidas] = useState(12143.50);
@@ -146,15 +147,15 @@ export default function HomePage({ navigation, route }) {
 
         {selectedQuickAction === 'finance' && (userRole === 1 || userRole === 3) && (
           <>
-            <FleetProgressCard />
-            <CurrentBalanceCard saldoAtual={saldoAtual} totalSaidas={totalSaidas} />
+            {/* <FleetProgressCard /> */}
+            {/* <CurrentBalanceCard saldoAtual={saldoAtual} totalSaidas={totalSaidas} /> */}
             <FleetExpensesOverview />
           </>
         )}
 
         {selectedQuickAction === 'payment' && (
           <View style={styles.sectionContainer}>
-            <PaymentCardsCarousel />
+            {/* <PaymentCardsCarousel /> */}
             <InteractiveCarousel 
               onOpenSlider={handleOpenSlider} 
               atividades={atividades} 
@@ -171,8 +172,13 @@ export default function HomePage({ navigation, route }) {
         {selectedQuickAction === 'rotes' && (
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Gerenciamento de Rotas</Text>
-            <ViagemAtualCard />
-            <RegistrarHodometroButton />
+            <ViagemAtualCard 
+              viagemSelecionada={viagemSelecionada}
+              onSelectViagem={setViagemSelecionada}
+            />
+            <RegistrarHodometroButton 
+              viagem={viagemSelecionada}
+            />
           </View>
         )}
 

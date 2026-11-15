@@ -10,13 +10,10 @@ export default function QuickActions({ selectedAction, onSelectAction, userRole 
         { id: 'rotes', name: 'Rotas', image: '' },
     ];
 
-    // Filtra quais cards o usuário pode ver
     const quickCardsInfos = allCards.filter(card => {
-        // Exemplo: Restringe 'users' e 'finance' apenas para Admin (1) ou Financeiro (3)
         if (card.id === 'users' || card.id === 'finance') {
             return userRole === 1 || userRole === 3;
         }
-        // Os demais cards (payment, rotes, etc.) aparecem para todos
         return true;
     });
 

@@ -6,7 +6,7 @@ export default function CurrentBalanceCard({ saldoAtual, totalSaidas }) {
   return (
     <View style={styles.sectionContainer}>
       <View style={styles.mainBalanceCard}>
-        <Text style={styles.mainDateText}>Segunda, 14 de setembro</Text>
+        <Text style={styles.mainDateText}>Segunda, 13 de setembro</Text>
         <View style={styles.walletIconContainer}>
           <MaterialCommunityIcons name="piggy-bank-outline" size={28} color="#2541ff" />
         </View>

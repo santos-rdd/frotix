@@ -5,12 +5,12 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 export default function BottomNavigation({ navigation }) {
   return (
     <View style={styles.container}>
-      <TouchableOpacity 
+      {/* <TouchableOpacity 
         style={styles.navButton} 
         onPress={() => navigation.navigate('uploadProof')}
       >
         <MaterialCommunityIcons name="truck-delivery-outline" size={24} color="#2541ff" />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       <TouchableOpacity 
         style={styles.navButton} 
@@ -19,12 +19,12 @@ export default function BottomNavigation({ navigation }) {
         <Feather name="home" size={24} color="#2541ff" />
       </TouchableOpacity>
 
-      <TouchableOpacity 
+      {/* <TouchableOpacity 
         style={styles.navButton} 
         onPress={() => console.log('Ferramenta clicada')}
       >
         <Feather name="tool" size={24} color="#2541ff" />
-      </TouchableOpacity>
+      </TouchableOpacity> */}
 
       <TouchableOpacity 
         style={styles.navButton} 

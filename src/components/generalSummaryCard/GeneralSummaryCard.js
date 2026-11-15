@@ -1,17 +1,66 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, G } from 'react-native-svg';
+import { API_URL } from '../../config/api.js';
 
 export default function GeneralSummaryCard() {
+  const [totalEntradas, setTotalEntradas] = useState(0);
+  const [totalSaidas, setTotalSaidas] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const isFirstLoad = useRef(true);
+
+  const carregarResumo = useCallback(async (isSilent = false) => {
+    try {
+      if (!isSilent || isFirstLoad.current) {
+        setLoading(true);
+      }
+      const response = await fetch(`${API_URL}/financeiro/resumo-geral`);
+      if (!response.ok) {
+        throw new Error(`Erro na requisição: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data && data.sucesso) {
+        setTotalEntradas(Number(data.totalEntradas) || 0);
+        setTotalSaidas(Number(data.totalSaidas) || 0);
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar dados do GeneralSummaryCard:', err?.message || err);
+    } finally {
+      isFirstLoad.current = false;
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      carregarResumo(true);
+
+      const interval = setInterval(() => {
+        carregarResumo(true);
+      }, 5000);
+
+      return () => clearInterval(interval);
+    }, [carregarResumo])
+  );
+
   const size = 160;
   const strokeWidth = 15;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
 
-  const total = 694.23 + 554.15;
-  const positivePercentage = 694.23 / total;
-  const strokeDashoffset = circumference - positivePercentage * circumference;
+  const total = totalEntradas + totalSaidas;
+  const positivePercentage = total > 0 ? (totalEntradas / total) : 0;
+  const strokeDashoffset = circumference - (positivePercentage * circumference);
+
+  const formatMoney = (val) => {
+    const num = Number(val) || 0;
+    return num.toLocaleString('pt-BR', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  };
 
   return (
     <View style={styles.sectionContainer}>
@@ -21,8 +70,12 @@ export default function GeneralSummaryCard() {
             <Text style={styles.title}>Balanço Atual</Text>
             <Text style={styles.subtitle}>Balanço Atual</Text>
           </View>
-          <TouchableOpacity>
-            <Feather name="more-horizontal" size={24} color="#FFF" />
+          <TouchableOpacity onPress={() => carregarResumo(false)} activeOpacity={0.7}>
+            {loading ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Feather name="rotate-cw" size={20} color="#FFF" />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -66,12 +119,16 @@ export default function GeneralSummaryCard() {
 
           <View style={styles.valuesContainer}>
             <View>
-              <Text style={styles.positiveValue}>+ R$ 694.23</Text>
-              <Text style={styles.valueDescription}>nos últimos 7 dias</Text>
+              <Text style={styles.positiveValue} numberOfLines={2}>
+                {`Entrada: +R$ ${formatMoney(totalEntradas)}`}
+              </Text>
+              <Text style={styles.valueDescription}>Total acumulado</Text>
             </View>
             <View style={{ marginTop: 20 }}>
-              <Text style={styles.negativeValue}>- R$ 554.15</Text>
-              <Text style={styles.valueDescription}>nos últimos 7 dias</Text>
+              <Text style={styles.negativeValue} numberOfLines={2}>
+                {`Saida: -R$ ${formatMoney(totalSaidas)}`}
+              </Text>
+              <Text style={styles.valueDescription}>Saídas + Parcelas do mês</Text>
             </View>
           </View>
         </View>
