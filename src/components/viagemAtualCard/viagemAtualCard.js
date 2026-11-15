@@ -47,7 +47,7 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
         console.warn('Não foi possível conectar ao backend:', err.message);
       }
 
-      // Fallback para exibição caso o backend não esteja acessível no momento
+      // Fallback para exibição com dados reais da tabela caso o backend não responda
       const fallback = [
         {
           id: 'd0000000-0000-0000-0000-000000000002',
@@ -104,6 +104,44 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
     <View style={styles.container}>
       <Text style={styles.headerTitle}>Viagens em curso</Text>
 
+      {/* Abas para alternar rapidamente entre todos os motoristas */}
+      {viagens.length > 1 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.driverTabsContainer}
+        >
+          {viagens.map((item, index) => {
+            const isSelected = viagemSelecionada?.id
+              ? viagemSelecionada.id === item.id
+              : currentIndex === index;
+
+            return (
+              <TouchableOpacity
+                key={item.id || index}
+                onPress={() => handleSelectTrip(item, index)}
+                style={[
+                  styles.driverTab,
+                  isSelected && styles.driverTabActive
+                ]}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.tabStatusDot, isSelected && styles.tabStatusDotActive]} />
+                <Text
+                  style={[
+                    styles.driverTabText,
+                    isSelected && styles.driverTabTextActive
+                  ]}
+                >
+                  {item.motorista}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Carrossel de Cards das viagens */}
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -185,6 +223,7 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
         })}
       </ScrollView>
 
+      {/* Paginação inferior */}
       {viagens.length > 1 && (
         <View style={styles.pagination}>
           {viagens.map((item, index) => {
@@ -233,8 +272,49 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '600',
     alignSelf: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 16,
     marginLeft: 4,
+  },
+  driverTabsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 2,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
+  driverTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  driverTabActive: {
+    backgroundColor: '#2541EF',
+    borderColor: '#FFFFFF',
+  },
+  tabStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    marginRight: 6,
+  },
+  tabStatusDotActive: {
+    backgroundColor: '#10B981',
+  },
+  driverTabText: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  driverTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   scrollContent: {
     alignItems: 'center',
