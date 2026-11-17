@@ -1,59 +1,99 @@
-import fs from 'fs/promises';
-import financialService, { ValidationError } from '../services/financialService.js';
+import financialService, { AppError } from '../services/financialService.js';
+import {
+  validateTransaction,
+  validateFinancing,
+  validatePayment,
+  validateListFilters,
+  isUuid
+} from '../validators/financialValidator.js';
 
-const getUserId = (req) => req.user?.id;
+const invalid = (res, errors) =>
+  res.status(400).json({ sucesso: false, mensagem: 'Dados inválidos.', erros: errors });
 
-const removeUpload = async (file) => {
-  if (file?.path) await fs.unlink(file.path).catch(() => {});
+const fail = (res, error) => {
+  if (error instanceof AppError) {
+    return res.status(error.status).json({ sucesso: false, mensagem: error.message });
+  }
+  console.error('Erro inesperado no módulo financeiro:', error);
+  return res.status(500).json({ sucesso: false, mensagem: 'Erro interno no módulo financeiro.' });
 };
 
-function handleError(res, err) {
-  if (err instanceof ValidationError) {
-    return res.status(400).json({ errors: err.errors });
-  }
-  console.error(err);
-  return res.status(500).json({ error: 'Erro interno do servidor.' });
-}
+const bodyOf = (req) => ({ ...(req.body ?? {}), userId: req.user?.id ?? req.body?.userId });
 
-class FinancialController {
-  async createTransaction(req, res) {
-    try {
-      const userId = getUserId(req);
-      if (!userId) {
-        await removeUpload(req.file);
-        return res.status(401).json({ error: 'Usuário não autenticado.' });
-      }
+const idParam = (req, res) => {
+  if (isUuid(req.params.id)) return req.params.id;
+  invalid(res, ['id: identificador inválido.']);
+  return null;
+};
 
-      const result = await financialService.createTransaction(req.body, req.file, userId);
-      return res.status(201).json(result);
-    } catch (err) {
-      await removeUpload(req.file);
-      return handleError(res, err);
-    }
-  }
-
-  async createFinancing(req, res) {
-    try {
-      const userId = getUserId(req);
-      if (!userId) {
-        return res.status(401).json({ error: 'Usuário não autenticado.' });
-      }
-
-      const result = await financialService.createFinancing(req.body, userId);
-      return res.status(201).json(result);
-    } catch (err) {
-      return handleError(res, err);
-    }
-  }
-
-  async getSummary(req, res) {
-    try {
-      const result = await financialService.getSummary();
-      return res.json(result);
-    } catch (err) {
-      return handleError(res, err);
-    }
+async function createTransaction(req, res) {
+  const { valid, errors, data } = validateTransaction(bodyOf(req));
+  if (!valid) return invalid(res, errors);
+  try {
+    const transaction = await financialService.createTransaction(data, req.file);
+    return res.status(201).json({ sucesso: true, mensagem: 'Lançamento cadastrado com sucesso.', dados: transaction });
+  } catch (error) {
+    return fail(res, error);
   }
 }
 
-export default new FinancialController();
+async function listTransactions(req, res) {
+  const { valid, errors, data } = validateListFilters(req.query);
+  if (!valid) return invalid(res, errors);
+  try {
+    return res.json({ sucesso: true, dados: await financialService.listTransactions(data) });
+  } catch (error) {
+    return fail(res, error);
+  }
+}
+
+async function payTransaction(req, res) {
+  const id = idParam(req, res);
+  if (!id) return undefined;
+  const { valid, errors, data } = validatePayment(req.body ?? {});
+  if (!valid) return invalid(res, errors);
+  try {
+    const transaction = await financialService.markAsPaid(id, data.paymentDate);
+    return res.json({ sucesso: true, mensagem: 'Pagamento registrado.', dados: transaction });
+  } catch (error) {
+    return fail(res, error);
+  }
+}
+
+async function createFinancing(req, res) {
+  const { valid, errors, data } = validateFinancing(bodyOf(req));
+  if (!valid) return invalid(res, errors);
+  try {
+    const financing = await financialService.createFinancing(data);
+    return res.status(201).json({ sucesso: true, mensagem: 'Financiamento e parcelas cadastrados com sucesso.', dados: financing });
+  } catch (error) {
+    return fail(res, error);
+  }
+}
+
+async function getFinancing(req, res) {
+  const id = idParam(req, res);
+  if (!id) return undefined;
+  try {
+    return res.json({ sucesso: true, dados: await financialService.listInstallments(id) });
+  } catch (error) {
+    return fail(res, error);
+  }
+}
+
+async function getCashProjection(req, res) {
+  try {
+    return res.json({ sucesso: true, dados: await financialService.getCashProjection() });
+  } catch (error) {
+    return fail(res, error);
+  }
+}
+
+export default {
+  createTransaction,
+  listTransactions,
+  payTransaction,
+  createFinancing,
+  getFinancing,
+  getCashProjection
+};

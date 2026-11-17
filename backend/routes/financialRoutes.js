@@ -1,30 +1,36 @@
 import { Router } from 'express';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { fileURLToPath } from 'url';
 import financialController from '../controllers/financialController.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
-const upload = multer({
-  dest: UPLOAD_DIR,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
-  fileFilter: (req, file, cb) => {
-    if (ALLOWED_MIME_TYPES.includes(file.mimetype)) return cb(null, true);
-    cb(new Error('Tipo de arquivo não permitido. Envie uma imagem JPG, PNG ou WEBP.'));
-  },
-});
 
 const router = Router();
 
-router.post('/transactions', upload.single('proof'), financialController.createTransaction);
+const ALLOWED_RECEIPT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+
+const upload = multer({
+  storage: multer.memoryStorage(), 
+  limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) =>
+    ALLOWED_RECEIPT_TYPES.includes(file.mimetype) ? cb(null, true) : cb(new Error('INVALID_FILE_TYPE'))
+});
+
+const receiptUpload = (req, res, next) => {
+  upload.single('comprovante')(req, res, (err) => {
+    if (!err) return next();
+    const mensagem =
+      err.code === 'LIMIT_FILE_SIZE' ? 'O comprovante deve ter no máximo 5 MB.'
+      : err.message === 'INVALID_FILE_TYPE' ? 'Envie o comprovante em JPG, PNG, WEBP ou PDF.'
+      : 'Não foi possível ler o arquivo enviado.';
+    return res.status(400).json({ sucesso: false, mensagem });
+  });
+};
+
+router.post('/transactions', receiptUpload, financialController.createTransaction);
+router.get('/transactions', financialController.listTransactions);
+router.patch('/transactions/:id/pay', financialController.payTransaction);
+
 router.post('/financings', financialController.createFinancing);
-router.get('/summary', financialController.getSummary);
+router.get('/financings/:id', financialController.getFinancing);
+
+router.get('/projection', financialController.getCashProjection);
 
 export default router;
