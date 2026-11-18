@@ -47,7 +47,7 @@ export default function LoginScreen({ navigation }) {
       const data = await response.json();
 
       if (response.ok) {
-        console.log('Usuário autorizado!', data.usuario);
+        // console.log('Usuário autorizado!', data.usuario);
         irParaHome(navigation, { auth: googleData, bankUser: data.usuario });
       } else {
         console.log('Acesso negado pelo backend:', data.erro);
@@ -61,7 +61,7 @@ export default function LoginScreen({ navigation }) {
 
   async function singIn(){
     try {
-      console.log('Botão clicado: checando Play Services...');
+      // console.log('Botão clicado: checando Play Services...');
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
 
       try {
@@ -74,7 +74,7 @@ export default function LoginScreen({ navigation }) {
       
       if(isSuccessResponse(response)){
         const emailGoogle = response.data.user.email;
-        console.log('Google login OK:', emailGoogle);
+        // console.log('Google login OK:', emailGoogle);
         await logIn(emailGoogle, response.data);
       } else {
         console.log('Login do Google não retornou sucesso (cancelado?).');
@@ -395,4 +395,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingBottom: 50
   },
-});
+});

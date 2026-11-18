@@ -1892,3 +1892,122 @@
 {"_e":"metro:client_log","_t":1791493215534,"level":"log","data":["Acesso negado pelo backend:","undefined"]}
 {"_e":"metro:client_log","_t":1791493294524,"level":"log","data":["Enviando login por email para:","https://frotix.onrender.com/auth/login-email"]}
 {"_e":"metro:client_log","_t":1791493303917,"level":"log","data":["Enviando login por email para:","https://frotix.onrender.com/auth/login-email"]}
+{"_e":"root:init","_t":1794766739388,"format":"v0-jsonl","version":"57.0.24"}
+{"_e":"devserver:start","_t":1794766739411,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1794766739764,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1794766739985,"plugins":[]}
+{"_e":"metro:instantiate","_t":1794766745568,"atlas":false,"workers":8,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1794766754522,"id":"1","platform":"android","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:progress","_t":1794766754522,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1794766754525,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1794766754624,"id":"1","progress":0.13605213652244022,"total":244,"current":90}
+{"_e":"metro:bundling:progress","_t":1794766754724,"id":"1","progress":0.43932710719028845,"total":433,"current":287}
+{"_e":"metro:bundling:progress","_t":1794766754824,"id":"1","progress":0.7277599560759307,"total":599,"current":511}
+{"_e":"metro:bundling:progress","_t":1794766754924,"id":"1","progress":0.8919753086419753,"total":684,"current":646}
+{"_e":"metro:bundling:progress","_t":1794766755027,"id":"1","progress":0.9971691450858285,"total":706,"current":705}
+{"_e":"metro:bundling:progress","_t":1794766755210,"id":"1","progress":0.999,"total":706,"current":706}
+{"_e":"metro:bundling:progress","_t":1794766755310,"id":"1","progress":0.999,"total":999,"current":874}
+{"_e":"metro:bundling:progress","_t":1794766755410,"id":"1","progress":0.999,"total":1180,"current":1130}
+{"_e":"metro:bundling:progress","_t":1794766755513,"id":"1","progress":0.999,"total":1186,"current":1183}
+{"_e":"metro:bundling:progress","_t":1794766755999,"id":"1","progress":0.999,"total":1186,"current":1184}
+{"_e":"metro:bundling:progress","_t":1794766756103,"id":"1","progress":0.999,"total":1186,"current":1185}
+{"_e":"metro:bundling:done","_t":1794766756173,"id":"1","total":1186,"ms":1651.0432}
+{"_e":"metro:client_log","_t":1794766758190,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766760317,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766764837,"level":"log","data":["Enviando requisição para:","http://localhost:3000/auth/login-google"]}
+{"_e":"metro:client_log","_t":1794766765566,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766765620,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766765655,"level":"error","data":["[ReferenceError: Property 'normalizeRole' doesn't exist]"]}
+{"_e":"metro:client_log","_t":1794766925731,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766931993,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766936476,"level":"log","data":["Enviando requisição para:","http://localhost:3000/auth/login-google"]}
+{"_e":"metro:client_log","_t":1794766937967,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766938198,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766949891,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766949942,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766951726,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766955694,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766956402,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766958277,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766959495,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766962445,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766963593,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766967840,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794766969106,"level":"log","data":["425,39"]}
+{"_e":"metro:client_log","_t":1794766969200,"level":"log","data":["46,56"]}
+{"_e":"metro:client_log","_t":1794766969289,"level":"log","data":["568,25"]}
+{"_e":"metro:client_log","_t":1794766969377,"level":"log","data":["622,22"]}
+{"_e":"metro:client_log","_t":1794766969467,"level":"log","data":["653,96"]}
+{"_e":"metro:client_log","_t":1794766969562,"level":"log","data":["721,69"]}
+{"_e":"metro:client_log","_t":1794766969652,"level":"log","data":["803,17"]}
+{"_e":"metro:client_log","_t":1794766969743,"level":"log","data":["860,31"]}
+{"_e":"metro:client_log","_t":1794766969833,"level":"log","data":["914,28"]}
+{"_e":"metro:client_log","_t":1794766969924,"level":"log","data":["953,43"]}
+{"_e":"metro:client_log","_t":1794766970019,"level":"log","data":["924,86"]}
+{"_e":"metro:client_log","_t":1794766970114,"level":"log","data":["799,99"]}
+{"_e":"metro:client_log","_t":1794766970207,"level":"log","data":["614,81"]}
+{"_e":"metro:client_log","_t":1794766970300,"level":"log","data":["511,11"]}
+{"_e":"metro:client_log","_t":1794766970392,"level":"log","data":["443,38"]}
+{"_e":"metro:client_log","_t":1794766970483,"level":"log","data":["390,47"]}
+{"_e":"metro:client_log","_t":1794766970574,"level":"log","data":["340,74"]}
+{"_e":"metro:client_log","_t":1794766970664,"level":"log","data":["325,92"]}
+{"_e":"metro:client_log","_t":1794766974628,"level":"log","data":["325,92"]}
+{"_e":"metro:client_log","_t":1794766984136,"level":"log","data":["325,92"]}
+{"_e":"metro:client_log","_t":1794766984176,"level":"log","data":["325,92"]}
+{"_e":"metro:client_log","_t":1794766985667,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794766990013,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"root:init","_t":1794767962611,"format":"v0-jsonl","version":"57.0.24"}
+{"_e":"devserver:start","_t":1794767962633,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1794767962994,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1794767963218,"plugins":[]}
+{"_e":"metro:instantiate","_t":1794767969226,"atlas":false,"workers":8,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1794767977494,"id":"1","platform":"android","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:progress","_t":1794767977494,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1794767977497,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1794767977597,"id":"1","progress":0.1134877521251446,"total":282,"current":95}
+{"_e":"metro:bundling:progress","_t":1794767977697,"id":"1","progress":0.1664315239721789,"total":402,"current":164}
+{"_e":"metro:bundling:progress","_t":1794767977798,"id":"1","progress":0.31338568256221244,"total":627,"current":351}
+{"_e":"metro:bundling:progress","_t":1794767977898,"id":"1","progress":0.5375384463264563,"total":817,"current":599}
+{"_e":"metro:bundling:progress","_t":1794767977998,"id":"1","progress":0.6174562375738222,"total":1027,"current":807}
+{"_e":"metro:bundling:progress","_t":1794767978098,"id":"1","progress":0.832717962144305,"total":1109,"current":1012}
+{"_e":"metro:bundling:progress","_t":1794767978200,"id":"1","progress":0.9966301624631381,"total":1186,"current":1184}
+{"_e":"metro:bundling:progress","_t":1794767978438,"id":"1","progress":0.9983143702953798,"total":1186,"current":1185}
+{"_e":"metro:bundling:done","_t":1794767978526,"id":"1","total":1186,"ms":1032.2087}
+{"_e":"metro:client_log","_t":1794767980715,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794767983409,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794767989355,"level":"log","data":["Enviando requisição para:","http://localhost:3000/auth/login-google"]}
+{"_e":"metro:client_log","_t":1794767990120,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794767990499,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794767995745,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794767995812,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794767996493,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794768002417,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794768023050,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794768096769,"level":"log","data":["423"]}
+{"_e":"metro:client_log","_t":1794768100304,"level":"log","data":["423"]}
+{"_e":"root:init","_t":1794769977905,"format":"v0-jsonl","version":"57.0.24"}
+{"_e":"devserver:start","_t":1794769977936,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1794769978407,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1794769978672,"plugins":[]}
+{"_e":"metro:instantiate","_t":1794769985930,"atlas":false,"workers":8,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1794769994716,"id":"1","platform":"android","environment":null,"entry":"index.js"}
+{"_e":"metro:bundling:progress","_t":1794769994716,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1794769994721,"id":"1","progress":0,"total":1,"current":0}
+{"_e":"metro:bundling:progress","_t":1794769994821,"id":"1","progress":0.06062040863177227,"total":264,"current":65}
+{"_e":"metro:bundling:progress","_t":1794769994935,"id":"1","progress":0.08244289775512204,"total":303,"current":87}
+{"_e":"metro:bundling:progress","_t":1794769995005,"id":"1","progress":0.08434902896230217,"total":303,"current":88}
+{"_e":"metro:bundling:progress","_t":1794769995104,"id":"1","progress":0.2113384694863098,"total":422,"current":194}
+{"_e":"metro:bundling:progress","_t":1794769995204,"id":"1","progress":0.38410305138226536,"total":668,"current":414}
+{"_e":"metro:bundling:progress","_t":1794769995304,"id":"1","progress":0.6353142317417998,"total":818,"current":652}
+{"_e":"metro:bundling:progress","_t":1794769995404,"id":"1","progress":0.7774309168690022,"total":1023,"current":902}
+{"_e":"metro:bundling:progress","_t":1794769995505,"id":"1","progress":0.8946351137468773,"total":1145,"current":1083}
+{"_e":"metro:bundling:done","_t":1794769995616,"id":"1","total":1145,"ms":900.7547}
+{"_e":"metro:client_log","_t":1794769997902,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794770001557,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794770007683,"level":"log","data":["Enviando requisição para:","http://localhost:3000/auth/login-google"]}
+{"_e":"metro:client_log","_t":1794770009578,"level":"warn","data":["Got a component with the name 'uploadProofScreen' for the screen 'uploadProof'. React Components must start with an uppercase letter. If you're passing a regular function and not a component, pass it as children to 'Screen' instead. Otherwise capitalize your component's name."]}
+{"_e":"metro:client_log","_t":1794770009829,"level":"log","data":["423"]}
+{"_e":"root:init","_t":1794770313089,"format":"v0-jsonl","version":"57.0.24"}
+{"_e":"devserver:start","_t":1794770313121,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../..\\..\\app","serverComponents":false,"serverActions":false,"serverRendering":false,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1794770313535,"serverRoot":"../..\\..","projectRoot":"../..\\..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":false,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"expo:dev-tools-plugin:load","_t":1794770313794,"plugins":[]}

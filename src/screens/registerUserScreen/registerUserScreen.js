@@ -17,6 +17,7 @@ export default function RegisterUserScreen() {
 
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [accessMethod, setAccessMethod] = useState('email');
   const [perfil, setPerfil] = useState('Motorista');
   const [modalVisible, setModalVisible] = useState(false);
@@ -70,28 +71,45 @@ export default function RegisterUserScreen() {
           autoCapitalize="none"
         />
       </View>
+      { accessMethod === 'email' && (
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Senha</Text>
+
+          <TextInput
+            style={styles.inputLine}
+            placeholderTextColor="#888"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+        </View>
+      )}
 
       <Text style={styles.sectionLabel}>Forma de acesso:</Text>
 
       <TouchableOpacity
         style={[
-          styles.accessButtonBlue,
-          accessMethod === 'email' && styles.accessButtonActive
+          styles.accessButton,
+          accessMethod === 'email'
+            ? styles.accessButtonActive
+            : styles.accessButtonInactive
         ]}
         onPress={() => setAccessMethod('email')}
       >
-        <Text style={styles.accessButtonBlueText}>E-mail e Senha</Text>
+        <Text style={styles.accessButtonText}>E-mail e Senha</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={[
-          styles.accessButtonDark,
-          accessMethod === 'gmail' && styles.accessButtonActive
+          styles.accessButton,
+          accessMethod === 'gmail'
+            ? styles.accessButtonActive
+            : styles.accessButtonInactive
         ]}
         onPress={() => setAccessMethod('gmail')}
       >
         <Ionicons name="logo-google" size={18} color="#4285F4" style={{ marginRight: 8 }} />
-        <Text style={styles.accessButtonDarkText}>Entrar com Gmail</Text>
+        <Text style={styles.accessButtonText}>Entrar com Gmail</Text>
       </TouchableOpacity>
 
       <Text style={styles.sectionLabel}>Perfil:</Text>
@@ -279,4 +297,30 @@ const styles = StyleSheet.create({
     color: '#2541ff',
     fontWeight: 'bold',
   },
+  accessButton: {
+  width: '100%',
+  height: 50,
+  borderRadius: 14,
+  justifyContent: 'center',
+  alignItems: 'center',
+  flexDirection: 'row',
+  marginBottom: 12,
+},
+
+accessButtonActive: {
+  backgroundColor: '#2541ff',
+  borderWidth: 0,
+},
+
+accessButtonInactive: {
+  backgroundColor: '#1a1a1a',
+  borderWidth: 1,
+  borderColor: '#2541ff',
+},
+
+accessButtonText: {
+  color: '#FFF',
+  fontSize: 15,
+  fontWeight: '600',
+},
 });

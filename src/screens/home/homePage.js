@@ -16,9 +16,9 @@ import {
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import QuickActions from '../../components/quickActions/quickActions.js';
 import GeneralSummaryCard from '../../components/generalSummaryCard/GeneralSummaryCard.js';
-import CurrentBalanceCard from '../../components/currentBalanceCard/currentBalanceCard.js';
+// import CurrentBalanceCard from '../../components/currentBalanceCard/currentBalanceCard.js';
 import ValueSliderModal from '../../components/valueSliderModal/valueSliderModal.js';
-import FleetProgressCard from '../../components/fleetProgressCard/fleetProgressCard.js';
+// import FleetProgressCard from '../../components/fleetProgressCard/fleetProgressCard.js';
 import FleetExpensesOverview from '../../components/fleetExpensesOverview/fleetExpensesOverview.js';
 import PaymentCardsCarousel from '../../components/paymentCardsCarousel/paymentCardsCarousel.js';
 import InteractiveCarousel from '../../components/interactiveCarousel/interactiveCarousel.js';
@@ -34,6 +34,7 @@ const { height } = Dimensions.get('window');
 export default function HomePage({ navigation, route }) {
   // null = ainda não escolhido; a ação inicial depende do perfil (ver acaoInicial abaixo).
   const [selectedQuickAction, setSelectedQuickAction] = useState(null);
+  const [viagemSelecionada, setViagemSelecionada] = useState(null);
 
   const [saldoAtual, setSaldoAtual] = useState(53435.20);
   const [totalSaidas, setTotalSaidas] = useState(12143.50);
@@ -204,8 +205,8 @@ export default function HomePage({ navigation, route }) {
 
         {acaoAtiva === 'finance' && (userRole === 1 || userRole === 3) && (
           <>
-            <FleetProgressCard onFilterPress={abrirRelatorios} />
-            <CurrentBalanceCard saldoAtual={saldoAtual} totalSaidas={totalSaidas} />
+            {/* <FleetProgressCard /> */}
+            {/* <CurrentBalanceCard saldoAtual={saldoAtual} totalSaidas={totalSaidas} /> */}
             <FleetExpensesOverview onFilterPress={abrirRelatorios} onMenuPress={abrirRelatorios} />
             <View style={styles.atalhosFinanceiro}>
               <TouchableOpacity
@@ -251,8 +252,12 @@ export default function HomePage({ navigation, route }) {
         {acaoAtiva === 'rotes' && (
           <View style={styles.sectionContainer}>
             <Text style={styles.sectionTitle}>Gerenciamento de Rotas</Text>
-            <ViagemAtualCard />
+            <ViagemAtualCard 
+              viagemSelecionada={viagemSelecionada}
+              onSelectViagem={setViagemSelecionada}
+            />
             <RegistrarHodometroButton
+              viagem={viagemSelecionada}
               onButtonPress={() => navigation.navigate('Viagens', { usuario })}
             />
           </View>
@@ -378,4 +383,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-});
+});

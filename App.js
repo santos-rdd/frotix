@@ -63,4 +63,4 @@ export default function App() {
 // npx expo run:android
 // node --watch ./backend/server.js 
 // backend hospedado: https://frotix.onrender.com
-// por enquanto estarei usando local 
+// por enquanto estarei usando local 

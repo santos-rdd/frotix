@@ -1,8 +1,89 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import Svg, { Circle, G } from 'react-native-svg';
+import { useFocusEffect } from '@react-navigation/native';
+import { API_URL } from '../../config/api.js';
+
+const SLICE_COLORS = [
+  '#1E293B', 
+  '#E2E8F0', 
+  '#DC2626', 
+  '#F59E0B', 
+  '#10B981', 
+];
 
 export default function FleetExpensesOverview({ onFilterPress, onMenuPress }) {
+  const [loading, setLoading] = useState(false);
+  const [veiculosEmRota, setVeiculosEmRota] = useState(0);
+  const [kmRodados, setKmRodados] = useState('0');
+  const [custoPorKm, setCustoPorKm] = useState('R$0,00');
+  const [despesas, setDespesas] = useState([]);
+  const isFirstLoad = useRef(true);
+
+  const size = 150;
+  const strokeWidth = 26;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  const carregarDados = useCallback(async (isSilent = false) => {
+    try {
+      if (!isSilent || isFirstLoad.current) {
+        setLoading(true);
+      }
+      const response = await fetch(`${API_URL}/financeiro/visao-geral-frota?dias=7`);
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+      const data = await response.json();
+      if (data && data.sucesso) {
+        setVeiculosEmRota(data.veiculosEmRota ?? 0);
+        setKmRodados(data.kmRodadosFormatado || '0');
+        setCustoPorKm(data.custoPorKmFormatado || 'R$0,00');
+
+        const lista = data.despesas || [];
+        let anguloAcumulado = -90;
+        const fatiasProcessadas = lista.map((item, index) => {
+          const cor = SLICE_COLORS[index % SLICE_COLORS.length];
+          const pctExata = Number(item.porcentagemExata) || Number(item.porcentagem) || 0;
+          const angulo = (pctExata / 100) * 360;
+          const rotacao = anguloAcumulado;
+          anguloAcumulado += angulo;
+
+          return {
+            ...item,
+            color: cor,
+            rotacao,
+            strokeDash: (pctExata / 100) * circumference
+          };
+        });
+        setDespesas(fatiasProcessadas);
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar dados do fleetExpensesOverview:', err?.message || err);
+    } finally {
+      isFirstLoad.current = false;
+      setLoading(false);
+    }
+  }, [circumference]);
+
+  useFocusEffect(
+    useCallback(() => {
+      carregarDados(true);
+
+      const interval = setInterval(() => {
+        carregarDados(true);
+      }, 60000);
+
+      return () => clearInterval(interval);
+    }, [carregarDados])
+  );
+
+  const handleReload = () => {
+    carregarDados(false);
+    if (onMenuPress) onMenuPress();
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.mainCard}>
@@ -16,74 +97,98 @@ export default function FleetExpensesOverview({ onFilterPress, onMenuPress }) {
               <Text style={styles.filterText}>últimos 7 dias</Text>
               <Feather name="sliders" size={14} color="#FFF" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={onMenuPress} style={styles.menuButton}>
-              <Feather name="more-horizontal" size={20} color="#FFF" />
+            <TouchableOpacity onPress={handleReload} style={styles.menuButton} activeOpacity={0.7}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Feather name="rotate-cw" size={20} color="#FFF" />
+              )}
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.legendRow}>
-          <View style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: '#1E293B' }]} />
-            <Text style={styles.legendText}>Manutenção</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: '#E2E8F0' }]} />
-            <Text style={styles.legendText}>Combustível</Text>
-          </View>
-          <View style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: '#DC2626' }]} />
-            <Text style={styles.legendText}>Pedágios</Text>
-          </View>
+          {despesas.length > 0 ? (
+            despesas.map((item, index) => (
+              <View key={item.id || index} style={styles.legendItem}>
+                <View style={[styles.dot, { backgroundColor: item.color }]} />
+                <Text style={styles.legendText} numberOfLines={1}>{item.nome}</Text>
+              </View>
+            ))
+          ) : (
+            <View style={styles.legendItem}>
+              <View style={[styles.dot, { backgroundColor: '#E2E8F0' }]} />
+              <Text style={styles.legendText}>Sem despesas recentes</Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.chartSection}>
           <View style={styles.donutContainer}>
-            <View style={styles.donutRing}>
-              <View style={styles.donutHole} />
-            </View>
+            <Svg width={size} height={size}>
+              <G origin={`${size / 2}, ${size / 2}`}>
+                <Circle
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  stroke="rgba(255, 255, 255, 0.15)"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                />
+                {despesas.map((item, index) => (
+                  <Circle
+                    key={item.id || index}
+                    cx={size / 2}
+                    cy={size / 2}
+                    r={radius}
+                    stroke={item.color}
+                    strokeWidth={strokeWidth}
+                    strokeDasharray={`${item.strokeDash} ${circumference}`}
+                    strokeDashoffset={0}
+                    rotation={item.rotacao}
+                    origin={`${size / 2}, ${size / 2}`}
+                    fill="transparent"
+                  />
+                ))}
+              </G>
+            </Svg>
           </View>
 
           <View style={styles.percentagesColumn}>
-            <View style={styles.percentageItem}>
-              <View style={[styles.smallDot, { backgroundColor: '#1E293B' }]} />
-              <Text style={styles.percentageText}>37%</Text>
-            </View>
-            <View style={styles.percentageItem}>
-              <View style={[styles.smallDot, { backgroundColor: '#E2E8F0' }]} />
-              <Text style={styles.percentageText}>44%</Text>
-            </View>
-            <View style={styles.percentageItem}>
-              <View style={[styles.smallDot, { backgroundColor: '#DC2626' }]} />
-              <Text style={styles.percentageText}>14%</Text>
-            </View>
+            {despesas.length > 0 ? (
+              despesas.map((item, index) => (
+                <View key={item.id || index} style={styles.percentageItem}>
+                  <View style={[styles.smallDot, { backgroundColor: item.color }]} />
+                  <Text style={styles.percentageText}>{item.porcentagem}%</Text>
+                </View>
+              ))
+            ) : (
+              <View style={styles.percentageItem}>
+                <View style={[styles.smallDot, { backgroundColor: '#E2E8F0' }]} />
+                <Text style={styles.percentageText}>0%</Text>
+              </View>
+            )}
           </View>
         </View>
       </View>
 
       <View style={styles.bottomCardsRow}>
         <View style={styles.statCard}>
-          <Text style={styles.statNumber}>10</Text>
+          <Text style={styles.statNumber}>{veiculosEmRota}</Text>
           <Text style={styles.statLabel}>Veículos em{'\n'}rota</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statNumberMedium}>3.200</Text>
+          <Text style={styles.statNumberMedium}>{kmRodados}</Text>
           <Text style={styles.statUnit}>km</Text>
           <Text style={styles.statLabel}>rodados</Text>
         </View>
 
         <View style={styles.statCard}>
-          <Text style={styles.statPrice}>R$6,80</Text>
+          <Text style={styles.statPrice}>{custoPorKm}</Text>
           <Text style={styles.statLabel}>Custo por km</Text>
         </View>
       </View>
-
-        <View style={styles.paginationDots}>
-            <View style={styles.dotInactive} />
-            <View style={styles.dotActive} />
-            <View style={styles.dotInactive} />
-        </View>
     </View>
   );
 }
@@ -135,6 +240,8 @@ const styles = StyleSheet.create({
   legendRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 20,
     paddingHorizontal: 5,
   },
@@ -164,27 +271,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  donutRing: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    borderWidth: 26,
-    borderColor: '#E2E8F0', 
-    borderTopColor: '#1E293B', 
-    borderLeftColor: '#DC2626', 
-    justifyContent: 'center',
-    alignItems: 'center',
-    transform: [{ rotate: '-45deg' }],
-  },
-  donutHole: {
-    width: 98,
-    height: 98,
-    borderRadius: 49,
-    backgroundColor: '#2541ff',
-  },
   percentagesColumn: {
     justifyContent: 'center',
-    gap: 16,
+    gap: 12,
     paddingRight: 20,
   },
   percentageItem: {
@@ -246,23 +335,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
-   paginationDots: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginLeft: '43%',
-    marginTop: 30,
-  },
-  dotActive: {
-    width: 20,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#2541ff',
-  },
-  dotInactive: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#555',
-  },
-});
+});

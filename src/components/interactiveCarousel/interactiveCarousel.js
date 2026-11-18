@@ -18,7 +18,6 @@ export default function InteractiveCarousel({ onOpenSlider, atividades, onAddFor
     const currentIndex = Math.floor(event.nativeEvent.contentOffset.x / slideSize);
     setActiveIndex(currentIndex);
   };
-
   const renderItem = ({ item }) => {
     return (
       <View style={styles.slideContainer}>
@@ -42,8 +41,8 @@ export default function InteractiveCarousel({ onOpenSlider, atividades, onAddFor
         renderItem={renderItem}
         onScroll={handleScroll}
         scrollEventThrottle={16}
-        snapToInterval={width} // Trava o arraste exatamente na largura da tela
-        decelerationRate="fast" // Faz a animação de parada ser imediata
+        snapToInterval={width} 
+        decelerationRate="fast" 
       />
 
       <View style={styles.paginationDots}>
@@ -89,4 +88,4 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#555',
   },
-});
+});

@@ -68,4 +68,4 @@ const styles = StyleSheet.create({
     color: '#b22222',
     fontSize: 12,
   },
-});
+});

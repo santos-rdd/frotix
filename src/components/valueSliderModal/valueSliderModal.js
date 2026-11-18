@@ -8,7 +8,8 @@ import {
   Animated,
   TouchableWithoutFeedback,
   StyleSheet,
-  Keyboard
+  Keyboard,
+  PanResponder
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -37,7 +38,7 @@ export default function ValueSliderModal({
   onNext,
   formasPagamento = [],
 }) {
-
+  console.log(amountValue)
   const navigation = useNavigation();
   const cardThemeColor = actionType === 'entrada' ? '#2541ff' : '#b22222';
   const cardHeightAnim = useRef(new Animated.Value(340)).current;
@@ -47,6 +48,41 @@ export default function ValueSliderModal({
   const [indiceForma, setIndiceForma] = useState(0);
   const opcoesCarrossel = [...formasPagamento, OPCAO_OUTROS];
   const textos = TEXTOS[actionType] || TEXTOS.entrada;
+
+  const MAX_VALUE = 999.99;
+  const barWidthRef = useRef(0);
+  const barXRef = useRef(0);
+  const barContainerRef = useRef(null);
+
+  const numericValue = parseFloat(String(amountValue || '0').replace(',', '.')) || 0;
+  const currentProgress = Math.min(Math.max(numericValue / MAX_VALUE, 0), 1);
+
+  const updateValueFromPosition = (x) => {
+    if (barWidthRef.current <= 0) return;
+    
+    let relativeX = x - barXRef.current;
+    let progress = relativeX / barWidthRef.current;
+    
+    if (progress < 0) progress = 0;
+    if (progress > 1) progress = 1;
+
+    let calculatedValue = progress * MAX_VALUE;
+    
+    setAmountValue(calculatedValue.toFixed(2).replace('.', ','));
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        updateValueFromPosition(evt.nativeEvent.locationX);
+      },
+      onPanResponderMove: (evt) => {
+        updateValueFromPosition(evt.nativeEvent.locationX);
+      },
+    })
+  ).current;
 
   useEffect(() => {
     if (!visible) {
@@ -157,11 +193,19 @@ export default function ValueSliderModal({
                   )}
                 </View>
 
-                <View style={styles.sliderBarContainer}>
-                  <View style={styles.sliderLineFilled} />
+                <View 
+                  ref={barContainerRef}
+                  style={styles.sliderBarContainer}
+                  onLayout={(event) => {
+                    barWidthRef.current = event.nativeEvent.layout.width;
+                  }}
+                  {...panResponder.panHandlers}
+                >
+                  <View style={[styles.sliderLineFilled, { flex: currentProgress || 0.001 }]} />
                   <View style={styles.sliderThumb} />
-                  <View style={styles.sliderLineEmpty} />
+                  <View style={[styles.sliderLineEmpty, { flex: (1 - currentProgress) || 0.001 }]} />
                 </View>
+
                 <Text style={styles.sliderInstruction}>Deslize para selecionar a quantidade</Text>
 
                 <TouchableOpacity style={styles.forwardButton} onPress={handleForwardPress}>
@@ -250,9 +294,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     marginVertical: 10,
+    paddingVertical: 15,
   },
   sliderLineFilled: {
-    flex: 1,
     height: 3,
     backgroundColor: '#121212',
   },
@@ -264,7 +308,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   sliderLineEmpty: {
-    flex: 1,
     height: 3,
     backgroundColor: '#FFF',
   },
@@ -355,4 +398,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+});
