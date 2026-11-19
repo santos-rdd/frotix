@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, ImageBackground } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import { formasPagamentoIniciais, labelTipo } from '../../constants/formasPagamentoMock.js';
+import { labelTipo } from '../../constants/formasPagamento.js';
 
 // Largura do cartão + espaço entre cartões: usada para saber qual cartão está visível.
 const LARGURA_CARTAO = 319;
@@ -14,10 +14,10 @@ const imagensCartao = [
 
 /**
  * Carrossel das formas de pagamento cadastradas.
- * formas: lista de formas (ver constants/formasPagamentoMock.js)
+ * formas: lista de formas vindas do backend (GET /formas-pagamento)
  * onChangeIndex(indice): avisa qual cartão está visível (usado pelo "Deletar").
  */
-export default function PaymentCardsCarousel({ formas = formasPagamentoIniciais, onChangeIndex }) {
+export default function PaymentCardsCarousel({ formas = [], onChangeIndex }) {
   const [indiceAtual, setIndiceAtual] = useState(0);
 
   const handleScroll = (event) => {
@@ -84,7 +84,7 @@ export default function PaymentCardsCarousel({ formas = formasPagamentoIniciais,
       <View style={[styles.cardBase, styles.cardPix]}>
         <MaterialCommunityIcons name={icones[item.tipo] || 'cash-multiple'} size={48} color="#FFF" />
         <Text style={styles.outroTitulo}>{labelTipo(item.tipo)}</Text>
-        {item.descricao ? <Text style={styles.pixChave}>{item.descricao}</Text> : null}
+        {item.descricao || item.nome ? <Text style={styles.pixChave}>{item.descricao || item.nome}</Text> : null}
       </View>
     );
   };

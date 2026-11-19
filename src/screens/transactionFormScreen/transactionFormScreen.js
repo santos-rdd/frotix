@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -11,15 +11,17 @@ import {
   Modal,
   FlatList,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { nomesCategorias } from '../../constants/categoriasMock.js';
+import { listarCategorias, listarFormas, registrarTransacao, enviarComprovante } from '../../services/frotix.js';
+import { descreverForma } from '../../constants/formasPagamento.js';
 
 export default function TransactionFormScreen({ route, navigation }) {
-  const { actionType, amountValue, formaPagamento } = route.params || { actionType: 'entrada', amountValue: '0' };
+  const { actionType, amountValue, formaPagamento, idFormaPagamento } = route.params || { actionType: 'entrada', amountValue: '0' };
 
   const [step, setStep] = useState('form');
 
@@ -47,6 +49,19 @@ export default function TransactionFormScreen({ route, navigation }) {
 
   const scaleAnim = useState(new Animated.Value(0.5))[0];
 
+  // Erro I3: categorias e formas vêm do banco, com id. O formulário mostra o nome,
+  // mas envia o id (antes mandava nomes de exemplo que não existiam no banco).
+  const [categorias, setCategorias] = useState([]);
+  const [formas, setFormas] = useState([]);
+  const [idCategoria, setIdCategoria] = useState(null);
+  const [idForma, setIdForma] = useState(idFormaPagamento || null);
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    listarCategorias().then(setCategorias).catch((e) => console.warn('Categorias:', e.message));
+    listarFormas().then(setFormas).catch((e) => console.warn('Formas:', e.message));
+  }, []);
+
   // Função para validar e atualizar campos numéricos (bloqueia letras e caracteres inválidos)
   const updateNumericField = (field, value) => {
     // Permite apenas números, ponto e vírgula
@@ -62,9 +77,10 @@ export default function TransactionFormScreen({ route, navigation }) {
     let options = [];
     if (type === 'categoria') {
       // Vem da tela Categorias Financeiras (dívida usa as categorias de saída).
-      options = nomesCategorias(actionType === 'entrada' ? 'entrada' : 'saida');
+      const tipo = actionType === 'entrada' ? 'entrada' : 'saida';
+      options = [...categorias.filter((c) => c.tipo === tipo).map((c) => c.nome), 'Outros'];
     } else if (type === 'formaPagamento') {
-      options = ['Dinheiro', 'Pix', 'Cartão de Crédito', 'Cartão de Débito', 'Boleto', 'Transferência'];
+      options = [...formas.map(descreverForma), 'Outros'];
     } else if (type === 'estadoOuStatus') {
       options = ['Pago', 'Pendente', 'Cancelado'];
     } else if (type === 'data') {
@@ -80,6 +96,11 @@ export default function TransactionFormScreen({ route, navigation }) {
 
   const selectOption = (value) => {
     updateField(modalType, value);
+    if (modalType === 'categoria') {
+      setIdCategoria(categorias.find((c) => c.nome === value)?.id || null);
+    } else if (modalType === 'formaPagamento') {
+      setIdForma(formas.find((f) => descreverForma(f) === value)?.id || null);
+    }
     setModalVisible(false);
   };
 
@@ -172,34 +193,51 @@ export default function TransactionFormScreen({ route, navigation }) {
     );
   };
 
+  // Envia os anexos para o Storage e devolve os caminhos salvos (erro I4: antes ia
+  // para o backend o caminho do arquivo no celular, que ninguém mais consegue abrir).
+  const enviarAnexos = async (lista) => {
+    const caminhos = [];
+    for (const arquivo of lista) {
+      caminhos.push(await enviarComprovante(arquivo));
+    }
+    return caminhos;
+  };
+
   const handleFinalSubmit = async () => {
+    if (enviando) return;
+    if (!formData.descricao.trim()) {
+      Alert.alert('Campo obrigatório', 'Informe a descrição.');
+      return;
+    }
+    const valor = parseFloat(String(formData.valorParcela).replace(',', '.'));
+    if (!(valor > 0)) {
+      Alert.alert('Valor inválido', 'Informe um valor maior que zero.');
+      return;
+    }
+    if (actionType === 'divida' && !(parseInt(formData.quantidadeParcelas, 10) >= 2)) {
+      Alert.alert('Parcelas', 'Uma dívida precisa ter pelo menos 2 parcelas. Para pagamento único, registre uma saída.');
+      return;
+    }
+
+    setEnviando(true);
     try {
       const dataAtual = new Date().toISOString().split('T')[0];
 
-      const payloadBancoDados = {
-        tipo: actionType,
-        ...formData,
-        data: formData.data || dataAtual,
-        anexos: {
-          fotos: fotos.map(f => f.uri),
-          documentos: documentos.map(d => d.uri),
-          comprovantes: comprovantes.map(c => c.uri)
-        }
+      const anexos = {
+        fotos: await enviarAnexos(fotos),
+        documentos: await enviarAnexos(documentos),
+        comprovantes: await enviarAnexos(comprovantes),
       };
 
-      const response = await fetch('http://localhost:3000/financeiro/transacoes', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payloadBancoDados),
+      // Erro I2: antes a URL era "http://localhost:3000" fixa; agora usa o API_URL e o token.
+      await registrarTransacao({
+        tipo: actionType,
+        ...formData,
+        idCategoria,
+        idFormaPagamento: idForma,
+        data: formData.data || dataAtual,
+        anexos,
       });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.sucesso) {
-        throw new Error(result.mensagem || 'Erro ao salvar transação.');
-      }
 
       setStep('success');
 
@@ -216,6 +254,8 @@ export default function TransactionFormScreen({ route, navigation }) {
     } catch (error) {
       console.error('Erro ao enviar transação:', error);
       Alert.alert('Erro', error.message || 'Não foi possível conectar ao servidor.');
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -546,8 +586,9 @@ export default function TransactionFormScreen({ route, navigation }) {
                 <TouchableOpacity 
                   style={[styles.saveButton, { backgroundColor: currentConfig.btnColor }]}
                   onPress={handleMainAction}
+                  disabled={enviando}
                 >
-                  <Text style={styles.saveButtonText}>{currentConfig.btnText}</Text>
+                  {enviando ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>{currentConfig.btnText}</Text>}
                 </TouchableOpacity>
 
                 <TouchableOpacity style={styles.cancelButton} onPress={() => navigation.goBack()}>
@@ -591,8 +632,9 @@ export default function TransactionFormScreen({ route, navigation }) {
                 <TouchableOpacity 
                   style={styles.prosseguirButton}
                   onPress={handleMainAction}
+                  disabled={enviando}
                 >
-                  <Text style={styles.prosseguirButtonText}>Prosseguir</Text>
+                  {enviando ? <ActivityIndicator color="#121212" /> : <Text style={styles.prosseguirButtonText}>Prosseguir</Text>}
                 </TouchableOpacity>
 
                 <TouchableOpacity 

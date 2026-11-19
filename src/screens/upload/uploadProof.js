@@ -9,15 +9,14 @@ import {
   ActivityIndicator
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { API_URL } from '../../config/api.js'; 
+import { enviarComprovante } from '../../services/frotix.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation';
 
-export default function uploadProofScreen({ navigation, route }) {
+export default function UploadProofScreen({ navigation, route }) {
   const [imageUri, setImageUri] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const { bankUser, usuario } = route?.params || {};
-  const userId = bankUser?.id || bankUser?._id;
+  const { usuario } = route?.params || {};
 
   // Função para tirar foto usando a Câmera
   const takePhotoWithCamera = async () => {
@@ -81,44 +80,14 @@ export default function uploadProofScreen({ navigation, route }) {
     setLoading(true);
 
     try {
-      const formData = new FormData();
-      
-      const filename = imageUri.split('/').pop();
-      const match = /\.(\w+)$/.exec(filename);
-      const type = match ? `image/${match[1]}` : `image`;
-
-      formData.append('comprovante', {
-        uri: imageUri,
-        name: filename,
-        type,
-      });
-
-      if (userId) {
-        formData.append('userId', userId);
-      }
-
-      console.log('Enviando comprovante para:', `${API_URL}/comprovantes/upload`);
-
-      const response = await fetch(`${API_URL}/comprovantes/upload`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        Alert.alert("Sucesso", "Comprovante enviado com sucesso para o banco de dados!");
-        setImageUri(null); 
-        navigation.goBack(); 
-      } else {
-        Alert.alert("Erro", data.erro || "Falha ao enviar o comprovante.");
-      }
+      // Erro I1/P12: a rota /comprovantes/upload agora existe e guarda o arquivo no Storage.
+      await enviarComprovante({ uri: imageUri });
+      Alert.alert("Sucesso", "Comprovante enviado com sucesso!");
+      setImageUri(null);
+      navigation.goBack();
     } catch (error) {
       console.error("Erro no upload:", error);
-      Alert.alert("Erro de Conexão", "Não foi possível enviar a imagem ao servidor.");
+      Alert.alert("Erro", error.message || "Não foi possível enviar a imagem ao servidor.");
     } finally {
       setLoading(false);
     }

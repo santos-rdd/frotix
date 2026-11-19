@@ -14,7 +14,7 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import PaymentCardsCarousel from '../paymentCardsCarousel/paymentCardsCarousel.js';
-import { descreverForma } from '../../constants/formasPagamentoMock.js';
+import { descreverForma } from '../../constants/formasPagamento.js';
 
 // Textos do passo de seleção (Figma: "Registrar Entrada3 opção 2/3" e "Registrar Saída3 opção 2").
 const TEXTOS = {
@@ -38,7 +38,6 @@ export default function ValueSliderModal({
   onNext,
   formasPagamento = [],
 }) {
-  console.log(amountValue)
   const navigation = useNavigation();
   const cardThemeColor = actionType === 'entrada' ? '#2541ff' : '#b22222';
   const cardHeightAnim = useRef(new Animated.Value(340)).current;
@@ -122,7 +121,8 @@ export default function ValueSliderModal({
     navigation.navigate('TransactionForm', {
       actionType: actionType,
       amountValue: amountValue,
-      formaPagamento: forma && forma.tipo !== 'outros' ? descreverForma(forma) : '',
+      formaPagamento: forma && forma.id !== OPCAO_OUTROS.id ? descreverForma(forma) : '',
+      idFormaPagamento: forma && forma.id !== OPCAO_OUTROS.id ? forma.id : null,
     });
   };
 

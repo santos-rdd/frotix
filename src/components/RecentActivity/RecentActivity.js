@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { API_URL } from '../../config/api.js';
+import { apiFetch } from '../../services/api.js';
 
 const INTERVALO_MS = 30000; 
 
@@ -16,8 +16,8 @@ export default function RecentActivity({ limite = 4, onMenuPress }) {
     buscando.current = true;
     setCarregando(true);
     try {
-      const r = await fetch(
-        `${API_URL}/resumo/atividades-recentes?limite=${limite}&t=${Date.now()}`,
+      const r = await apiFetch(
+        `/resumo/atividades-recentes?limite=${limite}&t=${Date.now()}`,
         { headers: { 'Cache-Control': 'no-cache' } }
       );
       const json = await r.json();

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
-import { resumoFrota } from '../../constants/frotaMock.js';
+import { META_KM_MES } from '../../constants/frota.js';
 
 // Data de hoje por extenso, ex.: "domingo, 8 de novembro".
 const hojePorExtenso = () =>
@@ -9,8 +9,8 @@ const hojePorExtenso = () =>
 
 export default function FleetProgressCard({ 
   date = hojePorExtenso(),
-  currentKm = resumoFrota.kmRodadosMes.toLocaleString('pt-BR'),
-  totalKm = resumoFrota.metaKmMes.toLocaleString('pt-BR'),
+  currentKm = '0',
+  totalKm = META_KM_MES.toLocaleString('pt-BR'),
   periodText = 'últimos 7 dias',
   onFilterPress 
 }) {

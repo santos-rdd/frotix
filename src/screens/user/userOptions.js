@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { CommonActions } from '@react-navigation/native';
+import { limparSessao } from '../../services/api.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation';
 
 
@@ -23,6 +24,7 @@ export default function UserProfileScreen({ navigation, route }) {
     } catch (error) {
       console.log('Erro ao deslogar do Google:', error);
     }
+    await limparSessao();
 
     navigation.dispatch(
       CommonActions.reset({

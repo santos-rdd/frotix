@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
-import { CommonActions } from '@react-navigation/native';
+import { CommonActions, useFocusEffect } from '@react-navigation/native';
 import {
   StyleSheet,
   View,
@@ -27,7 +27,8 @@ import ViagemAtualCard from '../../components/viagemAtualCard/viagemAtualCard.js
 import RegistrarHodometroButton from '../../components/registrarHodometroButton/registrarHodometroButton.js';
 import GestorHome from '../gestorHome/gestorHome.js';
 import FormaPagamentoModal from '../../components/formaPagamentoModal/formaPagamentoModal.js';
-import { formasPagamentoIniciais, descreverForma } from '../../constants/formasPagamentoMock.js';
+import { descreverForma } from '../../constants/formasPagamento.js';
+import { listarFormas, criarForma, removerForma } from '../../services/frotix.js';
 
 const { height } = Dimensions.get('window');
 
@@ -36,15 +37,6 @@ export default function HomePage({ navigation, route }) {
   const [selectedQuickAction, setSelectedQuickAction] = useState(null);
   const [viagemSelecionada, setViagemSelecionada] = useState(null);
 
-  const [saldoAtual, setSaldoAtual] = useState(53435.20);
-  const [totalSaidas, setTotalSaidas] = useState(12143.50);
-  const [atividades, setAtividades] = useState([
-    { id: '1', tipo: 'saida', titulo: 'Alimentação', valor: '- R$ 320.99', data: '14 Setembro 14:12', saldoApos: 'R$ 3941.23' },
-    { id: '2', tipo: 'entrada', titulo: 'Entrada', valor: '+ R$ 900.95', data: '14 Setembro 14:12', saldoApos: 'R$ 3941.23' },
-    { id: '3', tipo: 'entrada', titulo: 'Freelance', valor: '+ R$ 236.12', data: '14 Setembro 14:12', saldoApos: 'R$ 3941.23' },
-    { id: '4', tipo: 'saida', titulo: 'Abastecimento', valor: '- R$ 45.00', data: '14 Setembro 14:12', saldoApos: 'R$ 3941.23' },
-  ]);
-
   const [isSliderVisible, setIsSliderVisible] = useState(false);
   const [actionType, setActionType] = useState('entrada');
   const [amountValue, setAmountValue] = useState('423');
@@ -52,15 +44,30 @@ export default function HomePage({ navigation, route }) {
 
   const slideAnim = useRef(new Animated.Value(height)).current;
 
-  // Formas de pagamento (dados de exemplo até o backend de FORMA_PAGAMENTO ficar pronto).
-  const [formasPagamento, setFormasPagamento] = useState(formasPagamentoIniciais);
+  // Formas de pagamento cadastradas no banco (erro P4: antes eram dados de exemplo).
+  const [formasPagamento, setFormasPagamento] = useState([]);
   const [indiceForma, setIndiceForma] = useState(0); // cartão visível no carrossel
   const [isFormaModalVisible, setIsFormaModalVisible] = useState(false);
 
-  const handleSalvarForma = (novaForma) => {
-    setFormasPagamento((atual) => [...atual, { id: Date.now().toString(), ...novaForma }]);
-    setIsFormaModalVisible(false);
-    Alert.alert('Forma de pagamento adicionada', descreverForma(novaForma));
+  const carregarFormas = useCallback(async () => {
+    try {
+      setFormasPagamento(await listarFormas());
+    } catch (e) {
+      console.warn('Erro ao carregar formas de pagamento:', e.message);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => { carregarFormas(); }, [carregarFormas]));
+
+  const handleSalvarForma = async (novaForma) => {
+    try {
+      const criada = await criarForma(novaForma);
+      setIsFormaModalVisible(false);
+      await carregarFormas();
+      Alert.alert('Forma de pagamento adicionada', descreverForma(criada));
+    } catch (e) {
+      Alert.alert('Não foi possível salvar', e.message);
+    }
   };
 
   // Deleta a forma que está visível no carrossel, depois de confirmar.
@@ -78,9 +85,14 @@ export default function HomePage({ navigation, route }) {
         {
           text: 'Deletar',
           style: 'destructive',
-          onPress: () => {
-            setFormasPagamento((atual) => atual.filter((f) => f.id !== forma.id));
-            setIndiceForma(0);
+          onPress: async () => {
+            try {
+              await removerForma(forma.id);
+              setIndiceForma(0);
+              await carregarFormas();
+            } catch (e) {
+              Alert.alert('Não foi possível deletar', e.message);
+            }
           },
         },
       ]
@@ -108,41 +120,8 @@ export default function HomePage({ navigation, route }) {
     });
   };
 
-  const handleNextStep = () => {
-    const valorNumerico = parseFloat(amountValue.replace(',', '.')) || 0;
-    
-    let novoSaldo = saldoAtual;
-    let novaSaidaTotal = totalSaidas;
-    let tituloAcao = 'Entrada';
-
-    if (actionType === 'entrada') {
-      novoSaldo += valorNumerico;
-      tituloAcao = 'Entrada';
-    } else if (actionType === 'saida') {
-      novoSaldo -= valorNumerico;
-      novaSaidaTotal += valorNumerico;
-      tituloAcao = 'Saída';
-    } else if (actionType === 'divida') {
-      novoSaldo -= valorNumerico;
-      novaSaidaTotal += valorNumerico;
-      tituloAcao = 'Nova Dívida';
-    }
-
-    setSaldoAtual(novoSaldo);
-    setTotalSaidas(novaSaidaTotal);
-
-    const novoLog = {
-      id: Date.now().toString(),
-      tipo: actionType === 'entrada' ? 'entrada' : 'saida',
-      titulo: tituloAcao,
-      valor: `${actionType === 'entrada' ? '+ ' : '- '}R$ ${valorNumerico.toFixed(2).replace('.', ',')}`,
-      data: 'Hoje',
-      saldoApos: `R$ ${novoSaldo.toFixed(2).replace('.', ',')}`
-    };
-
-    setAtividades([novoLog, ...atividades]);
-    handleCloseSlider();
-  };
+  // O lançamento em si é salvo no formulário (TransactionForm), que grava no banco.
+  const handleNextStep = () => handleCloseSlider();
 
   const authGoogle = route?.params?.auth || null;
   const bankUser = route?.params?.bankUser || null;
@@ -166,6 +145,7 @@ export default function HomePage({ navigation, route }) {
   // não veem esse card, então abrem em "Rotas" (viagem atual), como no Figma do Motorista.
   const acaoInicial = userRole === 1 || userRole === 3 ? 'finance' : 'rotes';
   const acaoAtiva = selectedQuickAction ?? acaoInicial;
+  const podeEditarFormas = userRole === 1 || userRole === 3;
 
   // Dados do usuário repassados às telas de frota (cabeçalho e barra inferior).
   const usuario = { nome: userName, foto: userPhoto, role: userRole };
@@ -235,9 +215,8 @@ export default function HomePage({ navigation, route }) {
             />
             <InteractiveCarousel 
               onOpenSlider={handleOpenSlider} 
-              atividades={atividades} 
-              onAddForma={() => setIsFormaModalVisible(true)}
-              onDeleteForma={handleDeletarForma}
+              onAddForma={podeEditarFormas ? () => setIsFormaModalVisible(true) : undefined}
+              onDeleteForma={podeEditarFormas ? handleDeletarForma : undefined}
               onMenuAtividades={abrirRelatorios}
             />
           </View>

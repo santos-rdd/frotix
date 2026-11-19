@@ -9,9 +9,16 @@ import TripCard from '../../components/tripCard/tripCard.js';
 import VoltarButton from '../../components/voltarButton/voltarButton.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import {
-  veiculos, rotas, viagens as viagensIniciais, buscarVeiculo, buscarRota, STATUS_ROTA, formatarKm,
-} from '../../constants/frotaMock.js';
+import { STATUS_ROTA, formatarKm } from '../../constants/frota.js';
+import { listarRotas, listarVeiculos, abrirViagem as abrirViagemApi, concluirViagem } from '../../services/frotix.js';
+import useDados from '../../hooks/useDados.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
+
+// Rotas e veículos juntos, para a tela recarregar tudo de uma vez.
+const carregarTudo = async () => {
+  const [rotas, veiculos] = await Promise.all([listarRotas(), listarVeiculos()]);
+  return { rotas, veiculos };
+};
 
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
 
@@ -24,30 +31,40 @@ export default function Viagens({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const modoMotorista = route?.params?.modo === 'motorista';
 
-  const [viagens, setViagens] = useState(viagensIniciais);
+  // Erro P6/P11: viagens = rotas do banco. O motorista recebe só as dele (o backend filtra).
+  const { dados, carregando, erro, recarregar } = useDados(carregarTudo, { rotas: [], veiculos: [] });
+  const rotas = dados?.rotas || [];
+  const veiculos = dados?.veiculos || [];
+  const buscarVeiculo = (id) => veiculos.find((v) => v.id === id);
+
   const [veiculoId, setVeiculoId] = useState(route?.params?.veiculoId || null);
   const [rotaId, setRotaId] = useState(null);
-  const [hodometroInicial, setHodometroInicial] = useState(
-    route?.params?.veiculoId ? String(buscarVeiculo(route.params.veiculoId)?.hodometro ?? '') : ''
-  );
-  const [hodometrosFinais, setHodometrosFinais] = useState({}); // { [viagemId]: texto }
+  const [hodometroInicial, setHodometroInicial] = useState('');
+  const [hodometrosFinais, setHodometrosFinais] = useState({}); // { [rotaId]: texto }
+  const [salvando, setSalvando] = useState(false);
 
-  const emAndamento = viagens.filter((v) => v.status === 'em_andamento');
-  const concluidas = viagens.filter((v) => v.status === 'concluida');
+  const emAndamento = rotas.filter((r) => r.status === 'em_transito');
+  const concluidas = rotas.filter((r) => r.status === 'concluida');
 
-  // Só oferece veículos disponíveis e rotas agendadas que não estejam numa viagem aberta.
-  const ocupados = new Set(emAndamento.map((v) => v.veiculoId));
-  const rotasOcupadas = new Set(emAndamento.map((v) => v.rotaId));
   const opcoesVeiculo = veiculos
-    .filter((v) => v.status === 'disponivel' && !ocupados.has(v.id))
+    .filter((v) => v.status === 'disponivel')
     .map((v) => ({ id: v.id, label: `${v.modelo} · ${v.placa}` }));
   const opcoesRota = rotas
-    .filter((r) => r.status === 'agendada' && !rotasOcupadas.has(r.id))
-    .map((r) => ({ id: r.id, label: `${r.origem} → ${r.destino}` }));
+    .filter((r) => r.status === 'agendada')
+    .map((r) => ({ id: r.id, label: `${r.origem} → ${r.destino}${r.dataInicial ? ` · ${r.dataInicial}` : ''}` }));
 
   const selecionarVeiculo = (id) => {
     setVeiculoId(id);
     setHodometroInicial(String(buscarVeiculo(id)?.hodometro ?? ''));
+  };
+
+  // Ao escolher a rota, já sugere o veículo e o hodômetro cadastrados nela.
+  const selecionarRota = (id) => {
+    setRotaId(id);
+    const rota = rotas.find((r) => r.id === id);
+    if (rota?.veiculoId && buscarVeiculo(rota.veiculoId)?.status === 'disponivel') {
+      selecionarVeiculo(rota.veiculoId);
+    }
   };
 
   const limparFormulario = () => {
@@ -56,51 +73,56 @@ export default function Viagens({ navigation, route }) {
     setHodometroInicial('');
   };
 
-  const abrirViagem = () => {
+  const abrirViagem = async () => {
     if (!veiculoId || !rotaId || !hodometroInicial) {
       Alert.alert('Campos obrigatórios', 'Selecione o veículo, a rota e informe o hodômetro inicial.');
       return;
     }
     const inicial = Number(hodometroInicial);
     const veiculo = buscarVeiculo(veiculoId);
-    if (inicial < veiculo.hodometro) {
+    if (veiculo && inicial < veiculo.hodometro) {
       Alert.alert('Hodômetro inválido', `O hodômetro do veículo já marca ${formatarKm(veiculo.hodometro)}.`);
       return;
     }
-    const rota = buscarRota(rotaId);
-    const nova = {
-      id: `t${Date.now()}`,
-      rotaId,
-      veiculoId,
-      motorista: modoMotorista ? usuario?.nome || rota.motorista : rota.motorista,
-      hodometroInicial: inicial,
-      hodometroFinal: null,
-      status: 'em_andamento',
-    };
-    setViagens([nova, ...viagens]);
-    limparFormulario();
+    if (salvando) return;
+    setSalvando(true);
+    try {
+      await abrirViagemApi(rotaId, { veiculoId, hodometroInicial: inicial });
+      limparFormulario();
+      await recarregar();
+    } catch (e) {
+      Alert.alert('Não foi possível abrir a viagem', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
-  const fecharViagem = (viagem) => {
+  const fecharViagem = async (viagem) => {
     const texto = hodometrosFinais[viagem.id];
     const final = Number(texto);
     if (!texto || final <= viagem.hodometroInicial) {
       Alert.alert('Hodômetro final inválido', `Informe um valor maior que ${formatarKm(viagem.hodometroInicial)}.`);
       return;
     }
-    setViagens(viagens.map((v) => (v.id === viagem.id ? { ...v, hodometroFinal: final, status: 'concluida' } : v)));
-    setHodometrosFinais({ ...hodometrosFinais, [viagem.id]: '' });
+    if (salvando) return;
+    setSalvando(true);
+    try {
+      await concluirViagem(viagem.id, final);
+      setHodometrosFinais({ ...hodometrosFinais, [viagem.id]: '' });
+      await recarregar();
+    } catch (e) {
+      Alert.alert('Não foi possível fechar a viagem', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
-  const dadosCard = (viagem) => {
-    const rota = buscarRota(viagem.rotaId);
-    return {
-      origem: rota?.origem,
-      destino: rota?.destino,
-      placa: buscarVeiculo(viagem.veiculoId)?.placa,
-      motorista: viagem.motorista,
-    };
-  };
+  const dadosCard = (viagem) => ({
+    origem: viagem.origem,
+    destino: viagem.destino,
+    placa: viagem.placa || 'Sem veículo',
+    motorista: viagem.motorista,
+  });
 
   return (
     <>
@@ -120,7 +142,7 @@ export default function Viagens({ navigation, route }) {
               label="ROTA"
               opcoes={opcoesRota}
               valor={rotaId}
-              onSelecionar={setRotaId}
+              onSelecionar={selecionarRota}
               vazio="Nenhuma rota agendada"
             />
             <Text style={styles.label}>HODÔMETRO INICIAL (km)</Text>
@@ -136,7 +158,7 @@ export default function Viagens({ navigation, route }) {
               <TouchableOpacity style={[styles.botao, styles.botaoCancelar]} onPress={limparFormulario}>
                 <Text style={styles.botaoTextoClaro}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.botao, styles.botaoClaro]} onPress={abrirViagem}>
+              <TouchableOpacity style={[styles.botao, styles.botaoClaro]} onPress={abrirViagem} disabled={salvando}>
                 <Text style={styles.botaoTextoEscuro}>Abrir viagem</Text>
               </TouchableOpacity>
             </View>
@@ -159,7 +181,7 @@ export default function Viagens({ navigation, route }) {
                 placeholder={String(viagem.hodometroInicial)}
                 placeholderTextColor="rgba(255,255,255,0.6)"
               />
-              <TouchableOpacity style={[styles.botao, styles.botaoClaro, styles.botaoFechar]} onPress={() => fecharViagem(viagem)}>
+              <TouchableOpacity style={[styles.botao, styles.botaoClaro, styles.botaoFechar]} onPress={() => fecharViagem(viagem)} disabled={salvando}>
                 <Text style={styles.botaoTextoEscuro}>Fechar</Text>
               </TouchableOpacity>
             </TripCard>
@@ -170,14 +192,14 @@ export default function Viagens({ navigation, route }) {
               key={viagem.id}
               titulo="VIAGEM CONCLUÍDA"
               status={STATUS_ROTA.concluida}
-              infoDireita={`Hodômetro: ${viagem.hodometroFinal.toLocaleString('pt-BR')}\n${formatarKm(
-                viagem.hodometroFinal - viagem.hodometroInicial
-              )} rodados`}
+              infoDireita={`Hodômetro: ${viagem.hodometroFinal.toLocaleString('pt-BR')}\n${formatarKm(viagem.kmRodados)} rodados`}
               {...dadosCard(viagem)}
             />
           ))}
 
-          {emAndamento.length === 0 && concluidas.length === 0 ? (
+          <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={rotas.length > 0} />
+
+          {emAndamento.length === 0 && concluidas.length === 0 && !carregando && !erro ? (
             <Text style={styles.vazio}>Nenhuma viagem registrada ainda.</Text>
           ) : null}
 

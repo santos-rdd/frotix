@@ -6,9 +6,8 @@ import SelectField from '../../components/selectField/selectField.js';
 import { CardFormulario, CampoTexto, BotoesFormulario } from '../../components/formularioFrota/formularioFrota.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import {
-  veiculos, STATUS_VEICULO, placaValida, formatarPlaca, adicionarVeiculo, formatarKm,
-} from '../../constants/frotaMock.js';
+import { STATUS_VEICULO, placaValida, formatarPlaca, formatarKm } from '../../constants/frota.js';
+import { cadastrarVeiculo } from '../../services/frotix.js';
 
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
 const anoAtual = new Date().getFullYear();
@@ -33,14 +32,13 @@ export default function CadastroVeiculo({ navigation, route }) {
   const [consumo, setConsumo] = useState('');
   const [status, setStatus] = useState('disponivel');
   const [erros, setErros] = useState({});
+  const [salvando, setSalvando] = useState(false);
 
   const validar = () => {
     const novos = {};
     if (!modelo.trim()) novos.modelo = 'Informe o modelo do veículo.';
     if (!placaValida(placa)) {
       novos.placa = 'Placa inválida. Use ABC-1234 ou o padrão Mercosul ABC1D23.';
-    } else if (veiculos.some((v) => formatarPlaca(v.placa) === formatarPlaca(placa))) {
-      novos.placa = 'Já existe um veículo com essa placa.';
     }
     const anoNum = Number(ano);
     if (ano && (anoNum < 1980 || anoNum > anoAtual + 1)) {
@@ -55,21 +53,30 @@ export default function CadastroVeiculo({ navigation, route }) {
     return Object.keys(novos).length === 0;
   };
 
-  const salvar = () => {
-    if (!validar()) return;
-    const novo = adicionarVeiculo({
-      modelo: modelo.trim(),
-      placa: formatarPlaca(placa),
-      ano: ano ? Number(ano) : null,
-      hodometro: Number(hodometro),
-      consumoMedio: consumo ? Number(consumo.replace(',', '.')) : null,
-      status,
-    });
-    Alert.alert(
-      'Veículo cadastrado',
-      `${novo.modelo} · ${novo.placa}\nHodômetro: ${formatarKm(novo.hodometro)}`,
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
+  // Erro P6: grava no banco (a placa repetida é conferida pelo backend).
+  const salvar = async () => {
+    if (!validar() || salvando) return;
+    setSalvando(true);
+    try {
+      const novo = await cadastrarVeiculo({
+        modelo: modelo.trim(),
+        placa: formatarPlaca(placa),
+        ano: ano ? Number(ano) : null,
+        hodometro: Number(hodometro),
+        consumoMedio: consumo ? Number(consumo.replace(',', '.')) : null,
+        status,
+      });
+      Alert.alert(
+        'Veículo cadastrado',
+        `${novo.modelo} · ${novo.placa}\nHodômetro: ${formatarKm(novo.hodometro)}`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (e) {
+      if (/placa/i.test(e.message)) setErros((atual) => ({ ...atual, placa: e.message }));
+      else Alert.alert('Não foi possível cadastrar', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -121,7 +128,7 @@ export default function CadastroVeiculo({ navigation, route }) {
             />
             <SelectField label="STATUS INICIAL" opcoes={opcoesStatus} valor={status} onSelecionar={setStatus} />
 
-            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel="Cadastrar" />
+            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel="Cadastrar" salvando={salvando} />
           </CardFormulario>
         </ScrollView>
       </KeyboardAvoidingView>

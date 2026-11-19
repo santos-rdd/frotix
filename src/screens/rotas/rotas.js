@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Text, ScrollView, StyleSheet } from 'react-native';
 
 import ScreenHeader from '../../components/screenHeader/screenHeader.js';
@@ -7,7 +7,10 @@ import TripCard from '../../components/tripCard/tripCard.js';
 import VoltarButton from '../../components/voltarButton/voltarButton.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import { rotas as rotasIniciais, buscarVeiculo, STATUS_ROTA, formatarKm } from '../../constants/frotaMock.js';
+import { STATUS_ROTA, formatarKm } from '../../constants/frota.js';
+import { listarRotas } from '../../services/frotix.js';
+import useDados from '../../hooks/useDados.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
 const TITULOS = {
   em_transito: 'ROTA EM TRÂNSITO',
@@ -20,30 +23,11 @@ const normalizar = (texto = '') =>
 
 export default function Rotas({ navigation, route }) {
   const usuario = route?.params?.usuario;
-  const rotaAtualizada = route?.params?.rotaAtualizada;
-  const [rotas, setRotas] = useState(rotasIniciais);
+  // Erro P6: as rotas vêm do banco e recarregam ao voltar do cadastro ou dos detalhes.
+  const { dados, carregando, erro, recarregar } = useDados(listarRotas, []);
+  const rotas = dados || [];
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
-
-  // Ao voltar do cadastro, inclui na lista as rotas novas (CadastroRota grava no frotaMock).
-  useEffect(
-    () =>
-      navigation.addListener('focus', () => {
-        setRotas((atuais) => {
-          const ids = new Set(atuais.map((r) => r.id));
-          const novas = rotasIniciais.filter((r) => !ids.has(r.id));
-          return novas.length ? [...atuais, ...novas] : atuais;
-        });
-      }),
-    [navigation]
-  );
-
-  // DetalhesRota devolve a rota editada por params (navigation.popTo('Rotas', ...)).
-  useEffect(() => {
-    if (rotaAtualizada) {
-      setRotas((atuais) => atuais.map((r) => (r.id === rotaAtualizada.id ? rotaAtualizada : r)));
-    }
-  }, [rotaAtualizada]);
 
   const filtros = [
     { id: 'todos', label: 'Todos' },
@@ -56,13 +40,12 @@ export default function Rotas({ navigation, route }) {
   const lista = rotas.filter((r) => {
     if (filtro !== 'todos' && r.status !== filtro) return false;
     if (!termo) return true;
-    const placa = buscarVeiculo(r.veiculoId)?.placa;
-    return [placa, r.origem, r.destino, r.motorista].some((campo) => normalizar(campo).includes(termo));
+    return [r.placa, r.origem, r.destino, r.motorista].some((campo) => normalizar(campo).includes(termo));
   });
 
   const infoHodometro = (r) =>
     r.hodometroFinal
-      ? `Hodômetro: ${r.hodometroFinal.toLocaleString('pt-BR')}\n${formatarKm(r.hodometroFinal - r.hodometroInicial)} rodados`
+      ? `Hodômetro: ${r.hodometroFinal.toLocaleString('pt-BR')}\n${formatarKm(r.kmRodados)} rodados`
       : `Hodômetro:\n${formatarKm(r.hodometroInicial)} inicial`;
 
   return (
@@ -83,6 +66,8 @@ export default function Rotas({ navigation, route }) {
 
         <Text style={styles.subtitulo}>Lista de Rotas</Text>
 
+        <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={rotas.length > 0} />
+
         {lista.map((r) => (
           <TripCard
             key={r.id}
@@ -90,14 +75,14 @@ export default function Rotas({ navigation, route }) {
             status={STATUS_ROTA[r.status]}
             origem={r.origem}
             destino={r.destino}
-            placa={buscarVeiculo(r.veiculoId)?.placa}
+            placa={r.placa || 'Sem veículo'}
             motorista={r.motorista}
             infoDireita={infoHodometro(r)}
             onPress={() => navigation.navigate('DetalhesRota', { usuario, rota: r })}
           />
         ))}
 
-        {lista.length === 0 ? <Text style={styles.vazio}>Nenhuma rota encontrada.</Text> : null}
+        {lista.length === 0 && !carregando && !erro ? <Text style={styles.vazio}>Nenhuma rota encontrada.</Text> : null}
 
         <VoltarButton navigation={navigation} />
       </ScrollView>

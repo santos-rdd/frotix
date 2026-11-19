@@ -1,5 +1,6 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect } from 'react';
+import { Alert } from 'react-native';
+import { NavigationContainer, createNavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import HomeScreen from './src/screens/homeScreen/homeScreen.js';
@@ -8,7 +9,7 @@ import HomePage from './src/screens/home/homePage.js';
 import ForgotPasswordScreen from './src/screens/loginEmailScreen/loginEmailScreen.js';
 import VerifyCodeScreen from './src/screens/verifyCodeScreen/verifyCodeScreen.js';
 import UserProfileScreen from './src/screens/user/userOptions.js';
-import uploadProofScreen from './src/screens/upload/uploadProof.js';
+import UploadProofScreen from './src/screens/upload/uploadProof.js';
 import TransactionFormScreen from './src/screens/transactionFormScreen/transactionFormScreen.js';
 import RegisterUserScreen from './src/screens/registerUserScreen/registerUserScreen.js';
 import ManageUserScreen from './src/screens/manageUserScreen/manageUserScreen.js';
@@ -23,12 +24,23 @@ import CadastroRota from './src/screens/cadastroRota/cadastroRota.js';
 import Manutencao from './src/screens/manutencao/manutencao.js';
 import Relatorios from './src/screens/relatorios/relatorios.js';
 import Categorias from './src/screens/categorias/categorias.js';
+import { definirAoExpirarSessao } from './src/services/api.js';
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 export default function App() {
+  // Se o backend responder 401 (token vencido ou inválido), volta para o login.
+  useEffect(() => {
+    definirAoExpirarSessao(() => {
+      if (!navigationRef.isReady()) return;
+      Alert.alert('Sessão encerrada', 'Entre novamente para continuar.');
+      navigationRef.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }));
+    });
+  }, []);
+
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator 
         initialRouteName="Home" 
         screenOptions={{ headerShown: false }} 
@@ -39,7 +51,7 @@ export default function App() {
         <Stack.Screen name="LoginEmail" component={ForgotPasswordScreen} />
         <Stack.Screen name="VerifyCodeScreen" component={VerifyCodeScreen} />
         <Stack.Screen name="userProfile" component={UserProfileScreen} />
-        <Stack.Screen name="uploadProof" component={uploadProofScreen} />
+        <Stack.Screen name="uploadProof" component={UploadProofScreen} />
         <Stack.Screen name="TransactionForm" component={TransactionFormScreen} />
         <Stack.Screen name="RegisterUser" component={RegisterUserScreen} />
         <Stack.Screen name="ManageUser" component={ManageUserScreen} />
@@ -59,8 +71,4 @@ export default function App() {
   );
 }
 
-// adb reverse tcp:3000 tcp:3000
-// npx expo run:android
-// node --watch ./backend/server.js 
-// backend hospedado: https://frotix.onrender.com
-// por enquanto estarei usando local 
+// Como rodar (backend local, emulador, .env): veja CONFIGURACAO.md

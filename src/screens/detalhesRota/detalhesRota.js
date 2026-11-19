@@ -6,9 +6,8 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import { STATUS_ROTA, formatarMoeda } from '../../constants/frotaMock.js';
-
-const hoje = () => new Date().toLocaleDateString('pt-BR');
+import { STATUS_ROTA, formatarMoeda } from '../../constants/frota.js';
+import { concluirViagem } from '../../services/frotix.js';
 
 /**
  * Detalhes de uma rota (params.rota).
@@ -20,6 +19,7 @@ export default function DetalhesRota({ navigation, route }) {
   const rota = route?.params?.rota;
   const editavel = rota?.status === 'agendada';
   const [hodometroFinal, setHodometroFinal] = useState(rota?.hodometroFinal ? String(rota.hodometroFinal) : '');
+  const [salvando, setSalvando] = useState(false);
 
   if (!rota) {
     return (
@@ -30,25 +30,34 @@ export default function DetalhesRota({ navigation, route }) {
   }
 
   const status = STATUS_ROTA[rota.status];
+  const inicial = rota.hodometroInicial || 0;
   const final = hodometroFinal ? Number(hodometroFinal) : null;
-  const total = final !== null && final > rota.hodometroInicial ? final - rota.hodometroInicial : null;
+  const total = final !== null && final > inicial ? final - inicial : null;
 
   const custos = rota.despesas.reduce((soma, d) => soma + d.valor, 0);
   const saldo = rota.receita - custos;
   const margem = rota.receita > 0 ? Math.round((saldo / rota.receita) * 100) : 0;
 
-  const salvar = () => {
+  // Registrar o hodômetro final conclui a rota no banco (antes só mudava na tela).
+  const salvar = async () => {
     if (total === null) {
       Alert.alert(
         'Hodômetro final inválido',
-        `Informe um valor maior que ${rota.hodometroInicial.toLocaleString('pt-BR')} km.`
+        `Informe um valor maior que ${inicial.toLocaleString('pt-BR')} km.`
       );
       return;
     }
-    // Com o hodômetro final registrado, a rota é dada como concluída hoje.
-    const rotaAtualizada = { ...rota, hodometroFinal: final, dataFinal: hoje(), status: 'concluida' };
-    Alert.alert('Rota atualizada', `Total percorrido: ${total.toLocaleString('pt-BR')} km.`);
-    navigation.popTo('Rotas', { usuario, rotaAtualizada });
+    if (salvando) return;
+    setSalvando(true);
+    try {
+      await concluirViagem(rota.id, final);
+      Alert.alert('Rota concluída', `Total percorrido: ${total.toLocaleString('pt-BR')} km.`);
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Não foi possível salvar', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -68,7 +77,7 @@ export default function DetalhesRota({ navigation, route }) {
           <Text style={styles.secao}>Hodômetro e Km totais</Text>
           <View style={styles.hodometros}>
             <View style={styles.caixaKm}>
-              <Text style={styles.km}>{rota.hodometroInicial.toLocaleString('pt-BR')} km</Text>
+              <Text style={styles.km}>{inicial.toLocaleString('pt-BR')} km</Text>
             </View>
             <View style={[styles.caixaKm, editavel && styles.caixaEditavel]}>
               {editavel ? (
@@ -112,7 +121,7 @@ export default function DetalhesRota({ navigation, route }) {
           </View>
 
           {editavel ? (
-            <TouchableOpacity style={styles.salvar} onPress={salvar}>
+            <TouchableOpacity style={styles.salvar} onPress={salvar} disabled={salvando}>
               <Text style={styles.salvarTexto}>Salvar</Text>
             </TouchableOpacity>
           ) : null}

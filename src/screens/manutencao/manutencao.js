@@ -13,9 +13,16 @@ import VoltarButton from '../../components/voltarButton/voltarButton.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
 import {
-  veiculos, buscarVeiculo, manutencoes as manutencoesIniciais, adicionarManutencao,
   TIPOS_MANUTENCAO, STATUS_MANUTENCAO, labelTipoManutencao, dataValida, formatarData, formatarMoeda,
-} from '../../constants/frotaMock.js';
+} from '../../constants/frota.js';
+import { listarManutencoes, listarVeiculos, agendarManutencao, avancarManutencao } from '../../services/frotix.js';
+import useDados from '../../hooks/useDados.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
+
+const carregarTudo = async () => {
+  const [ordens, veiculos] = await Promise.all([listarManutencoes(), listarVeiculos()]);
+  return { ordens, veiculos };
+};
 
 const hoje = () => new Date().toLocaleDateString('pt-BR');
 const paraNumero = (texto) => Number(texto.replace(/\./g, '').replace(',', '.'));
@@ -31,7 +38,12 @@ export default function Manutencao({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const veiculoInicial = route?.params?.veiculoId || null;
 
-  const [ordens, setOrdens] = useState(manutencoesIniciais);
+  // Erro P6: ordens de serviço e veículos vêm do banco.
+  const { dados, carregando, erro, recarregar } = useDados(carregarTudo, { ordens: [], veiculos: [] });
+  const ordens = dados?.ordens || [];
+  const veiculos = dados?.veiculos || [];
+  const buscarVeiculo = (id) => veiculos.find((v) => v.id === id);
+  const [salvando, setSalvando] = useState(false);
   const [filtroVeiculo, setFiltroVeiculo] = useState(veiculoInicial);
 
   const [veiculoId, setVeiculoId] = useState(veiculoInicial);
@@ -54,7 +66,7 @@ export default function Manutencao({ navigation, route }) {
     setErros({});
   };
 
-  const agendar = () => {
+  const agendar = async () => {
     const novos = {};
     if (!veiculoId) novos.veiculo = 'Selecione o veículo.';
     if (!dataValida(data)) novos.data = 'Data inválida. Use DD/MM/AAAA.';
@@ -63,34 +75,44 @@ export default function Manutencao({ navigation, route }) {
       novos.custo = 'Informe um valor válido (ex.: 1500,00).';
     }
     setErros(novos);
-    if (Object.keys(novos).length) return;
+    if (Object.keys(novos).length || salvando) return;
 
-    const nova = adicionarManutencao({
-      veiculoId,
-      tipo,
-      data,
-      oficina: oficina.trim(),
-      custo: custo ? paraNumero(custo) : 0,
-      observacoes: observacoes.trim(),
-    });
-    setOrdens([...manutencoesIniciais]);
-    limpar();
-    Alert.alert('Manutenção agendada', `${labelTipoManutencao(nova.tipo)} em ${nova.data}.`);
+    setSalvando(true);
+    try {
+      const nova = await agendarManutencao({
+        veiculoId,
+        tipo,
+        data,
+        oficina: oficina.trim(),
+        custo: custo ? paraNumero(custo) : 0,
+        observacoes: observacoes.trim(),
+      });
+      limpar();
+      await recarregar();
+      Alert.alert('Manutenção agendada', `${labelTipoManutencao(nova.tipo)} em ${nova.data}.`);
+    } catch (e) {
+      Alert.alert('Não foi possível agendar', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
-  // Avança o status da OS e ajusta o status do veículo.
+  // Avança o status da OS; o backend ajusta o status do veículo.
   const avancar = (ordem) => {
     const proximo = ordem.status === 'agendada' ? 'em_andamento' : 'concluida';
     const veiculo = buscarVeiculo(ordem.veiculoId);
-    const aplicar = () => {
-      ordem.status = proximo;
-      if (veiculo) veiculo.status = proximo === 'em_andamento' ? 'manutencao' : 'disponivel';
-      setOrdens([...manutencoesIniciais]);
-    };
     if (proximo === 'em_andamento' && veiculo?.status === 'em_viagem') {
       Alert.alert('Veículo em viagem', 'Feche a viagem atual antes de iniciar a manutenção.');
       return;
     }
+    const aplicar = async () => {
+      try {
+        await avancarManutencao(ordem.id);
+        await recarregar();
+      } catch (e) {
+        Alert.alert('Não foi possível atualizar', e.message);
+      }
+    };
     Alert.alert(
       proximo === 'em_andamento' ? 'Iniciar manutenção' : 'Concluir manutenção',
       proximo === 'em_andamento'
@@ -138,7 +160,7 @@ export default function Manutencao({ navigation, route }) {
               placeholder="Descreva o serviço"
               multiline
             />
-            <BotoesFormulario onCancelar={limpar} onConfirmar={agendar} confirmarLabel="Agendar" />
+            <BotoesFormulario onCancelar={limpar} onConfirmar={agendar} confirmarLabel="Agendar" salvando={salvando} />
           </CardFormulario>
 
           <View style={styles.tituloLinha}>
@@ -151,6 +173,8 @@ export default function Manutencao({ navigation, route }) {
               </TouchableOpacity>
             ) : null}
           </View>
+
+          <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={ordens.length > 0} />
 
           {lista.map((o) => {
             const veiculo = buscarVeiculo(o.veiculoId);
@@ -188,7 +212,7 @@ export default function Manutencao({ navigation, route }) {
             );
           })}
 
-          {lista.length === 0 ? <Text style={styles.vazio}>Nenhuma ordem de serviço.</Text> : null}
+          {lista.length === 0 && !carregando && !erro ? <Text style={styles.vazio}>Nenhuma ordem de serviço.</Text> : null}
 
           <VoltarButton navigation={navigation} />
         </ScrollView>

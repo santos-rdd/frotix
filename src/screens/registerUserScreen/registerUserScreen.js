@@ -7,8 +7,12 @@ import {
   TouchableOpacity,
   ScrollView,
   Modal,
-  FlatList
+  FlatList,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
+import { criarUsuarioEmail, criarUsuarioGoogle } from '../../services/frotix.js';
+import { PERFIS, idPerfil } from '../../constants/perfis.js';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
@@ -22,22 +26,36 @@ export default function RegisterUserScreen() {
   const [perfil, setPerfil] = useState('Motorista');
   const [modalVisible, setModalVisible] = useState(false);
 
-  const perfisDisponíveis = [
-    'Motorista',
-    'Gestor de Frota',
-    'Financeiro',
-    'Admin'
-  ];
+  const [salvando, setSalvando] = useState(false);
+  const perfisDisponíveis = PERFIS.map((p) => p.nome);
 
-  const handleSave = () => {
-    const userData = {
-      nome,
-      email,
-      accessMethod,
-      perfil,
-    };
-    console.log('DADOS DO NOVO USUÁRIO:', userData);
-    navigation.goBack();
+  // Antes só fazia console.log; agora cria o usuário no banco.
+  // E-mail e senha: conta no Supabase Auth (a pessoa confirma pelo e-mail).
+  // Gmail: só o cadastro na tabela usuarios; a pessoa entra com a conta Google desse e-mail.
+  const handleSave = async () => {
+    if (!nome.trim() || !email.trim()) {
+      Alert.alert('Campos obrigatórios', 'Informe o nome e o e-mail.');
+      return;
+    }
+    if (accessMethod === 'email' && password.length < 6) {
+      Alert.alert('Senha', 'A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      if (accessMethod === 'email') {
+        await criarUsuarioEmail({ nome: nome.trim(), email: email.trim(), password, id_perfil: idPerfil(perfil) });
+        Alert.alert('Usuário cadastrado', 'Ele vai receber um e-mail para confirmar a conta.');
+      } else {
+        await criarUsuarioGoogle({ nome: nome.trim(), email: email.trim(), perfil: idPerfil(perfil) });
+        Alert.alert('Usuário cadastrado', 'Ele já pode entrar com a conta Google desse e-mail.');
+      }
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Não foi possível cadastrar', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -119,8 +137,8 @@ export default function RegisterUserScreen() {
         <Feather name="chevron-down" size={20} color="#121212" />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Salvar</Text>
+      <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={salvando}>
+        {salvando ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Salvar</Text>}
       </TouchableOpacity>
 
       <Modal

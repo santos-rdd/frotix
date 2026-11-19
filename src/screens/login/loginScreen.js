@@ -6,11 +6,13 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import GOOGLE_CONFIG from '../../config/google.js';
 import { API_URL } from '../../config/api.js';
+import { salvarToken } from '../../services/api.js';
 import { CommonActions } from '@react-navigation/native';
 
 // Depois do login a Home vira a única tela da pilha: assim o "voltar" do Android
@@ -23,6 +25,9 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  // Erro P1: o login pode levar até ~30 s quando o Render está "dormindo";
+  // sem um aviso na tela, parecia que o botão não tinha funcionado.
+  const [entrando, setEntrando] = useState(null); // 'google' | 'email' | null
 
   useEffect(() => { 
     GoogleSignin.configure({
@@ -32,22 +37,21 @@ export default function LoginScreen({ navigation }) {
     });
   }, []); 
   
-  const logIn = async (googleEmail, googleData) => {
+  // Erro C1: o backend agora confere o idToken com o Google, em vez de aceitar só o e-mail.
+  const logIn = async (idToken, googleData) => {
     try {
-      console.log('Enviando requisição para:', `${API_URL}/auth/login-google`);
-      
       const response = await fetch(`${API_URL}/auth/login-google`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email: googleEmail }),
+        body: JSON.stringify({ idToken }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // console.log('Usuário autorizado!', data.usuario);
+        await salvarToken(data.token);
         irParaHome(navigation, { auth: googleData, bankUser: data.usuario });
       } else {
         console.log('Acesso negado pelo backend:', data.erro);
@@ -60,6 +64,8 @@ export default function LoginScreen({ navigation }) {
   };
 
   async function singIn(){
+    if (entrando) return;
+    setEntrando('google');
     try {
       // console.log('Botão clicado: checando Play Services...');
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
@@ -73,15 +79,19 @@ export default function LoginScreen({ navigation }) {
       const response = await GoogleSignin.signIn();
       
       if(isSuccessResponse(response)){
-        const emailGoogle = response.data.user.email;
-        // console.log('Google login OK:', emailGoogle);
-        await logIn(emailGoogle, response.data);
+        if (!response.data.idToken) {
+          Alert.alert('Erro', 'O Google não devolveu o token de login. Confira o webClientId em src/config/google.js.');
+          return;
+        }
+        await logIn(response.data.idToken, response.data);
       } else {
         console.log('Login do Google não retornou sucesso (cancelado?).');
       }
     } catch(err){
       console.log("Erro completo no login:", JSON.stringify(err, null, 2));
       Alert.alert("Erro", `Falha na Autenticação com o Google: ${err.message || err}`);
+    } finally {
+      setEntrando(null);
     }
   };
 
@@ -91,8 +101,9 @@ export default function LoginScreen({ navigation }) {
       return;
     }
 
+    if (entrando) return;
+    setEntrando('email');
     try {
-      console.log('Enviando login por email para:', `${API_URL}/auth/login-email`);
 
       const response = await fetch(`${API_URL}/auth/login-email`, {
         method: 'POST',
@@ -105,7 +116,7 @@ export default function LoginScreen({ navigation }) {
       const data = await response.json();
 
       if (response.ok) {
-          console.log('Login por email autorizado!', data.usuario);
+          await salvarToken(data.token);
           irParaHome(navigation, { bankUser: data.usuario });
       } else {
         Alert.alert("Acesso Negado", data.erro || "Credenciais inválidas.");
@@ -113,6 +124,8 @@ export default function LoginScreen({ navigation }) {
     } catch (error) {
       console.error('Erro de conexão no login por email:', error);
       Alert.alert("Erro", "Não foi possível conectar ao servidor.");
+    } finally {
+      setEntrando(null);
     }
   };
 
@@ -138,15 +151,20 @@ export default function LoginScreen({ navigation }) {
 
         <TouchableOpacity  
           onPress={() => singIn()}
+          disabled={Boolean(entrando)}
           style={styles.googleButton} activeOpacity={0.8}>
-          <Image
-            source={require('../../../assets/icons/logo.png')}
-            style={styles.imageGoogle}
-            />
+          {entrando === 'google' ? (
+            <ActivityIndicator color="#FFF" style={styles.imageGoogle} />
+          ) : (
+            <Image
+              source={require('../../../assets/icons/logo.png')}
+              style={styles.imageGoogle}
+              />
+          )}
 
           <Text 
           style={styles.googleButtonText}>
-            Entrar com Gmail
+            {entrando === 'google' ? 'Entrando...' : 'Entrar com Gmail'}
           </Text>
         </TouchableOpacity>
 
@@ -206,8 +224,13 @@ export default function LoginScreen({ navigation }) {
           <TouchableOpacity 
           style={styles.loginButton} activeOpacity={0.8}
           onPress={handleEmailLogin}
+          disabled={Boolean(entrando)}
           >
-            <Text style={styles.loginButtonText}>Log In</Text>
+            {entrando === 'email' ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.loginButtonText}>Log In</Text>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity 

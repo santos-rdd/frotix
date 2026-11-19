@@ -6,9 +6,9 @@ import SelectField from '../../components/selectField/selectField.js';
 import { CardFormulario, CampoTexto, BotoesFormulario } from '../../components/formularioFrota/formularioFrota.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import {
-  veiculos, buscarVeiculo, adicionarRota, dataValida, formatarData, formatarKm,
-} from '../../constants/frotaMock.js';
+import { dataValida, formatarData, formatarKm } from '../../constants/frota.js';
+import { listarVeiculos, listarMotoristas, cadastrarRota } from '../../services/frotix.js';
+import useDados from '../../hooks/useDados.js';
 
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
 const normalizar = (texto) => texto.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
@@ -33,16 +33,23 @@ export default function CadastroRota({ navigation, route }) {
   const [origem, setOrigem] = useState('');
   const [destino, setDestino] = useState('');
   const [veiculoId, setVeiculoId] = useState(null);
-  const [motorista, setMotorista] = useState('');
+  const [motoristaId, setMotoristaId] = useState(null);
   const [data, setData] = useState(hoje());
   const [hodometroInicial, setHodometroInicial] = useState('');
   const [receita, setReceita] = useState('');
   const [erros, setErros] = useState({});
+  const [salvando, setSalvando] = useState(false);
+
+  const { dados: veiculos } = useDados(listarVeiculos, []);
+  // Erro P7: o motorista é escolhido entre os usuários com perfil Motorista.
+  const { dados: motoristas } = useDados(listarMotoristas, []);
+  const buscarVeiculo = (id) => (veiculos || []).find((v) => v.id === id);
 
   // Veículos em manutenção não podem receber rota.
-  const opcoesVeiculo = veiculos
+  const opcoesVeiculo = (veiculos || [])
     .filter((v) => v.status !== 'manutencao')
     .map((v) => ({ id: v.id, label: `${v.modelo} · ${v.placa}` }));
+  const opcoesMotorista = (motoristas || []).map((m) => ({ id: m.id, label: m.nome }));
 
   const selecionarVeiculo = (id) => {
     setVeiculoId(id);
@@ -57,7 +64,7 @@ export default function CadastroRota({ navigation, route }) {
       novos.destino = 'O destino precisa ser diferente da origem.';
     }
     if (!veiculoId) novos.veiculo = 'Selecione o veículo.';
-    if (!motorista.trim()) novos.motorista = 'Informe o motorista.';
+    if (!motoristaId) novos.motorista = 'Selecione o motorista.';
     if (!dataValida(data)) {
       novos.data = 'Data inválida. Use DD/MM/AAAA.';
     } else {
@@ -78,22 +85,29 @@ export default function CadastroRota({ navigation, route }) {
     return Object.keys(novos).length === 0;
   };
 
-  const salvar = () => {
-    if (!validar()) return;
-    const nova = adicionarRota({
-      origem: origem.trim(),
-      destino: destino.trim(),
-      veiculoId,
-      motorista: motorista.trim(),
-      dataInicial: data,
-      hodometroInicial: Number(hodometroInicial),
-      receita: Number(receita.replace(/\./g, '').replace(',', '.')),
-    });
-    Alert.alert(
-      'Rota cadastrada',
-      `${nova.origem} → ${nova.destino}\nAgendada para ${nova.dataInicial}`,
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
+  const salvar = async () => {
+    if (!validar() || salvando) return;
+    setSalvando(true);
+    try {
+      const nova = await cadastrarRota({
+        origem: origem.trim(),
+        destino: destino.trim(),
+        veiculoId,
+        motoristaId,
+        dataSaida: data,
+        hodometroInicial: Number(hodometroInicial),
+        receita: Number(receita.replace(/\./g, '').replace(',', '.')),
+      });
+      Alert.alert(
+        'Rota cadastrada',
+        `${nova.origem} → ${nova.destino}\nAgendada para ${nova.dataInicial}`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    } catch (e) {
+      Alert.alert('Não foi possível cadastrar', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -113,7 +127,14 @@ export default function CadastroRota({ navigation, route }) {
               vazio="Nenhum veículo disponível"
             />
             {erros.veiculo ? <Text style={styles.erro}>{erros.veiculo}</Text> : null}
-            <CampoTexto label="MOTORISTA" value={motorista} onChangeText={setMotorista} placeholder="Nome do motorista" erro={erros.motorista} />
+            <SelectField
+              label="MOTORISTA"
+              opcoes={opcoesMotorista}
+              valor={motoristaId}
+              onSelecionar={setMotoristaId}
+              vazio="Nenhum usuário com perfil Motorista"
+            />
+            {erros.motorista ? <Text style={styles.erro}>{erros.motorista}</Text> : null}
             <CampoTexto
               label="DATA DE SAÍDA"
               value={data}
@@ -140,7 +161,7 @@ export default function CadastroRota({ navigation, route }) {
               erro={erros.receita}
             />
 
-            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel="Cadastrar" />
+            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel="Cadastrar" salvando={salvando} />
           </CardFormulario>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -3,7 +3,7 @@ import {
   Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { TIPOS_FORMA_PAGAMENTO } from '../../constants/formasPagamentoMock.js';
+import { TIPOS_FORMA_PAGAMENTO } from '../../constants/formasPagamento.js';
 
 // Validade no formato MM/AA, com mês de 01 a 12.
 const validadeValida = (texto) => {

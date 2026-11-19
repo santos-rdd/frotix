@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   StyleSheet,
   View,
@@ -9,31 +9,17 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { listarUsuarios } from '../../services/frotix.js';
+import { corPerfil } from '../../constants/perfis.js';
+import useDados from '../../hooks/useDados.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
 export default function ManageUserScreen() {
   const navigation = useNavigation();
 
-  const [usuarios] = useState([
-    { id: '1', nome: 'Carlos Silva', role: 'admin', foto: null },
-    { id: '2', nome: 'Ana Souza', role: 'gestor', foto: null },
-    { id: '3', nome: 'Marcos Lima', role: 'financeiro', foto: null },
-    { id: '4', nome: 'João Pedro', role: 'motorista', foto: null },
-    { id: '5', nome: 'Lucas Mendes', role: 'motorista', foto: null },
-    { id: '6', nome: 'Beatriz Costa', role: 'motorista', foto: null },
-    { id: '7', nome: 'Renato Dias', role: 'motorista', foto: null },
-    { id: '8', nome: 'Juliana Rocha', role: 'motorista', foto: null },
-    { id: '9', nome: 'Gabriel Martins', role: 'motorista', foto: null },
-  ]);
-
-  const getRoleColor = (role) => {
-    switch (role) {
-      case 'admin': return '#b22222';
-      case 'gestor': return '#ff8c00';
-      case 'financeiro': return '#ffd700';
-      case 'motorista': return '#2ecc71';
-      default: return '#2ecc71';
-    }
-  };
+  // Erro P4: a lista vem do banco (antes eram 9 nomes de exemplo).
+  const { dados, carregando, erro, recarregar } = useDados(listarUsuarios, []);
+  const usuarios = dados || [];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -43,13 +29,16 @@ export default function ManageUserScreen() {
 
       <Text style={styles.title}>Gerenciar usuários</Text>
 
+      <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={usuarios.length > 0} />
+
       <View style={styles.gridContainer}>
-        {usuarios.map((user) => {
-          const dotColor = getRoleColor(user.role);
+        {usuarios.map((user, i) => {
+          const dotColor = corPerfil(user.perfil);
           return (
             <TouchableOpacity 
                 key={user.id} 
-                style={styles.userCard}
+                // 3 por linha, alinhados à esquerda (a última linha não fica com buraco no meio)
+                style={[styles.userCard, i % 3 !== 2 && { marginRight: '3.5%' }]}
                 onPress={() => navigation.navigate('UserDetail', { usuario: user })}
                 >
               {user.foto ? (
@@ -113,8 +102,7 @@ const styles = StyleSheet.create({
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
+    justifyContent: 'flex-start',
   },
   userCard: {
     width: '31%',
