@@ -9,7 +9,9 @@ import { CardFormulario, CampoTexto, EscolhaChips } from '../../components/formu
 import VoltarButton from '../../components/voltarButton/voltarButton.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import { categorias as categoriasIniciais, adicionarCategoria, removerCategoria } from '../../constants/categoriasMock.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
+import useDados from '../../hooks/useDados.js';
+import { listarCategorias, criarCategoria, removerCategoria } from '../../services/frotix.js';
 
 const TIPOS = [
   { id: 'entrada', label: 'Entrada' },
@@ -25,14 +27,15 @@ const normalizar = (texto) => texto.normalize('NFD').replace(/[̀-ͯ]/g, '').tri
  */
 export default function Categorias({ navigation, route }) {
   const usuario = route?.params?.usuario;
-  const [lista, setLista] = useState([...categoriasIniciais]);
+  // Erro P4: as categorias agora vêm do banco (antes eram de exemplo).
+  const { dados, carregando, erro: erroLista, recarregar } = useDados(listarCategorias, []);
+  const lista = dados || [];
   const [aba, setAba] = useState('entrada');
   const [nome, setNome] = useState('');
   const [erro, setErro] = useState('');
+  const [salvando, setSalvando] = useState(false);
 
-  const atualizar = () => setLista([...categoriasIniciais]);
-
-  const adicionar = () => {
+  const adicionar = async () => {
     const limpo = nome.trim();
     if (!limpo) {
       setErro('Informe o nome da categoria.');
@@ -42,14 +45,22 @@ export default function Categorias({ navigation, route }) {
       setErro('"Outros" já aparece sempre no fim da lista.');
       return;
     }
-    if (categoriasIniciais.some((c) => c.tipo === aba && normalizar(c.nome) === normalizar(limpo))) {
+    if (lista.some((c) => c.tipo === aba && normalizar(c.nome) === normalizar(limpo))) {
       setErro('Essa categoria já existe.');
       return;
     }
-    adicionarCategoria({ nome: limpo, tipo: aba });
-    setNome('');
-    setErro('');
-    atualizar();
+    if (salvando) return;
+    setSalvando(true);
+    try {
+      await criarCategoria(limpo, aba);
+      setNome('');
+      setErro('');
+      await recarregar();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   const remover = (categoria) => {
@@ -58,9 +69,13 @@ export default function Categorias({ navigation, route }) {
       {
         text: 'Remover',
         style: 'destructive',
-        onPress: () => {
-          removerCategoria(categoria.id);
-          atualizar();
+        onPress: async () => {
+          try {
+            await removerCategoria(categoria.id);
+            await recarregar();
+          } catch (e) {
+            Alert.alert('Não foi possível remover', e.message);
+          }
         },
       },
     ]);
@@ -85,7 +100,7 @@ export default function Categorias({ navigation, route }) {
               onSubmitEditing={adicionar}
               returnKeyType="done"
             />
-            <TouchableOpacity style={styles.botaoAdicionar} onPress={adicionar}>
+            <TouchableOpacity style={styles.botaoAdicionar} onPress={adicionar} disabled={salvando}>
               <Feather name="plus" size={18} color="#121212" />
               <Text style={styles.botaoAdicionarTexto}>Adicionar</Text>
             </TouchableOpacity>
@@ -94,6 +109,8 @@ export default function Categorias({ navigation, route }) {
           <Text style={styles.subtitulo}>
             Categorias de {aba === 'entrada' ? 'entrada' : 'saída'} ({daAba.length})
           </Text>
+
+          <EstadoDados carregando={carregando} erro={erroLista} onTentarDeNovo={recarregar} temDados={lista.length > 0} />
 
           {daAba.map((c) => (
             <View key={c.id} style={styles.item}>
@@ -105,7 +122,7 @@ export default function Categorias({ navigation, route }) {
             </View>
           ))}
 
-          {daAba.length === 0 ? <Text style={styles.vazio}>Nenhuma categoria cadastrada.</Text> : null}
+          {daAba.length === 0 && !carregando && !erroLista ? <Text style={styles.vazio}>Nenhuma categoria cadastrada.</Text> : null}
           <Text style={styles.nota}>"Outros" aparece sempre no fim da lista dos formulários.</Text>
 
           <VoltarButton navigation={navigation} />

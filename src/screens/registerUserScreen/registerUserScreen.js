@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 
 import {
+<<<<<<< HEAD
     StyleSheet,
     View,
     Text,
@@ -14,6 +15,21 @@ import {
     Alert
 } from 'react-native';
 
+=======
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Modal,
+  FlatList,
+  Alert,
+  ActivityIndicator
+} from 'react-native';
+import { criarUsuarioEmail, criarUsuarioGoogle } from '../../services/frotix.js';
+import { PERFIS, idPerfil } from '../../constants/perfis.js';
+>>>>>>> 47822e7e6224279073db457571ebcb38ff757bc2
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
@@ -27,6 +43,7 @@ export default function RegisterUserScreen() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
+<<<<<<< HEAD
     const [accessMethod, setAccessMethod] = useState('email');
     const [perfil, setPerfil] = useState('Motorista');
 
@@ -51,6 +68,39 @@ export default function RegisterUserScreen() {
         'Financeiro': 3,
         'Motorista': 4
     };
+=======
+  const [salvando, setSalvando] = useState(false);
+  const perfisDisponíveis = PERFIS.map((p) => p.nome);
+
+  // Antes só fazia console.log; agora cria o usuário no banco.
+  // E-mail e senha: conta no Supabase Auth (a pessoa confirma pelo e-mail).
+  // Gmail: só o cadastro na tabela usuarios; a pessoa entra com a conta Google desse e-mail.
+  const handleSave = async () => {
+    if (!nome.trim() || !email.trim()) {
+      Alert.alert('Campos obrigatórios', 'Informe o nome e o e-mail.');
+      return;
+    }
+    if (accessMethod === 'email' && password.length < 6) {
+      Alert.alert('Senha', 'A senha precisa ter pelo menos 6 caracteres.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      if (accessMethod === 'email') {
+        await criarUsuarioEmail({ nome: nome.trim(), email: email.trim(), password, id_perfil: idPerfil(perfil) });
+        Alert.alert('Usuário cadastrado', 'Ele vai receber um e-mail para confirmar a conta.');
+      } else {
+        await criarUsuarioGoogle({ nome: nome.trim(), email: email.trim(), perfil: idPerfil(perfil) });
+        Alert.alert('Usuário cadastrado', 'Ele já pode entrar com a conta Google desse e-mail.');
+      }
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Não foi possível cadastrar', e.message);
+    } finally {
+      setSalvando(false);
+    }
+  };
+>>>>>>> 47822e7e6224279073db457571ebcb38ff757bc2
 
     
 const handleSave = async () => {
@@ -100,10 +150,16 @@ const handleSave = async () => {
             accessMethod
         };
 
+<<<<<<< HEAD
         // Senha somente para cadastro tradicional.
         if (accessMethod === 'email') {
             userData.password = password;
         }
+=======
+      <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={salvando}>
+        {salvando ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Salvar</Text>}
+      </TouchableOpacity>
+>>>>>>> 47822e7e6224279073db457571ebcb38ff757bc2
 
         const response = await fetch(`${baseURL}/auth/cadastro`, {
             method: 'POST',

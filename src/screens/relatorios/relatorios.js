@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
@@ -9,9 +9,10 @@ import ScreenHeader from '../../components/screenHeader/screenHeader.js';
 import VoltarButton from '../../components/voltarButton/voltarButton.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import {
-  veiculos, rotas, manutencoes, buscarVeiculo, STATUS_ROTA, formatarKm, formatarMoeda,
-} from '../../constants/frotaMock.js';
+import { STATUS_ROTA, formatarKm, formatarMoeda } from '../../constants/frota.js';
+import { relatorio as buscarRelatorio } from '../../services/frotix.js';
+import useDados from '../../hooks/useDados.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
 const PERIODOS = [
   { id: '30', label: 'Últimos 30 dias', dias: 30 },
@@ -19,61 +20,18 @@ const PERIODOS = [
   { id: 'tudo', label: 'Tudo', dias: null },
 ];
 
-// "DD/MM/AAAA" -> Date.
-const paraDate = (texto) => {
-  if (!texto) return null;
-  const [d, m, a] = texto.split('/').map(Number);
-  return new Date(a, m - 1, d);
+// Relatório vazio, mostrado enquanto os dados do servidor não chegam.
+const RELATORIO_VAZIO = {
+  rotasPeriodo: [], manutencoesPeriodo: [], receita: 0, despesasViagem: 0, custoManutencao: 0,
+  despesas: 0, saldo: 0, margem: 0, kmRodados: 0, custoKm: 0, porStatus: [], ranking: [],
 };
 
-const dentroDoPeriodo = (texto, dias) => {
-  if (!dias) return true;
-  const data = paraDate(texto);
-  if (!data) return false;
-  const limite = new Date();
-  limite.setHours(0, 0, 0, 0);
-  limite.setDate(limite.getDate() - dias);
-  // Datas futuras (rotas agendadas) também entram, para o gestor ver o que vem por aí.
-  return data >= limite;
-};
+// Põe nome e cor de cada status (o backend manda só o id e o total).
+const completarStatus = (porStatus) =>
+  porStatus.map((s) => ({ ...s, label: STATUS_ROTA[s.id]?.label || s.id, cor: STATUS_ROTA[s.id]?.cor || '#888' }));
 
-// Junta os números do relatório a partir dos dados de exemplo.
-function calcularRelatorio(dias) {
-  const rotasPeriodo = rotas.filter((r) => dentroDoPeriodo(r.dataInicial, dias));
-  const manutencoesPeriodo = manutencoes.filter((m) => dentroDoPeriodo(m.data, dias));
-
-  const receita = rotasPeriodo.reduce((s, r) => s + (r.receita || 0), 0);
-  const despesasViagem = rotasPeriodo.reduce(
-    (s, r) => s + r.despesas.reduce((sd, d) => sd + d.valor, 0),
-    0
-  );
-  const custoManutencao = manutencoesPeriodo.reduce((s, m) => s + (m.custo || 0), 0);
-  const despesas = despesasViagem + custoManutencao;
-  const saldo = receita - despesas;
-  const margem = receita > 0 ? Math.round((saldo / receita) * 100) : 0;
-
-  const concluidas = rotasPeriodo.filter((r) => r.hodometroFinal);
-  const kmRodados = concluidas.reduce((s, r) => s + (r.hodometroFinal - r.hodometroInicial), 0);
-  const custoKm = kmRodados > 0 ? despesasViagem / kmRodados : 0;
-
-  const porStatus = Object.keys(STATUS_ROTA).map((id) => ({
-    id,
-    label: STATUS_ROTA[id].label,
-    cor: STATUS_ROTA[id].cor,
-    total: rotasPeriodo.filter((r) => r.status === id).length,
-  }));
-
-  // Ranking: menor custo por km primeiro (mais eficiente).
-  const ranking = [...veiculos]
-    .filter((v) => v.custoKm > 0)
-    .sort((a, b) => a.custoKm - b.custoKm)
-    .slice(0, 5);
-
-  return {
-    rotasPeriodo, manutencoesPeriodo, receita, despesasViagem, custoManutencao, despesas,
-    saldo, margem, kmRodados, custoKm, porStatus, ranking,
-  };
-}
+// Nome do arquivo exportado, ex.: relatorio-frotix-2026-11-19.pdf
+const nomeArquivo = (extensao) => `relatorio-frotix-${new Date().toISOString().slice(0, 10)}.${extensao}`;
 
 // Monta o HTML usado para gerar o PDF.
 function gerarHtml(rel, periodoLabel) {
@@ -81,7 +39,7 @@ function gerarHtml(rel, periodoLabel) {
     .map((r) => {
       const gasto = r.despesas.reduce((s, d) => s + d.valor, 0);
       return `<tr><td>${r.dataInicial || '-'}</td><td>${r.origem} → ${r.destino}</td><td>${
-        buscarVeiculo(r.veiculoId)?.placa || '-'
+        r.placa || '-'
       }</td><td>${STATUS_ROTA[r.status].label}</td><td>${formatarMoeda(r.receita)}</td><td>${formatarMoeda(gasto)}</td></tr>`;
     })
     .join('');
@@ -112,7 +70,7 @@ function gerarHtml(rel, periodoLabel) {
       <div class="card">Saldo líquido<b>${formatarMoeda(rel.saldo)}</b></div>
       <div class="card">Margem<b>${rel.margem}%</b></div>
     </div>
-    <p>Despesas de viagem: ${formatarMoeda(rel.despesasViagem)} · Manutenção: ${formatarMoeda(rel.custoManutencao)}</p>
+    <p>Despesas lançadas: ${formatarMoeda(rel.despesasViagem)} · Manutenção: ${formatarMoeda(rel.custoManutencao)}</p>
     <h2>Operacional</h2>
     <div class="cards">
       <div class="card">Km rodados<b>${formatarKm(rel.kmRodados)}</b></div>
@@ -134,7 +92,7 @@ function gerarCsv(rel, periodoLabel) {
     [],
     ['Resumo'],
     ['Receita', numero(rel.receita)],
-    ['Despesas de viagem', numero(rel.despesasViagem)],
+    ['Despesas lançadas', numero(rel.despesasViagem)],
     ['Manutenção', numero(rel.custoManutencao)],
     ['Saldo líquido', numero(rel.saldo)],
     ['Margem (%)', rel.margem],
@@ -146,7 +104,7 @@ function gerarCsv(rel, periodoLabel) {
       r.dataInicial || '',
       r.origem,
       r.destino,
-      buscarVeiculo(r.veiculoId)?.placa || '',
+      r.placa || '',
       r.motorista,
       STATUS_ROTA[r.status].label,
       numero(r.receita),
@@ -170,7 +128,16 @@ export default function Relatorios({ navigation, route }) {
   const [exportando, setExportando] = useState(null); // 'pdf' | 'excel' | null
 
   const periodoAtual = PERIODOS.find((p) => p.id === periodo);
-  const rel = calcularRelatorio(periodoAtual.dias);
+
+  // Erro P3: os números vêm do backend, dos mesmos lançamentos usados na Home.
+  const carregar = useCallback(() => buscarRelatorio(periodoAtual.dias), [periodoAtual.dias]);
+  const { dados, carregando, erro, recarregar } = useDados(carregar);
+  const rel = dados ? { ...dados, porStatus: completarStatus(dados.porStatus) } : RELATORIO_VAZIO;
+
+  const trocarPeriodo = (id) => {
+    if (id === periodo) return;
+    setPeriodo(id);
+  };
 
   const compartilhar = async (uri, mimeType, UTI) => {
     if (!(await Sharing.isAvailableAsync())) {
@@ -184,7 +151,17 @@ export default function Relatorios({ navigation, route }) {
     setExportando('pdf');
     try {
       const { uri } = await Print.printToFileAsync({ html: gerarHtml(rel, periodoAtual.label) });
-      await compartilhar(uri, 'application/pdf', 'com.adobe.pdf');
+      // Erro C8: o PDF saía com nome aleatório; agora sai como relatorio-frotix-AAAA-MM-DD.pdf.
+      let arquivoFinal = uri;
+      try {
+        const destino = new File(Paths.cache, nomeArquivo('pdf'));
+        if (destino.exists) destino.delete();
+        new File(uri).move(destino);
+        arquivoFinal = destino.uri;
+      } catch (e) {
+        console.warn('Não foi possível renomear o PDF:', e?.message || e);
+      }
+      await compartilhar(arquivoFinal, 'application/pdf', 'com.adobe.pdf');
     } catch (erro) {
       Alert.alert('Erro', `Não foi possível gerar o PDF: ${erro.message || erro}`);
     } finally {
@@ -195,7 +172,8 @@ export default function Relatorios({ navigation, route }) {
   const exportarExcel = async () => {
     setExportando('excel');
     try {
-      const arquivo = new File(Paths.cache, `relatorio-frotix-${Date.now()}.csv`);
+      const arquivo = new File(Paths.cache, nomeArquivo('csv'));
+      if (arquivo.exists) arquivo.delete();
       arquivo.create();
       arquivo.write(gerarCsv(rel, periodoAtual.label));
       await compartilhar(arquivo.uri, 'text/csv', 'public.comma-separated-values-text');
@@ -218,12 +196,14 @@ export default function Relatorios({ navigation, route }) {
             <TouchableOpacity
               key={p.id}
               style={[styles.chip, periodo === p.id && styles.chipAtivo]}
-              onPress={() => setPeriodo(p.id)}
+              onPress={() => trocarPeriodo(p.id)}
             >
               <Text style={styles.chipTexto}>{p.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={false} />
 
         <Text style={styles.secao}>Financeiro</Text>
         <View style={styles.cardAzul}>
@@ -236,7 +216,7 @@ export default function Relatorios({ navigation, route }) {
             <Text style={styles.cardAzulTexto}>{formatarMoeda(rel.receita)}</Text>
           </View>
           <View style={styles.linha}>
-            <Text style={styles.cardAzulTexto}>Despesas de viagem</Text>
+            <Text style={styles.cardAzulTexto}>Despesas lançadas</Text>
             <Text style={styles.cardAzulTexto}>{formatarMoeda(rel.despesasViagem)}</Text>
           </View>
           <View style={styles.linha}>
@@ -248,7 +228,7 @@ export default function Relatorios({ navigation, route }) {
         <Text style={styles.secao}>Operacional</Text>
         <View style={styles.metricas}>
           <View style={styles.metrica}>
-            <Text style={styles.metricaValor}>{rel.kmRodados.toLocaleString('pt-BR')}</Text>
+            <Text style={styles.metricaValor}>{Math.round(rel.kmRodados).toLocaleString('pt-BR')}</Text>
             <Text style={styles.metricaRotulo}>km rodados</Text>
           </View>
           <View style={styles.metrica}>

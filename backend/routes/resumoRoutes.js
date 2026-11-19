@@ -1,12 +1,10 @@
 import { Router } from 'express';
 import transacoesController from '../controllers/transacoesController.js';
+import { autenticar } from '../middleware/auth.js';
 
 const router = Router();
 
-router.get('/resumo-geral', transacoesController.obterResumoGeral);
-router.get('/atividades-recentes', transacoesController.listarAtividadesRecentes);
-router.get('/visao-geral-frota', transacoesController.obterVisaoGeralFrota);
-router.get('/despesas-frota', transacoesController.obterVisaoGeralFrota);
-router.get('/', transacoesController.obterResumoGeral);
+// Admin e Financeiro veem a empresa toda; os outros perfis só os próprios lançamentos.
+router.get('/atividades-recentes', autenticar, transacoesController.listarAtividadesRecentes);
 
 export default router;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -7,7 +7,10 @@ import FilterSearchBar from '../../components/filterSearchBar/filterSearchBar.js
 import VoltarButton from '../../components/voltarButton/voltarButton.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import { veiculos, STATUS_VEICULO, formatarKm, formatarMoeda } from '../../constants/frotaMock.js';
+import { STATUS_VEICULO, formatarKm, formatarMoeda } from '../../constants/frota.js';
+import { listarVeiculos } from '../../services/frotix.js';
+import useDados from '../../hooks/useDados.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
 // Normaliza para a busca ignorar maiúsculas, acentos e o hífen da placa.
 const normalizar = (texto) =>
@@ -17,10 +20,9 @@ export default function Veiculos({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
-  const [, setAtualizacao] = useState(0);
-
-  // Ao voltar do cadastro ou da manutenção, redesenha a lista com os dados novos.
-  useEffect(() => navigation.addListener('focus', () => setAtualizacao((n) => n + 1)), [navigation]);
+  // Erro P6: a lista vem do banco e recarrega ao voltar do cadastro ou da manutenção.
+  const { dados, carregando, erro, recarregar } = useDados(listarVeiculos, []);
+  const veiculos = dados || [];
 
   const contar = (status) => veiculos.filter((v) => v.status === status).length;
   const filtros = [
@@ -67,6 +69,8 @@ export default function Veiculos({ navigation, route }) {
 
         <Text style={styles.subtitulo}>Lista de Veículos</Text>
 
+        <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={veiculos.length > 0} />
+
         {lista.map((v) => {
           const status = STATUS_VEICULO[v.status];
           const acao = atalho(v);
@@ -109,7 +113,7 @@ export default function Veiculos({ navigation, route }) {
           );
         })}
 
-        {lista.length === 0 ? <Text style={styles.vazio}>Nenhum veículo encontrado.</Text> : null}
+        {lista.length === 0 && !carregando && !erro ? <Text style={styles.vazio}>Nenhum veículo encontrado.</Text> : null}
 
         <VoltarButton navigation={navigation} />
       </ScrollView>

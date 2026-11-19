@@ -9,7 +9,10 @@ import QuickActionsCards from '../../components/quickActionsCards/quickActionsCa
 import KmGauge from '../../components/kmGauge/kmGauge.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import { veiculos, resumoFrota, formatarMoeda } from '../../constants/frotaMock.js';
+import { formatarMoeda, META_KM_MES } from '../../constants/frota.js';
+import { resumoFrota } from '../../services/frotix.js';
+import useDados from '../../hooks/useDados.js';
+import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
 // Cores do donut conforme o Figma (diferentes dos selos de status das listas).
 const FATIAS = [
@@ -19,9 +22,9 @@ const FATIAS = [
 ];
 
 // Rótulo "últimos 7 dias ≡" do Figma (filtro de período, ainda só visual).
-const Periodo = ({ style }) => (
+const Periodo = ({ style, texto = 'últimos 7 dias' }) => (
   <View style={[styles.periodo, style]}>
-    <Text style={styles.periodoTexto}>últimos 7 dias</Text>
+    <Text style={styles.periodoTexto}>{texto}</Text>
     <Feather name="filter" size={12} color="#FFF" />
   </View>
 );
@@ -35,11 +38,13 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
   const usuario = usuarioProp || route?.params?.usuario;
   const [atalhoSelecionado, setAtalhoSelecionado] = useState('frota');
 
-  const contar = (status) => veiculos.filter((v) => v.status === status).length;
+  // Erro P5: os números vêm do backend (antes eram dados de exemplo).
+  const { dados: resumo, carregando, erro, recarregar } = useDados(() => resumoFrota(7));
+  const total = resumo?.totalVeiculos || 0;
+  const contar = (status) => resumo?.porStatus?.[status] || 0;
   const fatias = FATIAS.map((f) => ({ ...f, value: contar(f.id) }));
   const legenda = ['disponivel', 'em_viagem', 'manutencao'].map((id) => fatias.find((f) => f.id === id));
-  const percentual = (valor) => `${Math.round((valor / veiculos.length) * 100)}%`;
-  const custoMedioKm = veiculos.reduce((soma, v) => soma + v.custoKm, 0) / veiculos.length;
+  const percentual = (valor) => (total > 0 ? `${Math.round((valor / total) * 100)}%` : '0%');
 
   const ir = (tela, params = {}) => navigation.navigate(tela, { usuario, ...params });
 
@@ -104,10 +109,12 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
           </View>
         </View>
 
+        <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={Boolean(resumo)} />
+
         <View style={styles.metricas}>
           <MetricCard value={String(contar('em_viagem'))} title={'Veículos em\nrota'} />
-          <MetricCard value={`${resumoFrota.kmRodadosMes.toLocaleString('pt-BR')}\nkm`} title="rodados" />
-          <MetricCard value={formatarMoeda(custoMedioKm)} title="Custo por km" />
+          <MetricCard value={`${Math.round(resumo?.kmRodados || 0).toLocaleString('pt-BR')}\nkm`} title="rodados" />
+          <MetricCard value={formatarMoeda(resumo?.custoPorKm || 0)} title="Custo por km" />
         </View>
 
         <Text style={[styles.secaoTitulo, styles.acoesTitulo]}>Ações Rápidas</Text>
@@ -136,8 +143,8 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
           ))}
         </View>
 
-        <Periodo style={styles.periodoGauge} />
-        <KmGauge valor={resumoFrota.kmRodadosMes} meta={resumoFrota.metaKmMes} />
+        <Periodo style={styles.periodoGauge} texto="últimos 30 dias" />
+        <KmGauge valor={Math.round(resumo?.kmRodadosMes || 0)} meta={META_KM_MES} />
 
         <TouchableOpacity style={styles.botaoViagens} onPress={() => ir('Viagens', { modo: 'motorista' })}>
           <Text style={styles.botaoViagensTexto}>Minhas Viagens</Text>

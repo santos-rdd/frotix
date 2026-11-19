@@ -8,50 +8,63 @@ import {
   ScrollView,
   Image,
   Modal,
-  FlatList
+  FlatList,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
+import { atualizarUsuario, desativarUsuario } from '../../services/frotix.js';
+import { PERFIS, nomePerfil, idPerfil } from '../../constants/perfis.js';
 import { useNavigation, useRoute } from '@react-navigation/native';
 
 export default function UserDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   
-  const usuario = route.params?.usuario || {
-    id: '1',
-    nome: 'Carlos Silva',
-    email: 'carlos.silva@frotix.com',
-    role: 'Motorista',
-    foto: null,
-    accessType: 'email'
-  };
+  // Usuário escolhido na lista (dados do banco: { id, nome, email, perfil }).
+  const usuario = route.params?.usuario || {};
 
-  const [nome, setNome] = useState(usuario.nome);
-  const [email, setEmail] = useState(usuario.email);
-  const [perfil, setPerfil] = useState(usuario.role || 'Motorista');
+  const [nome, setNome] = useState(usuario.nome || '');
+  const [perfil, setPerfil] = useState(nomePerfil(usuario.perfil));
   const [modalVisible, setModalVisible] = useState(false);
+  const [salvando, setSalvando] = useState(false);
 
-  const perfisDisponíveis = [
-    'Motorista',
-    'Gestor de Frota',
-    'Financeiro',
-    'Administrador'
-  ];
+  const perfisDisponíveis = PERFIS.map((p) => p.nome);
 
-  const handleSave = () => {
-    const updatedUser = {
-      id: usuario.id,
-      nome,
-      email,
-      perfil,
-    };
-    console.log('USUÁRIO ATUALIZADO:', updatedUser);
-    navigation.goBack();
+  const handleSave = async () => {
+    if (!nome.trim()) {
+      Alert.alert('Campo obrigatório', 'Informe o nome.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      await atualizarUsuario(usuario.id, { nome: nome.trim(), perfil: idPerfil(perfil) });
+      Alert.alert('Usuário atualizado', `${nome.trim()} · ${perfil}`);
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Não foi possível salvar', e.message);
+    } finally {
+      setSalvando(false);
+    }
   };
 
+  // "Remover" desativa a conta: ela some da lista e não consegue mais entrar.
   const handleDelete = () => {
-    console.log('REMOVER USUÁRIO ID:', usuario.id);
-    navigation.goBack();
+    Alert.alert('Remover usuário', `Deseja remover o acesso de ${usuario.nome}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await desativarUsuario(usuario.id);
+            navigation.goBack();
+          } catch (e) {
+            Alert.alert('Não foi possível remover', e.message);
+          }
+        },
+      },
+    ]);
   };
 
   return (
@@ -82,22 +95,13 @@ export default function UserDetailScreen() {
         />
       </View>
 
+      {/* Erro P9: o e-mail aparecia vazio e havia um botão "Entrar com Gmail" sem função.
+          O e-mail é o login da pessoa, então aparece só para leitura. */}
       <View style={styles.inputGroup}>
-        <TextInput
-          style={styles.inputLine}
-          placeholder="e-mail"
-          placeholderTextColor="#888"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+        <Text style={[styles.inputLine, styles.inputSomenteLeitura]} numberOfLines={1}>
+          {usuario.email || 'E-mail não informado'}
+        </Text>
       </View>
-
-      <TouchableOpacity style={styles.accessButtonDark}>
-        <Ionicons name="logo-google" size={18} color="#4285F4" style={{ marginRight: 8 }} />
-        <Text style={styles.accessButtonDarkText}>Entrar com Gmail</Text>
-      </TouchableOpacity>
 
       <Text style={styles.sectionLabel}>Perfil:</Text>
 
@@ -110,8 +114,8 @@ export default function UserDetailScreen() {
         <Text style={styles.removeButtonText}>Remover usuário</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Salvar</Text>
+      <TouchableOpacity style={styles.saveButton} onPress={handleSave} disabled={salvando}>
+        {salvando ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveButtonText}>Salvar</Text>}
       </TouchableOpacity>
 
       <Modal
@@ -190,6 +194,10 @@ const styles = StyleSheet.create({
   },
   inputGroup: {
     marginBottom: 20,
+  },
+  inputSomenteLeitura: {
+    color: '#AAA',
+    paddingVertical: 14,
   },
   inputLine: {
     borderWidth: 1,

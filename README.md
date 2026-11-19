@@ -1,3 +1,5 @@
+> **Como configurar e rodar:** veja [CONFIGURACAO.md](CONFIGURACAO.md).
+
  # 🚛 FrotiX - Sistema de Gestão e Controle
 
     O **FrotiX** é uma aplicação mobile moderna desenvolvida para

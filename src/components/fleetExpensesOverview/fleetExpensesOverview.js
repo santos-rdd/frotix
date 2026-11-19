@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { Feather } from '@expo/vector-icons';
 import Svg, { Circle, G } from 'react-native-svg';
 import { useFocusEffect } from '@react-navigation/native';
-import { API_URL } from '../../config/api.js';
+import { apiFetch } from '../../services/api.js';
 
 const SLICE_COLORS = [
   '#1E293B', 
@@ -31,7 +31,7 @@ export default function FleetExpensesOverview({ onFilterPress, onMenuPress }) {
       if (!isSilent || isFirstLoad.current) {
         setLoading(true);
       }
-      const response = await fetch(`${API_URL}/financeiro/visao-geral-frota?dias=7`);
+      const response = await apiFetch('/financeiro/visao-geral-frota?dias=7');
       if (!response.ok) {
         throw new Error(`Erro HTTP: ${response.status}`);
       }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../../constants/theme.js';
 
 /**
@@ -51,14 +51,15 @@ export function EscolhaChips({ label, opcoes, valor, onSelecionar }) {
 }
 
 // Par de botões do rodapé do card: Cancelar (vermelho) e a ação principal (claro).
-export function BotoesFormulario({ onCancelar, onConfirmar, confirmarLabel = 'Salvar', cancelarLabel = 'Cancelar' }) {
+// salvando: mostra o indicador e bloqueia o botão (evita cadastro em dobro).
+export function BotoesFormulario({ onCancelar, onConfirmar, confirmarLabel = 'Salvar', cancelarLabel = 'Cancelar', salvando = false }) {
   return (
     <View style={styles.botoes}>
-      <TouchableOpacity style={[styles.botao, styles.botaoCancelar]} onPress={onCancelar}>
+      <TouchableOpacity style={[styles.botao, styles.botaoCancelar]} onPress={onCancelar} disabled={salvando}>
         <Text style={styles.botaoTextoClaro}>{cancelarLabel}</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={[styles.botao, styles.botaoClaro]} onPress={onConfirmar}>
-        <Text style={styles.botaoTextoEscuro}>{confirmarLabel}</Text>
+      <TouchableOpacity style={[styles.botao, styles.botaoClaro]} onPress={onConfirmar} disabled={salvando}>
+        {salvando ? <ActivityIndicator color="#121212" /> : <Text style={styles.botaoTextoEscuro}>{confirmarLabel}</Text>}
       </TouchableOpacity>
     </View>
   );

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, G } from 'react-native-svg';
-import { API_URL } from '../../config/api.js';
+import { apiFetch } from '../../services/api.js';
 
 export default function GeneralSummaryCard({ onMenuPress }) {
   const [totalEntradas, setTotalEntradas] = useState(0);
@@ -16,7 +16,7 @@ export default function GeneralSummaryCard({ onMenuPress }) {
       if (!isSilent || isFirstLoad.current) {
         setLoading(true);
       }
-      const response = await fetch(`${API_URL}/financeiro/resumo-geral`);
+      const response = await apiFetch('/financeiro/resumo-geral');
       if (!response.ok) {
         throw new Error(`Erro na requisição: ${response.status}`);
       }

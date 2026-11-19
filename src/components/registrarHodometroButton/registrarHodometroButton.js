@@ -13,14 +13,6 @@ const { width } = Dimensions.get('window');
 const MAP_WIDTH = width - 40;
 const MAP_HEIGHT = 480;
 
-const DEFAULT_VIAGEM = {
-  id: 'd0000000-0000-0000-0000-000000000002',
-  origem: 'Campinas - SP',
-  destino: 'Rio de Janeiro - RJ',
-  motorista: 'Marcos Souza',
-  status: 'EM_ANDAMENTO',
-  placa: 'POX-XX',
-};
 
 function generateLeafletHTML(origem, destino, motorista) {
   const safeOrigem = (origem || 'Campinas - SP').replace(/'/g, "\\'");
@@ -274,7 +266,21 @@ function generateLeafletHTML(origem, destino, motorista) {
 }
 
 export default function MapCardWithButton({ onButtonPress, viagem }) {
-  const viagemAtiva = viagem || DEFAULT_VIAGEM;
+  // Sem viagem em andamento, mostra só o botão (antes aparecia uma viagem de exemplo).
+  if (!viagem) {
+    return (
+      <View style={styles.mainContainer}>
+        <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={onButtonPress}>
+          <Text style={styles.buttonText}>Registrar Hodômetro</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+  return <MapaDaViagem viagem={viagem} onButtonPress={onButtonPress} />;
+}
+
+function MapaDaViagem({ onButtonPress, viagem }) {
+  const viagemAtiva = viagem;
 
   const htmlContent = useMemo(() => {
     return generateLeafletHTML(
@@ -322,7 +328,7 @@ export default function MapCardWithButton({ onButtonPress, viagem }) {
               <View style={styles.liveDot} />
               <Text style={styles.statusText}>EM ANDAMENTO</Text>
             </View>
-            <Text style={styles.plateText}>{viagemAtiva?.placa || 'POX-XX'}</Text>
+            <Text style={styles.plateText}>{viagemAtiva?.placa || 'Sem veículo'}</Text>
           </View>
 
           <Text style={styles.driverNameText} numberOfLines={1}>

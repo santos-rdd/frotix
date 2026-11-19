@@ -7,13 +7,14 @@ import {
 
 import authController from '../controllers/authController.js';
 import emailController from '../controllers/emailController.js';
+import { autenticar, exigirPerfil, PERFIS } from '../middleware/auth.js';
 
 const router = Router();
 
-router.post('/cadastro', cadastrarUsuario);
+// Cadastro de usuário com e-mail e senha: só Admin e Financeiro (antes era aberto a qualquer um).
+router.post('/cadastro', autenticar, exigirPerfil(PERFIS.ADMIN, PERFIS.FINANCEIRO), cadastrarUsuario);
 router.post('/reenviar-confirmacao', reenviarConfirmacao);
 
-router.post('/login', emailController);
 router.post('/login-email', emailController);
 router.post('/login-google', authController);
 
@@ -55,4 +56,8 @@ router.get('/confirmado', (req, res) => {
     `);
 });
 
+<<<<<<< HEAD
 export default router;
+=======
+export default router;
+>>>>>>> 47822e7e6224279073db457571ebcb38ff757bc2

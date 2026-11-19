@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator
 } from 'react-native';
-import { API_URL } from '../../config/api.js';
+import { listarViagensEmAndamento } from '../../services/frotix.js';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
@@ -19,62 +19,27 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef(null);
 
+  const [erro, setErro] = useState(null);
+
+  // Erro P10: o backend devolve só as viagens do motorista logado (ou todas, para os
+  // outros perfis). Antes havia uma lista fixa de "reserva" com viagens de exemplo.
   useEffect(() => {
     let isMounted = true;
 
     const carregarViagens = async () => {
       try {
         setLoading(true);
-        let response = await fetch(`${API_URL}/usuarios/viagens-andamento`);
-        if (!response.ok) {
-          response = await fetch(`${API_URL}/viagens-andamento`);
-        }
-
-        if (response.ok) {
-          const json = await response.json();
-          if (json.sucesso && Array.isArray(json.viagens) && json.viagens.length > 0) {
-            if (isMounted) {
-              setViagens(json.viagens);
-              if (!viagemSelecionada) {
-                onSelectViagem?.(json.viagens[0]);
-              }
-              setLoading(false);
-            }
-            return;
-          }
+        const lista = await listarViagensEmAndamento();
+        if (!isMounted) return;
+        setViagens(lista);
+        setErro(null);
+        if (!viagemSelecionada && lista.length > 0) {
+          onSelectViagem?.(lista[0]);
         }
       } catch (err) {
-        console.warn('Não foi possível conectar ao backend:', err.message);
-      }
-
-      // Fallback para exibição com dados reais da tabela caso o backend não responda
-      const fallback = [
-        {
-          id: 'd0000000-0000-0000-0000-000000000002',
-          origem: 'Campinas - SP',
-          destino: 'Rio de Janeiro - RJ',
-          motorista: 'Marcos Souza',
-          status: 'EM_ANDAMENTO',
-          placa: 'POX-XX',
-          km_inicial: 89120
-        },
-        {
-          id: 'd0000000-0000-0000-0000-000000000003',
-          origem: 'Curitiba - PR',
-          destino: 'Santos - SP',
-          motorista: 'João Silva',
-          status: 'EM_ANDAMENTO',
-          placa: 'POX-XX',
-          km_inicial: 45790
-        }
-      ];
-
-      if (isMounted) {
-        setViagens(fallback);
-        if (!viagemSelecionada) {
-          onSelectViagem?.(fallback[0]);
-        }
-        setLoading(false);
+        if (isMounted) setErro(err.message);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -96,6 +61,14 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="small" color="#2541EF" />
         <Text style={styles.loadingText}>Carregando viagens em curso...</Text>
+      </View>
+    );
+  }
+
+  if (erro || viagens.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>{erro || 'Nenhuma viagem em andamento.'}</Text>
       </View>
     );
   }
@@ -215,7 +188,7 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
                 </View>
                 <View style={styles.licenseInfoBlock}>
                   <Text style={styles.licenseLabel}>Licença do{'\n'}veículo</Text>
-                  <Text style={styles.licenseValue}>{item.placa || 'POX-XX'}</Text>
+                  <Text style={styles.licenseValue}>{item.placa || 'Sem veículo'}</Text>
                 </View>
               </View>
             </TouchableOpacity>

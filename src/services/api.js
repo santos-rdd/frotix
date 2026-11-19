@@ -1,0 +1,74 @@
+import * as SecureStore from 'expo-secure-store';
+import { API_URL } from '../config/api.js';
+
+// Token de sessão devolvido pelo login. Fica na memória e no SecureStore do aparelho.
+const CHAVE_TOKEN = 'frotix_token';
+let tokenAtual = null;
+let aoExpirarSessao = null;
+
+export async function salvarToken(token) {
+  tokenAtual = token || null;
+  try {
+    if (token) await SecureStore.setItemAsync(CHAVE_TOKEN, token);
+    else await SecureStore.deleteItemAsync(CHAVE_TOKEN);
+  } catch (e) {
+    console.warn('Não foi possível guardar o token:', e?.message || e);
+  }
+}
+
+export async function carregarToken() {
+  if (tokenAtual) return tokenAtual;
+  try {
+    tokenAtual = await SecureStore.getItemAsync(CHAVE_TOKEN);
+  } catch {
+    tokenAtual = null;
+  }
+  return tokenAtual;
+}
+
+export const limparSessao = () => salvarToken(null);
+
+/** O App.js registra aqui o que fazer quando o backend responde 401 (voltar ao login). */
+export function definirAoExpirarSessao(fn) {
+  aoExpirarSessao = fn;
+}
+
+/**
+ * fetch para o backend do Frotix: põe o endereço base e o token.
+ * Devolve o Response (como o fetch normal). Para JSON direto, use apiJson.
+ */
+export async function apiFetch(caminho, opcoes = {}) {
+  const token = await carregarToken();
+  const headers = { ...(opcoes.headers || {}) };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  let body = opcoes.body;
+  const ehForm = typeof FormData !== 'undefined' && body instanceof FormData;
+  if (body !== undefined && !ehForm && typeof body !== 'string') {
+    body = JSON.stringify(body);
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const resposta = await fetch(`${API_URL}${caminho}`, { ...opcoes, headers, body });
+
+  if (resposta.status === 401 && token) {
+    await limparSessao();
+    aoExpirarSessao?.();
+  }
+  return resposta;
+}
+
+/** Chama o backend e devolve o JSON; lança Error com a mensagem do backend se der erro. */
+export async function apiJson(caminho, opcoes = {}) {
+  let resposta;
+  try {
+    resposta = await apiFetch(caminho, opcoes);
+  } catch {
+    throw new Error('Sem conexão com o servidor. Verifique a internet e tente de novo.');
+  }
+  const json = await resposta.json().catch(() => ({}));
+  if (!resposta.ok || json.sucesso === false) {
+    throw new Error(json.erro || json.error || json.mensagem || `Erro ${resposta.status} no servidor.`);
+  }
+  return json;
+}

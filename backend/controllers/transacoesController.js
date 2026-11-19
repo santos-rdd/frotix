@@ -1,4 +1,6 @@
 import supabase from '../database/db.js';
+import { PERFIS } from '../middleware/auth.js';
+import { viagensConcluidasNoPeriodo, somarKm, custoPorKm, arredondar } from '../utils/calculos.js';
 
 const parseValor = (val) => {
   if (typeof val === 'string') {
@@ -42,9 +44,12 @@ const listarAtividadesRecentes = async (req, res) => {
   try {
     const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 4, 1), 50);
 
-    const { data, error } = await supabase
-      .from('lancamentos_financeiros')
-      .select('*');
+    // Admin e Financeiro veem a empresa toda; Gestor e Motorista, só os próprios lançamentos.
+    let consulta = supabase.from('lancamentos_financeiros').select('*');
+    if (![PERFIS.ADMIN, PERFIS.FINANCEIRO].includes(req.usuario?.perfil)) {
+      consulta = consulta.eq('id_usuario', req.usuario.id);
+    }
+    const { data, error } = await consulta;
     if (error) throw error;
 
     const lancamentos = (data || []).filter((item) => {
@@ -98,11 +103,31 @@ const listarAtividadesRecentes = async (req, res) => {
     console.error('Erro ao listar atividades recentes:', error);
     return res.status(500).json({
       sucesso: false,
-      mensagem: 'Erro interno ao consultar atividades recentes.',
-      erro: error.message
+      mensagem: 'Erro interno ao consultar atividades recentes.'
     });
   }
 };
+
+// Procura o id pelo nome quando o app antigo manda só o nome (C5: antes usava
+// .single(), que dá erro se não achar e o erro era ignorado).
+async function idPorNome(tabela, nome) {
+  if (!nome) return null;
+  const { data, error } = await supabase
+    .from(tabela)
+    .select('id')
+    .ilike('nome', String(nome).trim())
+    .eq('ativo', true)
+    .limit(1);
+  if (error) throw error;
+  return data?.[0]?.id || null;
+}
+
+// Só aceita anexos já enviados ao Storage (caminho devolvido por POST /comprovantes/upload).
+// Caminhos locais do celular (file://, content://) não servem para ninguém (erro I4).
+const anexoValido = (valor) =>
+  typeof valor === 'string' && valor.length > 0 && !/^(file|content|ph|assets-library):/i.test(valor);
+
+const primeiroAnexo = (lista) => (Array.isArray(lista) ? lista.find(anexoValido) : null) || null;
 
 const cadastrarTransacao = async (req, res) => {
   try {
@@ -111,9 +136,11 @@ const cadastrarTransacao = async (req, res) => {
       actionType,
       descricao,
       categoria,
+      idCategoria,
       formaPagamento,
+      idFormaPagamento,
+      idViagem,
       data,
-      clienteOuVeiculo,
       estadoOuStatus,
       credor,
       valorParcela,
@@ -121,64 +148,60 @@ const cadastrarTransacao = async (req, res) => {
       vencimentoPrimeira,
       valorQuitacaoAntecipada,
       anexos
-    } = req.body;
+    } = req.body || {};
 
-    const tipoBruto = tipo || actionType;
-
-    if (!tipoBruto) {
+    const tipoTransacao = String(tipo || actionType || '').toUpperCase().trim();
+    if (!['ENTRADA', 'SAIDA', 'DIVIDA'].includes(tipoTransacao)) {
       return res.status(400).json({
         sucesso: false,
-        mensagem: 'O campo tipo ou actionType é obrigatório.'
+        mensagem: 'Informe o tipo: entrada, saida ou divida.'
       });
     }
 
-    const tipoTransacao = tipoBruto.toUpperCase();
-    const usuarioIdFixo = 'cf92dbb6-88d5-4403-8629-f4d52d1fd91f';
+    if (!descricao || !String(descricao).trim()) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Informe a descrição.' });
+    }
 
     const valorParcelaNum = parseValor(valorParcela);
-    const valorQuitacaoNum = parseValor(valorQuitacaoAntecipada);
-
-    let categoriaId = null;
-    if (categoria) {
-      const { data: catData } = await supabase
-        .from('categorias_financeiras')
-        .select('id')
-        .ilike('nome', categoria)
-        .single();
-
-      if (catData) {
-        categoriaId = catData.id;
-      }
+    if (!(valorParcelaNum > 0)) {
+      return res.status(400).json({ sucesso: false, mensagem: 'Informe um valor maior que zero.' });
     }
 
-    let formaPagamentoId = null;
-    if (formaPagamento) {
-      const { data: formaData } = await supabase
-        .from('formas_pagamento')
-        .select('id')
-        .ilike('nome', formaPagamento)
-        .single();
+    // Erro I5: antes todo lançamento ia para um id_usuario fixo.
+    const usuarioId = req.usuario.id;
 
-      if (formaData) {
-        formaPagamentoId = formaData.id;
-      }
-    }
-
+    // Erro I3: o app agora manda o id; o nome fica só como alternativa.
+    const categoriaId = idCategoria || (await idPorNome('categorias_financeiras', categoria));
+    const formaPagamentoId = idFormaPagamento || (await idPorNome('formas_pagamento', formaPagamento));
     const dataAtual = new Date().toISOString().split('T')[0];
 
     if (tipoTransacao === 'DIVIDA') {
+      const qtd = parseInt(quantidadeParcelas, 10);
+      // A tabela financiamentos exige pelo menos 2 parcelas.
+      if (!(qtd >= 2)) {
+        return res.status(400).json({
+          sucesso: false,
+          mensagem: 'Uma dívida precisa ter pelo menos 2 parcelas. Para pagamento único, registre uma saída.'
+        });
+      }
+
+      const valorQuitacaoNum = parseValor(valorQuitacaoAntecipada);
       const primeiraDataValida = vencimentoPrimeira || data || dataAtual;
 
       const { data: financiamentoCriado, error: erroFinanciamento } = await supabase
         .from('financiamentos')
         .insert([{
           descricao,
-          valor_total: valorParcelaNum * (Number(quantidadeParcelas) || 1),
+          valor_total: Number((valorParcelaNum * qtd).toFixed(2)),
           valor_parcela: valorParcelaNum,
-          quantidade_parcelas: Number(quantidadeParcelas) || 1,
+          quantidade_parcelas: qtd,
           data_primeiro_vencimento: primeiraDataValida,
           valor_quitacao_antecipada: valorQuitacaoAntecipada ? valorQuitacaoNum : null,
-          credor: credor || null
+          credor: credor || null,
+          // Erro I6: o financiamento ficava sem dono, categoria e forma de pagamento.
+          id_usuario: usuarioId,
+          id_categoria: categoriaId,
+          id_forma_pagamento: formaPagamentoId
         }])
         .select()
         .single();
@@ -187,8 +210,7 @@ const cadastrarTransacao = async (req, res) => {
 
       const financiamentoId = financiamentoCriado.id;
       const parcelasArray = [];
-      const qtd = parseInt(quantidadeParcelas) || 1;
-      let dataBase = new Date(primeiraDataValida);
+      const dataBase = new Date(`${primeiraDataValida}T12:00:00`);
 
       for (let i = 1; i <= qtd; i++) {
         parcelasArray.push({
@@ -197,8 +219,8 @@ const cadastrarTransacao = async (req, res) => {
           tipo: 'DIVIDA',
           id_categoria: categoriaId,
           id_forma_pagamento: formaPagamentoId,
-          id_usuario: usuarioIdFixo,
-          id_viagem: null,
+          id_usuario: usuarioId,
+          id_viagem: idViagem || null,
           data_lancamento: dataAtual,
           data_vencimento: dataBase.toISOString().split('T')[0],
           status: 'PENDENTE',
@@ -214,7 +236,11 @@ const cadastrarTransacao = async (req, res) => {
         .from('lancamentos_financeiros')
         .insert(parcelasArray);
 
-      if (erroParcelas) throw erroParcelas;
+      if (erroParcelas) {
+        // Desfaz o financiamento para não ficar uma dívida sem parcelas.
+        await supabase.from('financiamentos').delete().eq('id', financiamentoId);
+        throw erroParcelas;
+      }
 
       return res.status(201).json({
         sucesso: true,
@@ -222,6 +248,8 @@ const cadastrarTransacao = async (req, res) => {
         financiamentoId
       });
     }
+
+    const status = estadoOuStatus ? String(estadoOuStatus).toUpperCase() : 'PAGO';
 
     const { data: lancamentoCriado, error: erroLancamento } = await supabase
       .from('lancamentos_financeiros')
@@ -231,14 +259,15 @@ const cadastrarTransacao = async (req, res) => {
         tipo: tipoTransacao,
         id_categoria: categoriaId,
         id_forma_pagamento: formaPagamentoId,
-        id_usuario: usuarioIdFixo,
-        id_viagem: null,
+        id_usuario: usuarioId,
+        id_viagem: idViagem || null,
         data_lancamento: data || dataAtual,
         data_vencimento: data || dataAtual,
-        status: estadoOuStatus ? estadoOuStatus.toUpperCase() : 'PAGO',
-        comprovante_url: anexos?.comprovantes?.[0] || null,
-        foto_url: anexos?.fotos?.[0] || null,
-        documento_url: anexos?.documentos?.[0] || null
+        data_pagamento: status === 'PAGO' ? (data || dataAtual) : null,
+        status,
+        comprovante_url: primeiroAnexo(anexos?.comprovantes),
+        foto_url: primeiroAnexo(anexos?.fotos),
+        documento_url: primeiroAnexo(anexos?.documentos)
       }])
       .select()
       .single();
@@ -254,8 +283,7 @@ const cadastrarTransacao = async (req, res) => {
     console.error('Erro ao cadastrar transação:', error);
     return res.status(500).json({
       sucesso: false,
-      mensagem: 'Erro interno ao salvar no banco de dados.',
-      erro: error.message
+      mensagem: 'Erro interno ao salvar no banco de dados.'
     });
   }
 };
@@ -275,7 +303,8 @@ const listarParcelasPendentes = async (req, res) => {
 
     return res.status(200).json({ sucesso: true, parcelasPendentes: data });
   } catch (error) {
-    return res.status(500).json({ sucesso: false, erro: error.message });
+    console.error('Erro ao listar parcelas pendentes:', error);
+    return res.status(500).json({ sucesso: false, erro: 'Erro interno ao consultar parcelas.' });
   }
 };
 
@@ -400,8 +429,7 @@ const obterResumoGeral = async (req, res) => {
     console.error('Erro ao obter resumo financeiro:', error);
     return res.status(500).json({
       sucesso: false,
-      mensagem: 'Erro interno ao consultar resumo financeiro.',
-      erro: error.message
+      mensagem: 'Erro interno ao consultar resumo financeiro.'
     });
   }
 };
@@ -425,10 +453,6 @@ const obterVisaoGeralFrota = async (req, res) => {
       (v) => (v.status || '').toUpperCase().trim() === 'EM_ANDAMENTO'
     );
     const veiculosEmRota = viagensEmAndamento.length;
-    const kmRodados = viagensEmAndamento.reduce(
-      (acc, v) => acc + (Number(v.km_inicial) || 0),
-      0
-    );
 
     const agora = new Date();
     const diasParam = Math.max(1, parseInt(req.query.dias || req.query.periodo, 10) || 7);
@@ -494,32 +518,27 @@ const obterVisaoGeralFrota = async (req, res) => {
       };
     });
 
-    const isCombustivel = (item) => {
-      const cat = catMap[item.id_categoria];
-      const catNome = (cat?.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      const desc = (item.descricao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      return catNome.includes('combustivel') || desc.includes('combustivel') || desc.includes('abastecimento');
-    };
-
-    const comb7Dias = despesas7Dias.filter(isCombustivel);
-    const combGeral = todasDespesas.filter(isCombustivel);
-    const combUsado = comb7Dias.length > 0 ? comb7Dias : combGeral;
-
-    const totalCombustivel = combUsado.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
-    const custoPorKm = kmRodados > 0 ? (totalCombustivel / kmRodados) : 0;
+    // Erro I7: km rodados = soma de (km_final − km_inicial) das viagens concluídas no
+    // período. Se não houver nenhuma no período, usa todas as concluídas (mesma regra
+    // das despesas acima). Custo por km = despesas do período ÷ km rodados.
+    const concluidasPeriodo = viagensConcluidasNoPeriodo(viagens, seteDiasAtrasStr);
+    const concluidasBase = concluidasPeriodo.length > 0
+      ? concluidasPeriodo
+      : viagensConcluidasNoPeriodo(viagens, null);
+    const kmRodados = somarKm(concluidasBase);
+    const custoKm = custoPorKm(totalDespesas, kmRodados);
 
     const kmFormatado = Math.round(kmRodados).toLocaleString('pt-BR');
-    const custoKmFormatado = `R$${custoPorKm.toFixed(2).replace('.', ',')}`;
+    const custoKmFormatado = `R$${custoKm.toFixed(2).replace('.', ',')}`;
 
     res.set('Cache-Control', 'no-store');
     return res.status(200).json({
       sucesso: true,
-      periodoDias: 7,
+      periodoDias: diasParam,
       veiculosEmRota,
-      kmRodados,
+      kmRodados: arredondar(kmRodados),
       kmRodadosFormatado: kmFormatado,
-      totalCombustivel: Number(totalCombustivel.toFixed(2)),
-      custoPorKm: Number(custoPorKm.toFixed(2)),
+      custoPorKm: arredondar(custoKm),
       custoPorKmFormatado: custoKmFormatado,
       totalDespesas: Number(totalDespesas.toFixed(2)),
       despesas: top5
@@ -528,8 +547,7 @@ const obterVisaoGeralFrota = async (req, res) => {
     console.error('Erro ao obter visão geral da frota:', error);
     return res.status(500).json({
       sucesso: false,
-      mensagem: 'Erro interno ao consultar dados da frota.',
-      erro: error.message
+      mensagem: 'Erro interno ao consultar dados da frota.'
     });
   }
 };
