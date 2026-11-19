@@ -5,7 +5,7 @@ import RecentActivity from '../RecentActivity/RecentActivity.js';
 
 const { width } = Dimensions.get('window');
 
-export default function InteractiveCarousel({ onOpenSlider, atividades }) {
+export default function InteractiveCarousel({ onOpenSlider, atividades, onAddForma, onDeleteForma, onMenuAtividades }) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const carouselData = [
@@ -22,11 +22,9 @@ export default function InteractiveCarousel({ onOpenSlider, atividades }) {
     return (
       <View style={styles.slideContainer}>
         {item.type === 'options' ? (
-          <OptionsPanel 
-          onOpenSlider={onOpenSlider}
-          />
+          <OptionsPanel onOpenSlider={onOpenSlider} onAddForma={onAddForma} onDeleteForma={onDeleteForma} />
         ) : (
-          <RecentActivity atividades={atividades} />
+          <RecentActivity atividades={atividades} onMenuPress={onMenuAtividades} />
         )}
       </View>
     );
