@@ -56,8 +56,4 @@ router.get('/confirmado', (req, res) => {
     `);
 });
 
-<<<<<<< HEAD
 export default router;
-=======
-export default router;
->>>>>>> 47822e7e6224279073db457571ebcb38ff757bc2

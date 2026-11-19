@@ -21,11 +21,6 @@
     "expo-status-bar": "~57.0.1",
     "express": "^5.2.1",
     "google-auth-library": "^11.3.4",
-<<<<<<< HEAD
-=======
-    "jsonwebtoken": "^9.0.3",
-    "multer": "^2.5.0",
->>>>>>> 47822e7e6224279073db457571ebcb38ff757bc2
     "pg": "^8.23.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
