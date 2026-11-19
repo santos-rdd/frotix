@@ -20,7 +20,7 @@
     "expo-sharing": "~57.0.25",
     "expo-status-bar": "~57.0.1",
     "express": "^5.2.1",
-    "multer": "^2.4.0",
+    "google-auth-library": "^11.3.4",
     "pg": "^8.23.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",

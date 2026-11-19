@@ -17,8 +17,6 @@ router.post('/login', emailController);
 router.post('/login-email', emailController);
 router.post('/login-google', authController);
 
-export default router;
-
 router.get('/confirmado', (req, res) => {
     res.status(200).send(`
         <!DOCTYPE html>
@@ -27,33 +25,10 @@ router.get('/confirmado', (req, res) => {
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <title>Confirmação Frotix</title>
-            <style>
-                body {
-                    background: #121212;
-                    color: white;
-                    font-family: Arial, sans-serif;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    min-height: 100vh;
-                    text-align: center;
-                    margin: 0;
-                }
-
-                .container {
-                    padding: 30px;
-                }
-
-                h1 {
-                    color: #2541ff;
-                }
-            </style>
         </head>
-        <body>
-            <div class="container">
-                <h1 id="titulo">Frotix</h1>
-                <p id="mensagem">Verificando confirmação...</p>
-            </div>
+        <body style="background:#121212;color:white;text-align:center;font-family:Arial;padding:50px">
+            <h1 style="color:#2541ff">FrotiX</h1>
+            <p id="mensagem">Verificando confirmação...</p>
 
             <script>
                 const params = new URLSearchParams(
@@ -61,17 +36,23 @@ router.get('/confirmado', (req, res) => {
                 );
 
                 const erro = params.get('error_description');
+                const token = params.get('access_token');
+
+                const mensagem = document.getElementById('mensagem');
 
                 if (erro) {
-                    document.getElementById('titulo').textContent = 'Ops!';
-                    document.getElementById('mensagem').textContent = erro;
+                    mensagem.textContent = erro;
+                } else if (token) {
+                    mensagem.textContent =
+                        'E-mail confirmado! Agora você pode voltar ao Frotix.';
                 } else {
-                    document.getElementById('titulo').textContent = 'E-mail confirmado!';
-                    document.getElementById('mensagem').textContent =
-                        'Seu endereço foi confirmado. Agora você pode voltar ao Frotix e entrar na sua conta.';
+                    mensagem.textContent =
+                        'Não foi possível identificar a confirmação.';
                 }
             </script>
         </body>
         </html>
     `);
 });
+
+export default router;

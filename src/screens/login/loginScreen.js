@@ -32,58 +32,107 @@ export default function LoginScreen({ navigation }) {
     });
   }, []); 
   
-  const logIn = async (googleEmail, googleData) => {
+  
+const logIn = async (idToken, googleData) => {
     try {
-      console.log('Enviando requisição para:', `${API_URL}/auth/login-google`);
-      
-      const response = await fetch(`${API_URL}/auth/login-google`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email: googleEmail }),
-      });
+        console.log('Enviando autenticação Google para:', `${API_URL}/auth/login-google`);
 
-      const data = await response.json();
+        const response = await fetch(`${API_URL}/auth/login-google`, {
+            method: 'POST',
 
-      if (response.ok) {
-        // console.log('Usuário autorizado!', data.usuario);
-        irParaHome(navigation, { auth: googleData, bankUser: data.usuario });
-      } else {
-        console.log('Acesso negado pelo backend:', data.erro);
-        Alert.alert("Acesso Negado", data.erro || "E-mail não autorizado.");
-      }
+            headers: {
+                'Content-Type': 'application/json',
+            },
+
+            body: JSON.stringify({
+                idToken
+            }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+            console.log('Login Google autorizado!', data.usuario);
+
+            navigation.navigate('HomePage', {
+                auth: {
+                    user: googleData.user
+                },
+
+                bankUser: data.usuario,
+                session: data.sessao
+            });
+
+        } else {
+            console.log('Acesso negado:', data.erro);
+
+            Alert.alert(
+                'Acesso Negado',
+                data.erro || 'Não foi possível autenticar com o Google.'
+            );
+        }
+
     } catch (error) {
-      console.error('Erro de conexão com o servidor', error);
-      Alert.alert("Erro de Conexão", `Não foi possível conectar em ${API_URL}. Verifique o servidor ou cabo.`);
-    }
-  };
+        console.error('Erro de conexão com o servidor:', error);
 
-  async function singIn(){
+        Alert.alert(
+            'Erro de Conexão',
+            `Não foi possível conectar em ${API_URL}. Verifique o servidor.`
+        );
+    }
+};
+
+
+ 
+async function singIn() {
     try {
-      // console.log('Botão clicado: checando Play Services...');
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        await GoogleSignin.hasPlayServices({
+            showPlayServicesUpdateDialog: true
+        });
 
-      try {
-        await GoogleSignin.signOut();
-      } catch (e) {
-        console.log('Nenhuma sessão anterior para limpar.');
-      }
-      
-      const response = await GoogleSignin.signIn();
-      
-      if(isSuccessResponse(response)){
-        const emailGoogle = response.data.user.email;
-        // console.log('Google login OK:', emailGoogle);
-        await logIn(emailGoogle, response.data);
-      } else {
-        console.log('Login do Google não retornou sucesso (cancelado?).');
-      }
-    } catch(err){
-      console.log("Erro completo no login:", JSON.stringify(err, null, 2));
-      Alert.alert("Erro", `Falha na Autenticação com o Google: ${err.message || err}`);
+        try {
+            await GoogleSignin.signOut();
+        } catch (error) {
+            console.log('Nenhuma sessão anterior para limpar.');
+        }
+
+        const response = await GoogleSignin.signIn();
+
+        if (isSuccessResponse(response)) {
+            const googleData = response.data;
+
+            const idToken = googleData.idToken;
+
+            if (!idToken) {
+                Alert.alert(
+                    'Erro de autenticação',
+                    'O Google não forneceu o ID Token. Confira o Web Client ID na configuração.'
+                );
+
+                return;
+            }
+
+            console.log('Conta Google selecionada:', googleData.user.email);
+
+            await logIn(idToken, googleData);
+
+        } else {
+            console.log('Login Google cancelado pelo usuário.');
+        }
+
+    } catch (err) {
+        console.log(
+            'Erro completo no login:',
+            JSON.stringify(err, null, 2)
+        );
+
+        Alert.alert(
+            'Erro',
+            `Falha na autenticação com o Google: ${err.message || err}`
+        );
     }
-  };
+}
+
 
   const handleEmailLogin = async () => {
     if (!emailInput || !password) {
@@ -106,7 +155,11 @@ export default function LoginScreen({ navigation }) {
 
       if (response.ok) {
           console.log('Login por email autorizado!', data.usuario);
-          irParaHome(navigation, { bankUser: data.usuario });
+
+          navigation.navigate('HomePage', {
+              bankUser: data.usuario,
+              session: data.sessao
+          });
       } else {
         Alert.alert("Acesso Negado", data.erro || "Credenciais inválidas.");
       }

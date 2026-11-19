@@ -68,3 +68,57 @@ export const obterViagensEmAndamento = async (req, res) => {
     });
   }
 };
+
+
+export const listarUsuarios = async (req, res) => {
+    try {
+        const { data: usuarios, error: usuariosError } = await supabase
+            .from('usuarios')
+            .select('id, nome, email, id_perfil, imagem, ativo, criado_em')
+            .order('nome', { ascending: true });
+
+        if (usuariosError) {
+            throw usuariosError;
+        }
+
+        const { data: perfis, error: perfisError } = await supabase
+            .from('perfis')
+            .select('id, codigo, nome');
+
+        if (perfisError) {
+            throw perfisError;
+        }
+
+        const usuariosFormatados = (usuarios || []).map((usuario) => {
+            const perfil = (perfis || []).find(
+                (p) => p.id === usuario.id_perfil
+            );
+
+            return {
+                ...usuario,
+                ativo: usuario.ativo !== false,
+                perfil: perfil
+                    ? {
+                        codigo: perfil.codigo,
+                        nome: perfil.nome
+                    }
+                    : null
+            };
+        });
+
+        res.set('Cache-Control', 'no-store');
+
+        return res.status(200).json({
+            sucesso: true,
+            usuarios: usuariosFormatados
+        });
+
+    } catch (err) {
+        console.error('Erro ao listar usuários:', err);
+
+        return res.status(500).json({
+            sucesso: false,
+            erro: 'Erro interno ao consultar os usuários.'
+        });
+    }
+};

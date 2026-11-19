@@ -13,11 +13,6 @@ export default function UserControlPanel() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.paginationDots}>
-        <View style={[styles.dot, styles.dotActive]} />
-        <View style={[styles.dot, styles.dotInactive]} />
-      </View>
-
       <Text style={styles.title}>Controle de usuários</Text>
 
       <TouchableOpacity 
