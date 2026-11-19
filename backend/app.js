@@ -6,9 +6,34 @@ import resumoRoutes from './routes/resumoRoutes.js';
 import frotaRoutes from './routes/frotaRoutes.js';
 import comprovantesRoutes from './routes/comprovantesRoutes.js';
 import { categoriasRoutes, formasRoutes, usuariosRoutes } from './routes/cadastrosRoutes.js';
+import financialRoutes from './routes/financialRoutes.js';
 
 // O app fica separado do listen() para os testes automatizados conseguirem usá-lo.
 const app = express();
+
+// Log de requisições no topo para capturar qualquer tráfego que atinja o servidor
+app.use((req, res, next) => {
+    console.log(`[HTTP IN] ${req.method} ${req.originalUrl}`);
+
+    res.on('finish', () => {
+        console.log(
+            `[HTTP OUT] ${req.method} ${req.originalUrl} -> ${res.statusCode}`
+        );
+    });
+
+    next();
+});
+
+// Suporte a CORS e requisições preflight (OPTIONS)
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -23,6 +48,7 @@ app.use('/formas-pagamento', formasRoutes);
 app.use('/usuarios', usuariosRoutes);
 app.use('/frota', frotaRoutes);
 app.use('/comprovantes', comprovantesRoutes);
+app.use('/financial', financialRoutes);
 
 app.use((req, res) => res.status(404).json({ sucesso: false, erro: 'Rota não encontrada.' }));
 

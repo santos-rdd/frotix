@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import multer from 'multer';
 import financialController from '../controllers/financialController.js';
+import { autenticar } from '../middleware/auth.js';
 
 const router = Router();
+
+router.use(autenticar);
 
 const ALLOWED_RECEIPT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
 

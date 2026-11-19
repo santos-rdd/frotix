@@ -9,3 +9,4 @@
 const RENDER_URL = 'https://frotix.onrender.com';
 
 export const API_URL = (process.env.EXPO_PUBLIC_API_URL || RENDER_URL).replace(/\/+$/, '');
+console.log('[Config] API_URL configurada:', API_URL);

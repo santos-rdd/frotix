@@ -33,6 +33,7 @@ export const removerForma = (id) => apiJson(`/formas-pagamento/${id}`, { method:
 export const listarUsuarios = async () => (await apiJson('/usuarios')).usuarios;
 export const criarUsuarioGoogle = async (dados) => (await post('/usuarios/google', dados)).usuario;
 export const criarUsuarioEmail = (dados) => post('/auth/cadastro', dados);
+export const reenviarConfirmacao = (email) => post('/auth/reenviar-confirmacao', { email });
 export const atualizarUsuario = async (id, dados) => (await apiJson(`/usuarios/${id}`, { method: 'PUT', body: dados })).usuario;
 export const desativarUsuario = (id) => apiJson(`/usuarios/${id}`, { method: 'DELETE' });
 

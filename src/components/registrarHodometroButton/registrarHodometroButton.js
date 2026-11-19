@@ -14,7 +14,6 @@ const MAP_WIDTH = width - 40;
 const MAP_HEIGHT = 480;
 
 
-// Gera o HTML do mapa interativo com Leaflet e OpenStreetMap
 function generateLeafletHTML(origem, destino, motorista) {
   const safeOrigem = (origem || 'Campinas - SP').replace(/'/g, "\\'");
   const safeDestino = (destino || 'Rio de Janeiro - RJ').replace(/'/g, "\\'");

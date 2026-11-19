@@ -21,6 +21,7 @@ export const formasRoutes = Router()
 export const usuariosRoutes = Router()
   .use(autenticar, soFinanceiro)
   .get('/', cadastros.listarUsuarios)
+  .get('/listar', cadastros.listarUsuarios)
   .post('/google', cadastros.criarUsuarioGoogle)
   .put('/:id', cadastros.atualizarUsuario)
   .delete('/:id', cadastros.desativarUsuario);

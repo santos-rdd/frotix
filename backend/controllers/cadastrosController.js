@@ -154,7 +154,9 @@ const montarUsuario = (u) => ({
   nome: u.nome,
   email: u.email,
   perfil: u.id_perfil,
+  id_perfil: u.id_perfil,
   foto: u.imagem || null,
+  imagem: u.imagem || null,
   ativo: u.ativo !== false,
 });
 

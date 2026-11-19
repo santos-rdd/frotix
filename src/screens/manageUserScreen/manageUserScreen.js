@@ -1,12 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+
 import {
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Image
+    StyleSheet,
+    View,
+    Text,
+    TouchableOpacity,
+    ScrollView,
+    Image,
+    ActivityIndicator,
+    Alert
 } from 'react-native';
+import { API_URL } from '../../config/api';
+
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { listarUsuarios } from '../../services/frotix.js';
@@ -14,155 +19,349 @@ import { corPerfil } from '../../constants/perfis.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
+
 export default function ManageUserScreen() {
-  const navigation = useNavigation();
+    const navigation = useNavigation();
 
-  // Erro P4: a lista vem do banco (antes eram 9 nomes de exemplo).
-  const { dados, carregando, erro, recarregar } = useDados(listarUsuarios, []);
-  const usuarios = dados || [];
+    const [usuarios, setUsuarios] = useState([]);
+    const [carregando, setCarregando] = useState(true);
 
-  return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-        <Feather name="arrow-left" size={22} color="#FFF" />
-      </TouchableOpacity>
+    const carregarUsuarios = async () => {
+        try {
+            setCarregando(true);
+            const lista = await listarUsuarios();
+            setUsuarios(Array.isArray(lista) ? lista : []);
+        } catch (error) {
+            console.error('Erro ao listar usuários:', error);
+            Alert.alert(
+                'Erro',
+                error.message || 'Não foi possível carregar a lista de usuários.'
+            );
+        } finally {
+            setCarregando(false);
+        }
+    };
 
-      <Text style={styles.title}>Gerenciar usuários</Text>
+    useEffect(() => {
+        const unsubscribe = navigation.addListener('focus', () => {
+            carregarUsuarios();
+        });
+        carregarUsuarios();
+        return unsubscribe;
+    }, [navigation]);
 
-      <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={usuarios.length > 0} />
+    const getRole = (user) => {
+        const codigoPerfil =
+            user.perfis?.codigo ||
+            user.perfil?.codigo;
 
-      <View style={styles.gridContainer}>
-        {usuarios.map((user, i) => {
-          const dotColor = corPerfil(user.perfil);
-          return (
-            <TouchableOpacity 
-                key={user.id} 
-                // 3 por linha, alinhados à esquerda (a última linha não fica com buraco no meio)
-                style={[styles.userCard, i % 3 !== 2 && { marginRight: '3.5%' }]}
-                onPress={() => navigation.navigate('UserDetail', { usuario: user })}
-                >
-              {user.foto ? (
-                <Image source={{ uri: user.foto }} style={styles.userImage} />
-              ) : (
-                <View style={styles.placeholderCard}>
-                  <Feather name="image" size={32} color="#FFF" />
-                </View>
-              )}
-              <View style={styles.userInfoRow}>
-                <View style={[styles.statusDot, { backgroundColor: dotColor }]} />
-                <Text style={styles.userName} numberOfLines={1}>{user.nome}</Text>
-              </View>
+        if (codigoPerfil) {
+            const perfis = {
+                ADMIN: 'admin',
+                GESTOR_FROTA: 'gestor',
+                FINANCEIRO: 'financeiro',
+                MOTORISTA: 'motorista'
+            };
+
+            return perfis[codigoPerfil.toUpperCase()] || 'motorista';
+        }
+
+        const perfisPorId = {
+            1: 'admin',
+            2: 'gestor',
+            3: 'financeiro',
+            4: 'motorista'
+        };
+
+        return perfisPorId[user.id_perfil] || 'motorista';
+    };
+
+    // Cor de identificação de cada perfil
+    const getRoleColor = (role) => {
+        switch (role) {
+            case 'admin': return '#b22222';
+            case 'gestor': return '#ff8c00';
+            case 'financeiro': return '#ffd700';
+            case 'motorista': return '#2ecc71';
+            default: return '#2ecc71';
+        }
+    };
+
+    return (
+        <ScrollView
+            style={styles.container}
+            contentContainerStyle={styles.content}
+        >
+
+            <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => navigation.goBack()}
+            >
+                <Feather name="arrow-left" size={22} color="#FFF" />
             </TouchableOpacity>
-          );
-        })}
-      </View>
 
-      <View style={styles.legendContainer}>
-        <View style={styles.legendItem}>
-          <View style={[styles.statusDot, { backgroundColor: '#b22222' }]} />
-          <Text style={styles.legendText}>Administrador</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.statusDot, { backgroundColor: '#ff8c00' }]} />
-          <Text style={styles.legendText}>Gestor de Frota</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.statusDot, { backgroundColor: '#ffd700' }]} />
-          <Text style={styles.legendText}>Financeiro</Text>
-        </View>
-        <View style={styles.legendItem}>
-          <View style={[styles.statusDot, { backgroundColor: '#2ecc71' }]} />
-          <Text style={styles.legendText}>Motorista</Text>
-        </View>
-      </View>
-    </ScrollView>
-  );
+            <Text style={styles.title}>Gerenciar usuários</Text>
+
+            {carregando ? (
+
+                <ActivityIndicator
+                    size="large"
+                    color="#2541ff"
+                    style={styles.loading}
+                />
+
+            ) : (
+
+                <View style={styles.gridContainer}>
+
+                    {usuarios.map((user) => {
+                        const role = getRole(user);
+                        const dotColor = getRoleColor(role);
+
+                        const ativo = user.ativo !== false;
+
+                        return (
+                            <TouchableOpacity
+                                key={user.id}
+                                style={styles.userCard}
+                                onPress={() =>
+                                    navigation.navigate('UserDetail', {
+                                        usuario: {
+                                            ...user,
+                                            foto: user.imagem || null,
+                                            role
+                                        }
+                                    })
+                                }
+                            >
+
+                                <View style={styles.statusBadge}>
+                                    <Text
+                                        style={[
+                                            styles.statusText,
+                                            ativo
+                                                ? styles.activeText
+                                                : styles.inactiveText
+                                        ]}
+                                    >
+                                        {ativo ? 'Ativo' : 'Inativo'}
+                                    </Text>
+                                </View>
+
+                                {user.imagem ? (
+
+                                    <Image
+                                        source={{ uri: user.imagem }}
+                                        style={styles.userImage}
+                                    />
+
+                                ) : (
+
+                                    <View style={styles.placeholderCard}>
+                                        <Feather
+                                            name="user"
+                                            size={38}
+                                            color="#FFF"
+                                        />
+                                    </View>
+
+                                )}
+
+                                <View style={styles.userInfoRow}>
+                                    <View
+                                        style={[
+                                            styles.statusDot,
+                                            { backgroundColor: dotColor }
+                                        ]}
+                                    />
+
+                                    <Text
+                                        style={styles.userName}
+                                        numberOfLines={1}
+                                    >
+                                        {user.nome}
+                                    </Text>
+                                </View>
+
+                            </TouchableOpacity>
+                        );
+                    })}
+
+                </View>
+            )}
+
+            {!carregando && usuarios.length === 0 && (
+                <Text style={styles.emptyText}>
+                    Nenhum usuário encontrado.
+                </Text>
+            )}
+
+            <View style={styles.legendContainer}>
+
+                <View style={styles.legendItem}>
+                    <View style={[styles.statusDot, { backgroundColor: '#b22222' }]} />
+                    <Text style={styles.legendText}>Administrador</Text>
+                </View>
+
+                <View style={styles.legendItem}>
+                    <View style={[styles.statusDot, { backgroundColor: '#ff8c00' }]} />
+                    <Text style={styles.legendText}>Gestor de Frota</Text>
+                </View>
+
+                <View style={styles.legendItem}>
+                    <View style={[styles.statusDot, { backgroundColor: '#ffd700' }]} />
+                    <Text style={styles.legendText}>Financeiro</Text>
+                </View>
+
+                <View style={styles.legendItem}>
+                    <View style={[styles.statusDot, { backgroundColor: '#2ecc71' }]} />
+                    <Text style={styles.legendText}>Motorista</Text>
+                </View>
+
+            </View>
+
+        </ScrollView>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#121212',
-  },
-  content: {
-    padding: 20,
-    paddingTop: 50,
-    paddingBottom: 40,
-  },
-  backButton: {
-    marginBottom: 20,
-  },
-  title: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 25,
-  },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-  },
-  userCard: {
-    width: '31%',
-    backgroundColor: '#2541ff',
-    borderRadius: 16,
-    padding: 10,
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#2a2a2a',
-  },
-  userImage: {
-    width: '100%',
-    height: 90,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  placeholderCard: {
-    width: '100%',
-    height: 90,
-    borderRadius: 12,
-    backgroundColor: '#2541ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  userInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  userName: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 15,
-    marginTop: 20,
-    paddingTop: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#222',
-  },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  legendText: {
-    color: '#AAA',
-    fontSize: 11,
-  },
+
+    container: {
+        flex: 1,
+        backgroundColor: '#121212',
+    },
+
+    content: {
+        padding: 20,
+        paddingTop: 50,
+        paddingBottom: 40,
+    },
+
+    backButton: {
+        marginBottom: 20,
+    },
+
+    title: {
+        color: '#FFF',
+        fontSize: 20,
+        fontWeight: 'bold',
+        textAlign: 'center',
+        marginBottom: 25,
+    },
+
+    gridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+
+    userCard: {
+        width: 99,
+        height: 112,
+        backgroundColor: '#2541ff',
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: '#2a2a2a',
+        position: 'relative',
+        display: 'flex'
+    },
+
+    statusBadge: {
+        width: '90%',
+        borderRadius: 10,
+        backgroundColor: 'rgba(255, 255, 255, 0.18)',
+        borderColor: 'rgba(255, 255, 255, 0.25)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        top: 25,
+        zIndex: 1
+    },
+
+    statusText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
+
+    activeText: {
+        color: '#39FF64',
+    },
+
+    inactiveText: {
+        color: '#FFF',
+    },
+
+    userImage: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 12,
+        marginBottom: 1,
+    },
+    placeholderCard: {
+        width: '100%',
+        height: "100%",
+        borderRadius: 12,
+        backgroundColor: '#2541ff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    userInfoRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        width: '100%',
+        justifyContent: 'center',
+        gap: 6,
+    },
+
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        bottom: 20
+    },
+
+    userName: {
+        color: '#FFF',
+        fontSize: 11,
+        fontWeight: '500',
+        flexShrink: 1,
+        bottom: 20
+    },
+
+    legendContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        gap: 15,
+        marginTop: 20,
+        paddingTop: 15,
+        borderTopWidth: 1,
+        borderTopColor: '#222',
+    },
+
+    legendItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+
+    legendText: {
+        color: '#AAA',
+        fontSize: 11,
+    },
+
+    loading: {
+        marginTop: 40,
+    },
+
+    emptyText: {
+        color: '#AAA',
+        textAlign: 'center',
+        marginTop: 30,
+    },
+
 });

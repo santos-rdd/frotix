@@ -1,5 +1,4 @@
 import supabase, { createSupabaseAuthClient } from '../database/db.js';
-
 import { OAuth2Client } from 'google-auth-library';
 import { gerarToken } from '../middleware/auth.js';
 
@@ -79,142 +78,6 @@ export default async function authController(req, res) {
     }
 }
 
-export const cadastrarUsuario = async (req, res) => {
-    try {
-        const { nome, email, password, id_perfil, imagem } = req.body;
-
-        if (!nome || !email || !password || !id_perfil) {
-            return res.status(400).json({
-                error: 'Preencha todos os campos obrigatórios.'
-            });
-        }
-
-        const emailNormalizado = email.trim().toLowerCase();
-
-        // Validação do e-mail.
-        const formatoEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-
-        if (!formatoEmail.test(emailNormalizado)) {
-            return res.status(400).json({
-                error: 'Informe um e-mail válido.'
-            });
-        }
-
-        if (password.length < 6) {
-            return res.status(400).json({
-                error: 'A senha deve possuir pelo menos 6 caracteres.'
-            });
-        }
-
-        // Validação do perfil.
-        const perfisValidos = [1, 2, 3, 4];
-
-        if (!perfisValidos.includes(Number(id_perfil))) {
-            return res.status(400).json({
-                error: 'Perfil inválido.'
-            });
-        }
-
-        // Verifica se já existe na tabela usuarios.
-        const { data: usuarioExistente, error: consultaError } =
-            await supabase
-                .from('usuarios')
-                .select('id')
-                .eq('email', emailNormalizado)
-                .maybeSingle();
-
-        if (consultaError) {
-            throw consultaError;
-        }
-
-        if (usuarioExistente) {
-            return res.status(409).json({
-                error: 'Este e-mail já está cadastrado.'
-            });
-        }
-
-        const authClient = createSupabaseAuthClient();
-
-        const { data: authData, error: authError } =
-            await authClient.auth.signUp({
-                email: emailNormalizado,
-                password,
-                options: {
-                    emailRedirectTo: process.env.EMAIL_CONFIRM_REDIRECT_URL,
-                        data: {
-                            nome,
-                            id_perfil: Number(id_perfil),
-                            imagem: imagem || null,
-                            accessMethod: 'email'
-                        }
-                }
-            });
-
-        if (authError) {
-            console.error('ERRO SUPABASE AUTH:', authError);
-
-            return res.status(authError.status || 400).json({
-                error: authError.message
-            });
-        }
-
-        if (!authData.user) {
-            return res.status(400).json({
-                error: 'Não foi possível criar a conta.'
-            });
-        }
-
-        // Verifica se o e-mail já possuía identidade no Auth.
-        if (
-            Array.isArray(authData.user.identities) &&
-            authData.user.identities.length === 0
-        ) {
-            return res.status(409).json({
-                error: 'Este e-mail já possui uma conta.'
-            });
-        }
-
-        // O trigger já criou o registro em public.usuarios.
-        // Aqui apenas buscamos os dados criados automaticamente.
-        const { data: usuario, error: usuarioError } = await supabase
-            .from('usuarios')
-            .select('id, nome, email, id_perfil, ativo, criado_em, imagem')
-            .eq('id', authData.user.id)
-            .maybeSingle();
-
-        if (usuarioError) {
-            console.error('ERRO AO CONSULTAR USUARIO:', usuarioError);
-
-            return res.status(500).json({
-                error: 'A conta foi criada, mas houve um erro ao consultar os dados do usuário.'
-            });
-        }
-
-        if (!usuario) {
-            console.error(
-                'O trigger não criou o registro para:',
-                authData.user.id
-            );
-
-            return res.status(500).json({
-                error: 'A identidade foi criada, mas o registro do Frotix não foi encontrado.'
-            });
-        }
-
-        return res.status(201).json({
-            message: 'Usuário cadastrado! Verifique seu e-mail para confirmar a conta.',
-            usuario
-        });
-
-    } catch (err) {
-        console.error('ERRO AO CADASTRAR USUARIO:', err);
-
-        return res.status(500).json({
-            error: 'Erro interno no servidor.'
-        });
-    }
-};
-
 export const reenviarConfirmacao = async (req, res) => {
     try {
         const { email } = req.body || {};
@@ -255,6 +118,187 @@ export const reenviarConfirmacao = async (req, res) => {
 
         return res.status(500).json({
             error: 'Erro interno ao reenviar confirmação.'
+        });
+    }
+};
+
+
+export const cadastrarUsuario = async (req, res) => {
+    try {
+        const {
+            nome,
+            email,
+            password,
+            id_perfil,
+            imagem,
+            accessMethod = 'email'
+        } = req.body;
+
+        if (!nome || !email || !id_perfil) {
+            return res.status(400).json({
+                error: 'Preencha os campos obrigatórios.'
+            });
+        }
+
+        if (!['email', 'gmail'].includes(accessMethod)) {
+            return res.status(400).json({
+                error: 'Método de acesso inválido.'
+            });
+        }
+
+        if (accessMethod === 'email' && !password) {
+            return res.status(400).json({
+                error: 'A senha é obrigatória.'
+            });
+        }
+
+        if (accessMethod === 'email' && password.length < 6) {
+            return res.status(400).json({
+                error: 'A senha deve possuir pelo menos 6 caracteres.'
+            });
+        }
+
+        const emailNormalizado = email.trim().toLowerCase();
+
+        const formatoEmail = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+        if (!formatoEmail.test(emailNormalizado)) {
+            return res.status(400).json({
+                error: 'Informe um endereço de e-mail válido.'
+            });
+        }
+
+        const perfisValidos = [1, 2, 3, 4];
+
+        if (!perfisValidos.includes(Number(id_perfil))) {
+            return res.status(400).json({
+                error: 'Perfil inválido.'
+            });
+        }
+
+        // Verifica se existe na tabela usuarios.
+        const { data: usuarioExistente, error: consultaError } =
+            await supabase
+                .from('usuarios')
+                .select('id')
+                .eq('email', emailNormalizado)
+                .maybeSingle();
+
+        if (consultaError) {
+            throw consultaError;
+        }
+
+        if (usuarioExistente) {
+            return res.status(409).json({
+                error: 'Este e-mail já está cadastrado.'
+            });
+        }
+
+        let authData;
+        let authError;
+
+        const imagemNormalizada =
+            imagem && imagem !== 'null' ? imagem : null;
+
+        // CADASTRO TRADICIONAL
+        if (accessMethod === 'email') {
+
+            const authClient = createSupabaseAuthClient();
+
+            const resultado = await authClient.auth.signUp({
+                email: emailNormalizado,
+                password,
+
+                options: {
+                    emailRedirectTo: process.env.EMAIL_CONFIRM_REDIRECT_URL,
+
+                    data: {
+                        nome,
+                        id_perfil: Number(id_perfil),
+                        imagem: imagemNormalizada,
+                        accessMethod: 'email'
+                    }
+                }
+            });
+
+            authData = resultado.data;
+            authError = resultado.error;
+
+        } else {
+
+            const resultado = await supabase.auth.admin.createUser({
+                email: emailNormalizado,
+                email_confirm: true,
+
+                user_metadata: {
+                    nome,
+                    id_perfil: Number(id_perfil),
+                    imagem: imagemNormalizada,
+                    accessMethod: 'gmail'
+                }
+            });
+
+            authData = resultado.data;
+            authError = resultado.error;
+        }
+
+        if (authError) {
+            console.error('ERRO AO CRIAR IDENTIDADE:', authError);
+
+            return res.status(authError.status || 400).json({
+                error: authError.message
+            });
+        }
+
+        if (!authData.user) {
+            return res.status(400).json({
+                error: 'Não foi possível criar a conta.'
+            });
+        }
+
+        if (
+            accessMethod === 'email' &&
+            Array.isArray(authData.user.identities) &&
+            authData.user.identities.length === 0
+        ) {
+            return res.status(409).json({
+                error: 'Este e-mail já possui uma conta.'
+            });
+        }
+
+        const { data: usuario, error: usuarioError } = await supabase
+            .from('usuarios')
+            .select('id, nome, email, id_perfil, ativo, criado_em, imagem')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+
+        if (usuarioError) {
+            console.error('ERRO AO CONSULTAR USUARIO:', usuarioError);
+
+            return res.status(500).json({
+                error: 'Erro ao consultar os dados do usuário.'
+            });
+        }
+
+        if (!usuario) {
+            return res.status(500).json({
+                error: 'A identidade foi criada, mas o registro do Frotix não foi encontrado.'
+            });
+        }
+
+        return res.status(201).json({
+            message: accessMethod === 'gmail'
+                ? 'Usuário cadastrado para utilizar o Google.'
+                : 'Usuário cadastrado! Verifique seu e-mail para confirmar a conta.',
+
+            usuario
+        });
+
+    } catch (err) {
+        console.error('ERRO AO CADASTRAR USUARIO:', err);
+
+        return res.status(500).json({
+            error: 'Erro interno no servidor.'
         });
     }
 };

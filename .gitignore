@@ -3,6 +3,8 @@
 .env
 .env.*
 !.env.example
+.env*.local
+.expo/
 
 *.keystore
 google-services.json
@@ -10,7 +12,6 @@ GoogleService-Info.plist
 .claude/
 .vscode/
 .idea/
-./config
 
 # dependencies
 node_modules/
