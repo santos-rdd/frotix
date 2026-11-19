@@ -5,7 +5,7 @@ import { API_URL } from '../../config/api.js';
 
 const INTERVALO_MS = 30000; 
 
-export default function RecentActivity({ limite = 4 }) {
+export default function RecentActivity({ limite = 4, onMenuPress }) {
   const [atividades, setAtividades] = useState([]);
   const [carregando, setCarregando] = useState(false);
   const montado = useRef(true);
@@ -44,19 +44,25 @@ export default function RecentActivity({ limite = 4 }) {
     <View style={styles.sectionContainer}>
       <View style={styles.activityHeaderRow}>
         <Text style={styles.sectionTitle}>Atividade Recente</Text>
-
-        <TouchableOpacity
-          onPress={carregar}
-          disabled={carregando}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityLabel="Atualizar atividades"
-        >
-          {carregando ? (
-            <ActivityIndicator size="small" color="#FFF" />
-          ) : (
-            <Feather name="rotate-cw" size={18} color="#FFF" />
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            onPress={carregar}
+            disabled={carregando}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Atualizar atividades"
+          >
+            {carregando ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Feather name="rotate-cw" size={18} color="#FFF" />
+            )}
+          </TouchableOpacity>
+          {onMenuPress && (
+            <TouchableOpacity onPress={onMenuPress} hitSlop={10}>
+              <Feather name="more-horizontal" size={20} color="#FFF" />
+            </TouchableOpacity>
           )}
-        </TouchableOpacity>
+        </View>
       </View>
 
       {atividades.length === 0 && !carregando && (
@@ -101,6 +107,11 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 18,
     marginBottom: 15,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   activityHeaderRow: {
     flexDirection: 'row',

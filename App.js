@@ -13,6 +13,16 @@ import TransactionFormScreen from './src/screens/transactionFormScreen/transacti
 import RegisterUserScreen from './src/screens/registerUserScreen/registerUserScreen.js';
 import ManageUserScreen from './src/screens/manageUserScreen/manageUserScreen.js';
 import UserDetailScreen from './src/screens/userDetailScreen/userDetailScreen.js';
+import GestorHome from './src/screens/gestorHome/gestorHome.js';
+import Viagens from './src/screens/viagens/viagens.js';
+import Veiculos from './src/screens/veiculos/veiculos.js';
+import Rotas from './src/screens/rotas/rotas.js';
+import DetalhesRota from './src/screens/detalhesRota/detalhesRota.js';
+import CadastroVeiculo from './src/screens/cadastroVeiculo/cadastroVeiculo.js';
+import CadastroRota from './src/screens/cadastroRota/cadastroRota.js';
+import Manutencao from './src/screens/manutencao/manutencao.js';
+import Relatorios from './src/screens/relatorios/relatorios.js';
+import Categorias from './src/screens/categorias/categorias.js';
 
 const Stack = createNativeStackNavigator();
 
@@ -34,6 +44,16 @@ export default function App() {
         <Stack.Screen name="RegisterUser" component={RegisterUserScreen} />
         <Stack.Screen name="ManageUser" component={ManageUserScreen} />
         <Stack.Screen name="UserDetail" component={UserDetailScreen} />
+        <Stack.Screen name="GestorHome" component={GestorHome} />
+        <Stack.Screen name="Viagens" component={Viagens} />
+        <Stack.Screen name="Veiculos" component={Veiculos} />
+        <Stack.Screen name="Rotas" component={Rotas} />
+        <Stack.Screen name="DetalhesRota" component={DetalhesRota} />
+        <Stack.Screen name="CadastroVeiculo" component={CadastroVeiculo} />
+        <Stack.Screen name="CadastroRota" component={CadastroRota} />
+        <Stack.Screen name="Manutencao" component={Manutencao} />
+        <Stack.Screen name="Relatorios" component={Relatorios} />
+        <Stack.Screen name="Categorias" component={Categorias} />
       </Stack.Navigator>
     </NavigationContainer>
   );

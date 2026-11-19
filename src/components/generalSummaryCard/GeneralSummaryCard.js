@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import Svg, { Circle, G } from 'react-native-svg';
 import { API_URL } from '../../config/api.js';
 
-export default function GeneralSummaryCard() {
+export default function GeneralSummaryCard({ onMenuPress }) {
   const [totalEntradas, setTotalEntradas] = useState(0);
   const [totalSaidas, setTotalSaidas] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -70,13 +70,20 @@ export default function GeneralSummaryCard() {
             <Text style={styles.title}>Balanço Atual</Text>
             <Text style={styles.subtitle}>Balanço Atual</Text>
           </View>
-          <TouchableOpacity onPress={() => carregarResumo(false)} activeOpacity={0.7}>
-            {loading ? (
-              <ActivityIndicator size="small" color="#FFF" />
-            ) : (
-              <Feather name="rotate-cw" size={20} color="#FFF" />
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => carregarResumo(false)} activeOpacity={0.7}>
+              {loading ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Feather name="rotate-cw" size={20} color="#FFF" />
+              )}
+            </TouchableOpacity>
+            {onMenuPress && (
+              <TouchableOpacity onPress={onMenuPress} hitSlop={10}>
+                <Feather name="more-horizontal" size={24} color="#FFF" />
+              </TouchableOpacity>
             )}
-          </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.legendContainer}>
@@ -148,6 +155,11 @@ const styles = StyleSheet.create({
     padding: 20,
     height: 360,
     width: '100%',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   cardHeader: {
     flexDirection: 'row',
