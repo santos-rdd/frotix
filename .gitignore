@@ -10,7 +10,6 @@ GoogleService-Info.plist
 .claude/
 .vscode/
 .idea/
-./config
 
 # dependencies
 node_modules/

@@ -17,6 +17,7 @@
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "express": "^5.2.1",
+    "google-auth-library": "^11.3.4",
     "pg": "^8.23.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
