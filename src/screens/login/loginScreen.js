@@ -11,6 +11,12 @@ import {
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import GOOGLE_CONFIG from '../../config/google.js';
 import { API_URL } from '../../config/api.js';
+import { CommonActions } from '@react-navigation/native';
+
+// Depois do login a Home vira a única tela da pilha: assim o "voltar" do Android
+// não leva de novo para o login (para sair, use "Sair da Conta" no perfil).
+const irParaHome = (navigation, params) =>
+  navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'HomePage', params }] }));
 
 export default function LoginScreen({ navigation }) {
   const [emailInput, setEmailInput] = useState(''); 

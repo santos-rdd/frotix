@@ -2,28 +2,27 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
-export default function OptionsPanel({ onOpenSlider }) {
+export default function OptionsPanel({ onOpenSlider, onAddForma, onDeleteForma }) {
   return (
     <View style={styles.interactiveSection}>
       <View style={styles.optionsCard}>
         <Text style={styles.optionsTitle}>Opções</Text>
         
-        {/* <View style={styles.circleButtonsRow}>
-          <TouchableOpacity style={styles.circleButton}>
+        <View style={styles.circleButtonsRow}>
+          <TouchableOpacity style={styles.circleButton} onPress={onAddForma}>
             <View style={styles.circleButtonMaterial}>
-              <MaterialCommunityIcons name="arrow-right" size={26} color="#121212" />
+              <MaterialCommunityIcons name="wallet-plus-outline" size={26} color="#121212" />
             </View>
-            <Text style={styles.circleButtonText}>Visualizar movimentações recentes</Text>
-          </TouchableOpacity> */}
+            <Text style={styles.circleButtonText}>Adicionar Forma De Pagamento</Text>
+          </TouchableOpacity>
 
-          {/* <TouchableOpacity style={styles.circleButton}>
+          <TouchableOpacity style={styles.circleButton} onPress={onDeleteForma}>
             <View style={styles.circleButtonMaterial}>
               <Feather name="trash-2" size={24} color="#121212" />
             </View>
             <Text style={styles.circleButtonText}>Deletar Forma De Pagamento</Text>
-          </TouchableOpacity> 
-        </View> 
-        */}
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity 
           style={[styles.actionButton, { backgroundColor: '#2541ff' }]}
@@ -53,7 +52,7 @@ export default function OptionsPanel({ onOpenSlider }) {
 const styles = StyleSheet.create({
   interactiveSection: {
     display: 'flex',
-    marginRight: 40,
+    marginRight: 40
   },
   optionsCard: {
     backgroundColor: 'none',
@@ -65,7 +64,7 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 70,
+    marginBottom: 20,
   },
   circleButtonsRow: {
     flexDirection: 'row',
