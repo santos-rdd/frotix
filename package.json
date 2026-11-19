@@ -20,6 +20,9 @@
     "expo-sharing": "~57.0.25",
     "expo-status-bar": "~57.0.1",
     "express": "^5.2.1",
+    "google-auth-library": "^11.3.4",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.5.0",
     "pg": "^8.23.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -35,7 +38,9 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "backend": "node --watch ./backend/server.js",
+    "test:backend": "node --test --experimental-test-module-mocks backend/tests/api.test.js"
   },
   "private": true
 }

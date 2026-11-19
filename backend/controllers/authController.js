@@ -1,67 +1,84 @@
 import supabase, { createSupabaseAuthClient } from '../database/db.js';
 
+import { OAuth2Client } from 'google-auth-library';
+import { gerarToken } from '../middleware/auth.js';
+
+// Client ID "Web" do Google usado pelo app (src/config/google.js). O idToken que o
+// app recebe do Google é emitido para esse público; qualquer outro é recusado.
+const GOOGLE_WEB_CLIENT_ID =
+    process.env.GOOGLE_WEB_CLIENT_ID ||
+    '716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com';
+
+const googleClient = new OAuth2Client(GOOGLE_WEB_CLIENT_ID);
+
+// Permite trocar a verificação nos testes automatizados.
+export let verificarIdTokenGoogle = async (idToken) => {
+    const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_WEB_CLIENT_ID });
+    return ticket.getPayload();
+};
+export const definirVerificadorGoogle = (fn) => { verificarIdTokenGoogle = fn; };
+
+/**
+ * POST /auth/login-google  { idToken }
+ * Confere com o Google que o idToken é válido e pertence ao app, e só então
+ * libera o usuário cadastrado com aquele e-mail (erro C1: antes bastava mandar
+ * um e-mail qualquer).
+ */
 export default async function authController(req, res) {
-    const { email } = req.body;
+    const { idToken } = req.body || {};
+
+    if (!idToken) {
+        return res.status(400).json({ erro: 'Token do Google não enviado. Atualize o aplicativo.' });
+    }
+
+    let payload;
     try {
-        const { data, error } = await supabase
+        payload = await verificarIdTokenGoogle(idToken);
+    } catch (err) {
+        console.warn('idToken do Google recusado:', err.message);
+        return res.status(401).json({ erro: 'Não foi possível confirmar seu login com o Google.' });
+    }
+
+    if (!payload?.email || payload.email_verified === false) {
+        return res.status(401).json({ erro: 'A conta Google não tem e-mail verificado.' });
+    }
+
+    try {
+        const { data: usuario, error } = await supabase
             .from('usuarios')
-            .select('*')
-            .eq('email', email);
+            .select('id, nome, email, id_perfil, ativo, imagem')
+            .ilike('email', payload.email.trim())
+            .maybeSingle();
 
-        if (error) {
-            throw error;
+        if (error) throw error;
+
+        if (!usuario) {
+            return res.status(403).json({
+                erro: 'Acesso negado. Este e-mail não possui cadastro no sistema.'
+            });
         }
 
-        if (data.length === 0) {
-        return res.status(403).json({ 
-            erro: 'Acesso negado. Este e-mail não possui cadastro no sistema.' 
-        });
+        if (usuario.ativo === false) {
+            return res.status(403).json({ erro: 'Esta conta está desativada.' });
         }
-        const usuarioDoBanco = data[0];
 
         return res.status(200).json({
-        mensagem: 'Login autorizado com sucesso!',
-        usuario: {
-            id: usuarioDoBanco.id,
-            email: usuarioDoBanco.email,
-            nome: usuarioDoBanco.nome,
-            role: usuarioDoBanco.id_perfil
-        }
+            mensagem: 'Login autorizado com sucesso!',
+            token: gerarToken(usuario),
+            usuario: {
+                id: usuario.id,
+                email: usuario.email,
+                nome: usuario.nome,
+                name: usuario.nome,
+                role: usuario.id_perfil
+            }
         });
-    } catch (err){
+    } catch (err) {
         console.error('Erro ao verificar usuário:', err);
-        return res.status(500).json({ err: 'Erro interno no servidor.' });
+        return res.status(500).json({ erro: 'Erro interno no servidor.' });
     }
 }
 
-export const loginUsuario = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ error: 'E-mail e senha são obrigatórios.' });
-    }
-
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single();
-
-    if (error || !data) {
-      return res.status(401).json({ error: 'E-mail ou senha incorretos.' });
-    }
-
-    return res.status(200).json({
-      message: 'Login realizado com sucesso!',
-      usuario: data
-    });
-
-  } catch (err) {
-    return res.status(500).json({ error: 'Erro interno no servidor.' });
-  }
-};
 export const cadastrarUsuario = async (req, res) => {
     try {
         const { nome, email, password, id_perfil, imagem } = req.body;
@@ -225,7 +242,7 @@ export const reenviarConfirmacao = async (req, res) => {
             console.error('ERRO AO REENVIAR CONFIRMAÇÃO:', error);
 
             return res.status(error.status || 400).json({
-                error: error.message
+                error: 'Não foi possível reenviar a confirmação.'
             });
         }
 

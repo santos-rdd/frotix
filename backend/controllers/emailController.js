@@ -1,4 +1,5 @@
 import supabase, { createSupabaseAuthClient } from '../database/db.js';
+import { gerarToken } from '../middleware/auth.js';
 
 export default async function emailController(req, res) {
     try {
@@ -66,9 +67,13 @@ export default async function emailController(req, res) {
         return res.status(200).json({
             mensagem: 'Login realizado com sucesso!',
 
+            // Token do Frotix: o app manda em "Authorization: Bearer" nas outras rotas.
+            token: gerarToken(usuario),
+
             usuario: {
                 id: usuario.id,
                 email: usuario.email,
+                nome: usuario.nome,
                 name: usuario.nome,
                 role: usuario.id_perfil
             },
