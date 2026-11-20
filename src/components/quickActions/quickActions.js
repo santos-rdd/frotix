@@ -5,7 +5,7 @@ import QuickActionsCards from '../quickActionsCards/quickActionsCards';
 export default function QuickActions({ selectedAction, onSelectAction, userRole }) {
     const allCards = [
         { id: 'finance', name: 'Categorias Financeiras', image: ''},
-        { id: 'payment', name: 'Formas de Pagamento', image: ''},
+        { id: 'payment', name: 'Entradas e Saídas', image: ''},
         { id: 'users', name: 'Gerenciador de Usuários', image: ''},
         { id: 'rotes', name: 'Rotas', image: '' },
     ];

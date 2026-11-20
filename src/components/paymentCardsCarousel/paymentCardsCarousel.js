@@ -12,11 +12,6 @@ const imagensCartao = [
   require('../../../assets/image/secondCard.png'),
 ];
 
-/**
- * Carrossel das formas de pagamento cadastradas.
- * formas: lista de formas vindas do backend (GET /formas-pagamento)
- * onChangeIndex(indice): avisa qual cartão está visível (usado pelo "Deletar").
- */
 export default function PaymentCardsCarousel({ formas = [], onChangeIndex }) {
   const [indiceAtual, setIndiceAtual] = useState(0);
 
@@ -31,7 +26,6 @@ export default function PaymentCardsCarousel({ formas = [], onChangeIndex }) {
 
   const renderCard = ({ item, index }) => {
     if (item.tipo === 'debito' || item.tipo === 'credito') {
-      // O primeiro estilo (imagem clara) usa texto preto; o segundo, texto branco.
       const claro = index % 2 === 0;
       return (
         <View style={[styles.cardBase, claro ? styles.cardVortex : styles.cardDebit]}>

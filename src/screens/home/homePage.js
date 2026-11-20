@@ -33,7 +33,6 @@ import { listarFormas, criarForma, removerForma } from '../../services/frotix.js
 const { height } = Dimensions.get('window');
 
 export default function HomePage({ navigation, route }) {
-  // null = ainda não escolhido; a ação inicial depende do perfil (ver acaoInicial abaixo).
   const [selectedQuickAction, setSelectedQuickAction] = useState(null);
   const [viagemSelecionada, setViagemSelecionada] = useState(null);
 
@@ -44,9 +43,8 @@ export default function HomePage({ navigation, route }) {
 
   const slideAnim = useRef(new Animated.Value(height)).current;
 
-  // Formas de pagamento cadastradas no banco (erro P4: antes eram dados de exemplo).
   const [formasPagamento, setFormasPagamento] = useState([]);
-  const [indiceForma, setIndiceForma] = useState(0); // cartão visível no carrossel
+  const [indiceForma, setIndiceForma] = useState(0); 
   const [isFormaModalVisible, setIsFormaModalVisible] = useState(false);
 
   const carregarFormas = useCallback(async () => {
@@ -70,7 +68,6 @@ export default function HomePage({ navigation, route }) {
     }
   };
 
-  // Deleta a forma que está visível no carrossel, depois de confirmar.
   const handleDeletarForma = () => {
     const forma = formasPagamento[indiceForma];
     if (!forma) {
@@ -120,7 +117,6 @@ export default function HomePage({ navigation, route }) {
     });
   };
 
-  // O lançamento em si é salvo no formulário (TransactionForm), que grava no banco.
   const handleNextStep = () => handleCloseSlider();
 
   const authGoogle = route?.params?.auth || null;
@@ -137,20 +133,14 @@ export default function HomePage({ navigation, route }) {
     4 : 'Motorista'
   };
 
-  // Os "⋯" e os filtros "últimos 7 dias" dos cards levam aos Relatórios,
-  // onde estão o detalhamento e o filtro de período de verdade.
   const abrirRelatorios = () => navigation.navigate('Relatorios', { usuario });
 
-  // Admin e Financeiro abrem nos dashboards ("Categorias Financeiras"); os outros perfis
-  // não veem esse card, então abrem em "Rotas" (viagem atual), como no Figma do Motorista.
   const acaoInicial = userRole === 1 || userRole === 3 ? 'finance' : 'rotes';
   const acaoAtiva = selectedQuickAction ?? acaoInicial;
   const podeEditarFormas = userRole === 1 || userRole === 3;
 
-  // Dados do usuário repassados às telas de frota (cabeçalho e barra inferior).
   const usuario = { nome: userName, foto: userPhoto, role: userRole };
 
-  // Gestor de Frota tem uma Home própria.
   if (userRole === 2) {
     return <GestorHome navigation={navigation} route={route} usuario={usuario} />;
   }
@@ -207,12 +197,12 @@ export default function HomePage({ navigation, route }) {
 
         {acaoAtiva === 'payment' && (
           <View style={styles.sectionContainer}>
-            {/* key muda ao deletar, para o carrossel voltar ao primeiro cartão */}
             <PaymentCardsCarousel
               key={formasPagamento.length}
               formas={formasPagamento}
               onChangeIndex={setIndiceForma}
-            />
+            /> 
+            
             <InteractiveCarousel 
               onOpenSlider={handleOpenSlider} 
               onAddForma={podeEditarFormas ? () => setIsFormaModalVisible(true) : undefined}

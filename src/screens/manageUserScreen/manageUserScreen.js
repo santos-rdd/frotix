@@ -1,42 +1,84 @@
-import React, { useEffect, useState } from 'react';
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
     StyleSheet,
     View,
     Text,
     TouchableOpacity,
-    ScrollView,
+    FlatList,
     Image,
     ActivityIndicator,
-    Alert
+    Alert,
+    Modal,
+    useWindowDimensions
 } from 'react-native';
-import { API_URL } from '../../config/api';
 
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { listarUsuarios } from '../../services/frotix.js';
-import { corPerfil } from '../../constants/perfis.js';
-import useDados from '../../hooks/useDados.js';
-import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
+import { listarUsuarios } from '../../services/frotix.js';
 
 export default function ManageUserScreen() {
     const navigation = useNavigation();
+    const { width: larguraTela } = useWindowDimensions();
+
+    const listaRef = useRef(null);
 
     const [usuarios, setUsuarios] = useState([]);
     const [carregando, setCarregando] = useState(true);
 
+    const [filtroStatus, setFiltroStatus] = useState('todos');
+    const [filtroStatusTemp, setFiltroStatusTemp] = useState('todos');
+
+    const [modalFiltros, setModalFiltros] = useState(false);
+
+    const [filtroPerfil, setFiltroPerfil] = useState('todos');
+    const [ordenacao, setOrdenacao] = useState('recentes');
+
+    const [filtroPerfilTemp, setFiltroPerfilTemp] = useState('todos');
+    const [ordenacaoTemp, setOrdenacaoTemp] = useState('recentes');
+
+    const [paginaAtual, setPaginaAtual] = useState(0);
+
+    const USUARIOS_POR_PAGINA = 12;
+
+    const larguraCartao = (larguraTela - 40 - 24) / 3;
+
+    const perfisFiltro = [
+        { label: 'Todos', value: 'todos' },
+        { label: 'Admin', value: 'admin' },
+        { label: 'Gestor', value: 'gestor' },
+        { label: 'Financeiro', value: 'financeiro' },
+        { label: 'Motorista', value: 'motorista' }
+    ];
+
+    const ordenacoes = [
+        { label: 'Mais recentes', value: 'recentes' },
+        { label: 'Mais antigas', value: 'antigas' },
+        { label: 'Ordem alfabética (A-Z)', value: 'alfabetica' }
+    ];
+
     const carregarUsuarios = async () => {
         try {
             setCarregando(true);
+
             const lista = await listarUsuarios();
-            setUsuarios(Array.isArray(lista) ? lista : []);
+
+            setUsuarios(
+                Array.isArray(lista) ? lista : []
+            );
+
+            setPaginaAtual(0);
+
         } catch (error) {
             console.error('Erro ao listar usuários:', error);
+
             Alert.alert(
                 'Erro',
                 error.message || 'Não foi possível carregar a lista de usuários.'
             );
+
         } finally {
             setCarregando(false);
         }
@@ -46,7 +88,9 @@ export default function ManageUserScreen() {
         const unsubscribe = navigation.addListener('focus', () => {
             carregarUsuarios();
         });
+
         carregarUsuarios();
+
         return unsubscribe;
     }, [navigation]);
 
@@ -76,151 +120,642 @@ export default function ManageUserScreen() {
         return perfisPorId[user.id_perfil] || 'motorista';
     };
 
-    // Cor de identificação de cada perfil
+    const isUsuarioAtivo = (user) => {
+        return (
+            user.ativo === true ||
+            user.ativo === 'true' ||
+            user.ativo === 1 ||
+            user.ativo === '1'
+        );
+    };
+
     const getRoleColor = (role) => {
         switch (role) {
-            case 'admin': return '#b22222';
-            case 'gestor': return '#ff8c00';
-            case 'financeiro': return '#ffd700';
-            case 'motorista': return '#2ecc71';
-            default: return '#2ecc71';
+            case 'admin':
+                return '#b22222';
+
+            case 'gestor':
+                return '#ff8c00';
+
+            case 'financeiro':
+                return '#ffd700';
+
+            case 'motorista':
+                return '#2ecc71';
+
+            default:
+                return '#2ecc71';
         }
     };
 
-    return (
-        <ScrollView
-            style={styles.container}
-            contentContainerStyle={styles.content}
-        >
+    const usuariosFiltrados = useMemo(() => {
+        let resultado = [...usuarios];
 
+        if (filtroStatus === 'ativos') {
+            resultado = resultado.filter(
+                user => isUsuarioAtivo(user)
+            );
+        }
+
+        if (filtroStatus === 'inativos') {
+            resultado = resultado.filter(
+                user => !isUsuarioAtivo(user)
+            );
+        }
+
+        if (filtroPerfil !== 'todos') {
+            resultado = resultado.filter(
+                user => getRole(user) === filtroPerfil
+            );
+        }
+
+        resultado.sort((a, b) => {
+            if (ordenacao === 'alfabetica') {
+                return String(a.nome || '').localeCompare(
+                    String(b.nome || ''),
+                    'pt-BR',
+                    { sensitivity: 'base' }
+                );
+            }
+
+            const dataA = Date.parse(a.criado_em) || 0;
+            const dataB = Date.parse(b.criado_em) || 0;
+
+            if (ordenacao === 'antigas') {
+                return dataA - dataB;
+            }
+
+            return dataB - dataA;
+        });
+
+        return resultado;
+    }, [usuarios, filtroPerfil, ordenacao, filtroStatus]);
+
+    const paginas = useMemo(() => {
+        const resultado = [];
+
+        for (
+            let i = 0;
+            i < usuariosFiltrados.length;
+            i += USUARIOS_POR_PAGINA
+        ) {
+            resultado.push(
+                usuariosFiltrados.slice(
+                    i,
+                    i + USUARIOS_POR_PAGINA
+                )
+            );
+        }
+
+        return resultado;
+    }, [usuariosFiltrados]);
+
+    useEffect(() => {
+        setPaginaAtual(0);
+
+        listaRef.current?.scrollToOffset({
+            offset: 0,
+            animated: false
+        });
+    }, [filtroPerfil, filtroStatus, ordenacao, usuarios]);
+
+    const navegarPagina = (novaPagina) => {
+        if (novaPagina < 0 || novaPagina >= paginas.length) {
+            return;
+        }
+
+        listaRef.current?.scrollToOffset({
+            offset: novaPagina * larguraTela,
+            animated: true
+        });
+
+        setPaginaAtual(novaPagina);
+    };
+
+    const abrirFiltros = () => {
+        setFiltroPerfilTemp(filtroPerfil);
+        setOrdenacaoTemp(ordenacao);
+        setFiltroStatusTemp(filtroStatus);
+
+        setModalFiltros(true);
+    };
+
+    const aplicarFiltros = () => {
+        setFiltroPerfil(filtroPerfilTemp);
+        setOrdenacao(ordenacaoTemp);
+        setFiltroStatus(filtroStatusTemp);
+
+        setModalFiltros(false);
+    };
+
+    const limparFiltros = () => {
+        setFiltroPerfilTemp('todos');
+        setOrdenacaoTemp('recentes');
+        setFiltroStatusTemp('todos');
+
+        setFiltroPerfil('todos');
+        setOrdenacao('recentes');
+        setFiltroStatus('todos');
+
+        setModalFiltros(false);
+    };
+
+    const renderUsuario = (user) => {
+        const role = getRole(user);
+        const dotColor = getRoleColor(role);
+
+        const ativo = isUsuarioAtivo(user);
+
+        return (
             <TouchableOpacity
-                style={styles.backButton}
-                onPress={() => navigation.goBack()}
+                key={user.id}
+                style={[
+                    styles.userCard,
+                    { width: larguraCartao }
+                ]}
+                onPress={() =>
+                    navigation.navigate('UserDetail', {
+                        usuario: {
+                            ...user,
+                            foto: user.imagem || null,
+                            role
+                        }
+                    })
+                }
+                activeOpacity={0.8}
             >
-                <Feather name="arrow-left" size={22} color="#FFF" />
-            </TouchableOpacity>
 
-            <Text style={styles.title}>Gerenciar usuários</Text>
+                {user.imagem ? (
+
+                    <Image
+                        source={{ uri: user.imagem }}
+                        style={styles.userImage}
+                    />
+
+                ) : (
+
+                    <View style={styles.placeholderCard}>
+                        <Feather
+                            name="user"
+                            size={38}
+                            color="#FFF"
+                        />
+                    </View>
+
+                )}
+
+                <View style={styles.statusBadge}>
+                    <Text
+                        style={[
+                            styles.statusText,
+                            ativo
+                                ? styles.activeText
+                                : styles.inactiveText
+                        ]}
+                    >
+                        {ativo ? 'Ativo' : 'Inativo'}
+                    </Text>
+                </View>
+
+                <View style={styles.userInfoRow}>
+
+                    <View
+                        style={[
+                            styles.statusDot,
+                            { backgroundColor: dotColor }
+                        ]}
+                    />
+
+                    <Text
+                        style={styles.userName}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                    >
+                        {user.nome}
+                    </Text>
+
+                </View>
+
+            </TouchableOpacity>
+        );
+    };
+
+    return (
+        <View style={styles.container}>
+
+            <View style={styles.header}>
+
+                <TouchableOpacity
+                    style={styles.backButton}
+                    onPress={() => navigation.goBack()}
+                >
+                    <Feather
+                        name="arrow-left"
+                        size={22}
+                        color="#FFF"
+                    />
+                </TouchableOpacity>
+
+                <Text style={styles.title}>
+                    Gerenciar usuários
+                </Text>
+
+                <View style={styles.toolbar}>
+
+                    <View>
+                        <Text style={styles.userCount}>
+                            {usuariosFiltrados.length} usuários
+                        </Text>
+                    </View>
+
+                    <TouchableOpacity
+                        style={styles.filterButton}
+                        onPress={abrirFiltros}
+                    >
+                        <Feather
+                            name="filter"
+                            size={16}
+                            color="#FFF"
+                        />
+
+                        <Text style={styles.filterButtonText}>
+                            Filtrar
+                        </Text>
+                    </TouchableOpacity>
+
+                </View>
+
+            </View>
 
             {carregando ? (
 
-                <ActivityIndicator
-                    size="large"
-                    color="#2541ff"
-                    style={styles.loading}
-                />
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator
+                        size="large"
+                        color="#2541ff"
+                    />
+
+                    <Text style={styles.loadingText}>
+                        Carregando usuários...
+                    </Text>
+                </View>
+
+            ) : usuariosFiltrados.length === 0 ? (
+
+                <View style={styles.emptyContainer}>
+                    <Feather
+                        name="users"
+                        size={42}
+                        color="#555"
+                    />
+
+                    <Text style={styles.emptyText}>
+                        Nenhum usuário encontrado.
+                    </Text>
+                </View>
 
             ) : (
 
-                <View style={styles.gridContainer}>
+                <>
+                    <FlatList
+                        ref={listaRef}
+                        data={paginas}
+                        keyExtractor={(pagina, index) =>
+                            pagina[0]?.id || `pagina-${index}`
+                        }
+                        horizontal
+                        pagingEnabled
+                        snapToInterval={larguraTela}
+                        decelerationRate="fast"
+                        bounces={false}
+                        showsHorizontalScrollIndicator={false}
 
-                    {usuarios.map((user) => {
-                        const role = getRole(user);
-                        const dotColor = getRoleColor(role);
+                        initialNumToRender={1}
+                        maxToRenderPerBatch={2}
+                        windowSize={3}
+                        removeClippedSubviews
 
-                        const ativo = user.ativo !== false;
+                        getItemLayout={(_, index) => ({
+                            length: larguraTela,
+                            offset: larguraTela * index,
+                            index
+                        })}
 
-                        return (
-                            <TouchableOpacity
-                                key={user.id}
-                                style={styles.userCard}
-                                onPress={() =>
-                                    navigation.navigate('UserDetail', {
-                                        usuario: {
-                                            ...user,
-                                            foto: user.imagem || null,
-                                            role
-                                        }
-                                    })
-                                }
+                        onMomentumScrollEnd={({ nativeEvent }) => {
+                            const novaPagina = Math.round(
+                                nativeEvent.contentOffset.x / larguraTela
+                            );
+
+                            setPaginaAtual(novaPagina);
+                        }}
+
+                        renderItem={({ item: pagina }) => (
+
+                            <View
+                                style={[
+                                    styles.carouselPage,
+                                    { width: larguraTela }
+                                ]}
                             >
 
-                                <View style={styles.statusBadge}>
-                                    <Text
-                                        style={[
-                                            styles.statusText,
-                                            ativo
-                                                ? styles.activeText
-                                                : styles.inactiveText
-                                        ]}
-                                    >
-                                        {ativo ? 'Ativo' : 'Inativo'}
-                                    </Text>
+                                <View style={styles.gridContainer}>
+
+                                    {pagina.map(user =>
+                                        renderUsuario(user)
+                                    )}
+
                                 </View>
 
-                                {user.imagem ? (
+                            </View>
 
-                                    <Image
-                                        source={{ uri: user.imagem }}
-                                        style={styles.userImage}
-                                    />
+                        )}
+                    />
 
-                                ) : (
+                    <View style={styles.paginationContainer}>
 
-                                    <View style={styles.placeholderCard}>
-                                        <Feather
-                                            name="user"
-                                            size={38}
-                                            color="#FFF"
-                                        />
-                                    </View>
+                        <TouchableOpacity
+                            style={[
+                                styles.pageArrow,
+                                paginaAtual === 0 && styles.pageArrowDisabled
+                            ]}
+                            onPress={() => navegarPagina(paginaAtual - 1)}
+                            disabled={paginaAtual === 0}
+                        >
+                            <Feather
+                                name="chevron-left"
+                                size={22}
+                                color="#FFF"
+                            />
+                        </TouchableOpacity>
 
-                                )}
+                        <Text style={styles.pageIndicator}>
+                            Página {paginaAtual + 1} de {paginas.length}
+                        </Text>
 
-                                <View style={styles.userInfoRow}>
-                                    <View
-                                        style={[
-                                            styles.statusDot,
-                                            { backgroundColor: dotColor }
-                                        ]}
-                                    />
+                        <TouchableOpacity
+                            style={[
+                                styles.pageArrow,
+                                paginaAtual >= paginas.length - 1 &&
+                                    styles.pageArrowDisabled
+                            ]}
+                            onPress={() => navegarPagina(paginaAtual + 1)}
+                            disabled={paginaAtual >= paginas.length - 1}
+                        >
+                            <Feather
+                                name="chevron-right"
+                                size={22}
+                                color="#FFF"
+                            />
+                        </TouchableOpacity>
 
-                                    <Text
-                                        style={styles.userName}
-                                        numberOfLines={1}
-                                    >
-                                        {user.nome}
-                                    </Text>
-                                </View>
+                    </View>
+                </>
 
-                            </TouchableOpacity>
-                        );
-                    })}
-
-                </View>
-            )}
-
-            {!carregando && usuarios.length === 0 && (
-                <Text style={styles.emptyText}>
-                    Nenhum usuário encontrado.
-                </Text>
             )}
 
             <View style={styles.legendContainer}>
 
                 <View style={styles.legendItem}>
-                    <View style={[styles.statusDot, { backgroundColor: '#b22222' }]} />
-                    <Text style={styles.legendText}>Administrador</Text>
+                    <View
+                        style={[
+                            styles.statusDot,
+                            { backgroundColor: '#b22222' }
+                        ]}
+                    />
+
+                    <Text style={styles.legendText}>
+                        Administrador
+                    </Text>
                 </View>
 
                 <View style={styles.legendItem}>
-                    <View style={[styles.statusDot, { backgroundColor: '#ff8c00' }]} />
-                    <Text style={styles.legendText}>Gestor de Frota</Text>
+                    <View
+                        style={[
+                            styles.statusDot,
+                            { backgroundColor: '#ff8c00' }
+                        ]}
+                    />
+
+                    <Text style={styles.legendText}>
+                        Gestor de Frota
+                    </Text>
                 </View>
 
                 <View style={styles.legendItem}>
-                    <View style={[styles.statusDot, { backgroundColor: '#ffd700' }]} />
-                    <Text style={styles.legendText}>Financeiro</Text>
+                    <View
+                        style={[
+                            styles.statusDot,
+                            { backgroundColor: '#ffd700' }
+                        ]}
+                    />
+
+                    <Text style={styles.legendText}>
+                        Financeiro
+                    </Text>
                 </View>
 
                 <View style={styles.legendItem}>
-                    <View style={[styles.statusDot, { backgroundColor: '#2ecc71' }]} />
-                    <Text style={styles.legendText}>Motorista</Text>
+                    <View
+                        style={[
+                            styles.statusDot,
+                            { backgroundColor: '#2ecc71' }
+                        ]}
+                    />
+
+                    <Text style={styles.legendText}>
+                        Motorista
+                    </Text>
                 </View>
 
             </View>
 
-        </ScrollView>
+            <Modal
+                visible={modalFiltros}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setModalFiltros(false)}
+            >
+
+                <TouchableOpacity
+                    style={styles.modalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setModalFiltros(false)}
+                >
+
+                    <View
+                        style={styles.filterModalContent}
+                        onStartShouldSetResponder={() => true}
+                    >
+
+                        <View style={styles.modalHeader}>
+
+                            <Text style={styles.modalTitle}>
+                                Filtrar usuários
+                            </Text>
+
+                            <TouchableOpacity
+                                onPress={() => setModalFiltros(false)}
+                            >
+                                <Feather
+                                    name="x"
+                                    size={22}
+                                    color="#FFF"
+                                />
+                            </TouchableOpacity>
+
+                        </View>
+
+                        <Text style={styles.modalLabel}>
+                            Situação da conta
+                        </Text>
+
+                        <View style={styles.optionsContainer}>
+
+                            {[
+                                { label: 'Todos', value: 'todos' },
+                                { label: 'Ativos', value: 'ativos' },
+                                { label: 'Inativos', value: 'inativos' }
+                            ].map(opcao => (
+
+                                <TouchableOpacity
+                                    key={opcao.value}
+                                    style={[
+                                        styles.filterOption,
+                                        filtroStatusTemp === opcao.value &&
+                                            styles.filterOptionActive
+                                    ]}
+                                    onPress={() => setFiltroStatusTemp(opcao.value)}
+                                >
+
+                                    <Text
+                                        style={[
+                                            styles.filterOptionText,
+                                            filtroStatusTemp === opcao.value &&
+                                                styles.filterOptionTextActive
+                                        ]}
+                                    >
+                                        {opcao.label}
+                                    </Text>
+
+                                </TouchableOpacity>
+
+                            ))}
+
+                        </View>
+
+                        <Text style={styles.modalLabel}>
+                            Tipo de perfil
+                        </Text>
+
+                        <View style={styles.optionsContainer}>
+
+                            {perfisFiltro.map(opcao => (
+
+                                <TouchableOpacity
+                                    key={opcao.value}
+                                    style={[
+                                        styles.filterOption,
+                                        filtroPerfilTemp === opcao.value &&
+                                            styles.filterOptionActive
+                                    ]}
+                                    onPress={() =>
+                                        setFiltroPerfilTemp(opcao.value)
+                                    }
+                                >
+
+                                    <Text
+                                        style={[
+                                            styles.filterOptionText,
+                                            filtroPerfilTemp === opcao.value &&
+                                                styles.filterOptionTextActive
+                                        ]}
+                                    >
+                                        {opcao.label}
+                                    </Text>
+
+                                </TouchableOpacity>
+
+                            ))}
+
+                        </View>
+
+                        <Text style={styles.modalLabel}>
+                            Ordenar por
+                        </Text>
+
+                        <View style={styles.sortOptions}>
+
+                            {ordenacoes.map(opcao => (
+
+                                <TouchableOpacity
+                                    key={opcao.value}
+                                    style={[
+                                        styles.sortOption,
+                                        ordenacaoTemp === opcao.value &&
+                                            styles.sortOptionActive
+                                    ]}
+                                    onPress={() =>
+                                        setOrdenacaoTemp(opcao.value)
+                                    }
+                                >
+
+                                    <View style={styles.sortOptionContent}>
+
+                                        <Text
+                                            style={[
+                                                styles.sortOptionText,
+                                                ordenacaoTemp === opcao.value &&
+                                                    styles.sortOptionTextActive
+                                            ]}
+                                        >
+                                            {opcao.label}
+                                        </Text>
+
+                                        {ordenacaoTemp === opcao.value && (
+                                            <Feather
+                                                name="check"
+                                                size={18}
+                                                color="#2541ff"
+                                            />
+                                        )}
+
+                                    </View>
+
+                                </TouchableOpacity>
+
+                            ))}
+
+                        </View>
+
+                        <View style={styles.modalActions}>
+
+                            <TouchableOpacity
+                                style={styles.clearButton}
+                                onPress={limparFiltros}
+                            >
+                                <Text style={styles.clearButtonText}>
+                                    Limpar
+                                </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={styles.applyButton}
+                                onPress={aplicarFiltros}
+                            >
+                                <Text style={styles.applyButtonText}>
+                                    Aplicar filtros
+                                </Text>
+                            </TouchableOpacity>
+
+                        </View>
+
+                    </View>
+
+                </TouchableOpacity>
+
+            </Modal>
+
+        </View>
     );
 }
 
@@ -231,10 +766,9 @@ const styles = StyleSheet.create({
         backgroundColor: '#121212',
     },
 
-    content: {
-        padding: 20,
+    header: {
+        paddingHorizontal: 20,
         paddingTop: 50,
-        paddingBottom: 40,
     },
 
     backButton: {
@@ -246,39 +780,97 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         textAlign: 'center',
-        marginBottom: 25,
+        marginBottom: 20,
+    },
+
+    toolbar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+
+    userCount: {
+        color: '#FFF',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+
+    pageDescription: {
+        color: '#777',
+        fontSize: 11,
+        marginTop: 3,
+    },
+
+    filterButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: '#1a1a1a',
+        borderWidth: 1,
+        borderColor: '#2541ff',
+        paddingHorizontal: 16,
+        paddingVertical: 9,
+        borderRadius: 12,
+    },
+
+    filterButtonText: {
+        color: '#FFF',
+        fontSize: 13,
+        fontWeight: '600',
+    },
+
+    carouselPage: {
+        flex: 1,
+        paddingTop: 4,
     },
 
     gridContainer: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'space-between',
-        gap: 12,
+        justifyContent: 'flex-start',
+        columnGap: 12,
+        rowGap: 12,
+        paddingHorizontal: 20,
     },
 
     userCard: {
-        width: 99,
         height: 112,
         backgroundColor: '#2541ff',
         borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 12,
         borderWidth: 1,
         borderColor: '#2a2a2a',
         position: 'relative',
-        display: 'flex'
+        overflow: 'hidden',
+    },
+
+    userImage: {
+        width: '100%',
+        height: '100%',
+        position: 'absolute',
+    },
+
+    placeholderCard: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#2541ff',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
 
     statusBadge: {
+        position: 'absolute',
+        top: 8,
         width: '90%',
         borderRadius: 10,
         backgroundColor: 'rgba(255, 255, 255, 0.18)',
         borderColor: 'rgba(255, 255, 255, 0.25)',
         alignItems: 'center',
         justifyContent: 'center',
-        top: 25,
-        zIndex: 1
+        zIndex: 1,
     },
 
     statusText: {
@@ -294,34 +886,21 @@ const styles = StyleSheet.create({
         color: '#FFF',
     },
 
-    userImage: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 12,
-        marginBottom: 1,
-    },
-    placeholderCard: {
-        width: '100%',
-        height: "100%",
-        borderRadius: 12,
-        backgroundColor: '#2541ff',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-
     userInfoRow: {
+        position: 'absolute',
+        bottom: 8,
         flexDirection: 'row',
         alignItems: 'center',
-        width: '100%',
         justifyContent: 'center',
-        gap: 6,
+        width: '94%',
+        gap: 5,
     },
 
     statusDot: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        bottom: 20
+        flexShrink: 0,
     },
 
     userName: {
@@ -329,7 +908,33 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '500',
         flexShrink: 1,
-        bottom: 20
+    },
+
+    paginationContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 25,
+        paddingVertical: 14,
+    },
+
+    pageArrow: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#2541ff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    pageArrowDisabled: {
+        opacity: 0.3,
+    },
+
+    pageIndicator: {
+        color: '#FFF',
+        fontSize: 13,
+        fontWeight: '600',
     },
 
     legendContainer: {
@@ -337,8 +942,10 @@ const styles = StyleSheet.create({
         flexWrap: 'wrap',
         justifyContent: 'center',
         gap: 15,
-        marginTop: 20,
-        paddingTop: 15,
+        marginHorizontal: 20,
+        marginTop: 5,
+        marginBottom: 50,
+        paddingTop: 12,
         borderTopWidth: 1,
         borderTopColor: '#222',
     },
@@ -354,14 +961,167 @@ const styles = StyleSheet.create({
         fontSize: 11,
     },
 
-    loading: {
-        marginTop: 40,
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+    },
+
+    loadingText: {
+        color: '#AAA',
+        fontSize: 13,
+    },
+
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
     },
 
     emptyText: {
         color: '#AAA',
+        fontSize: 14,
         textAlign: 'center',
-        marginTop: 30,
+    },
+
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+
+    filterModalContent: {
+        width: '100%',
+        backgroundColor: '#1a1a1a',
+        borderRadius: 20,
+        padding: 20,
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+
+    modalHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 25,
+    },
+
+    modalTitle: {
+        color: '#FFF',
+        fontSize: 18,
+        fontWeight: 'bold',
+    },
+
+    modalLabel: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '600',
+        marginBottom: 12,
+        marginTop: 5,
+    },
+
+    optionsContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+        marginBottom: 22,
+    },
+
+    filterOption: {
+        paddingHorizontal: 13,
+        paddingVertical: 9,
+        borderRadius: 10,
+        backgroundColor: '#252525',
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+
+    filterOptionActive: {
+        backgroundColor: '#2541ff',
+        borderColor: '#2541ff',
+    },
+
+    filterOptionText: {
+        color: '#AAA',
+        fontSize: 12,
+    },
+
+    filterOptionTextActive: {
+        color: '#FFF',
+        fontWeight: '600',
+    },
+
+    sortOptions: {
+        gap: 8,
+        marginBottom: 25,
+    },
+
+    sortOption: {
+        padding: 13,
+        borderRadius: 10,
+        backgroundColor: '#252525',
+        borderWidth: 1,
+        borderColor: '#333',
+    },
+
+    sortOptionActive: {
+        borderColor: '#2541ff',
+    },
+
+    sortOptionContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
+
+    sortOptionText: {
+        color: '#AAA',
+        fontSize: 13,
+    },
+
+    sortOptionTextActive: {
+        color: '#FFF',
+        fontWeight: '600',
+    },
+
+    modalActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        gap: 12,
+    },
+
+    clearButton: {
+        flex: 1,
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: '#252525',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    clearButtonText: {
+        color: '#AAA',
+        fontSize: 14,
+        fontWeight: '600',
+    },
+
+    applyButton: {
+        flex: 1.5,
+        height: 46,
+        borderRadius: 12,
+        backgroundColor: '#2541ff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    applyButtonText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: '600',
     },
 
 });

@@ -8,7 +8,6 @@ export default function OptionsPanel({ onOpenSlider, onAddForma, onDeleteForma }
       <View style={styles.optionsCard}>
         <Text style={styles.optionsTitle}>Opções</Text>
         
-        {/* Só Admin e Financeiro cadastram formas de pagamento (a Home não passa os botões para os outros). */}
         {onAddForma && onDeleteForma ? (
         <View style={styles.circleButtonsRow}>
           <TouchableOpacity style={styles.circleButton} onPress={onAddForma}>
