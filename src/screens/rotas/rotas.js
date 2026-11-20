@@ -18,8 +18,8 @@ const TITULOS = {
   concluida: 'ROTA CONCLUÍDA',
 };
 
-const normalizar = (texto = '') =>
-  texto.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/-/g, '').toLowerCase();
+const normalizar = (texto) =>
+  String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/-/g, '').toLowerCase();
 
 export default function Rotas({ navigation, route }) {
   const usuario = route?.params?.usuario;
@@ -46,6 +46,8 @@ export default function Rotas({ navigation, route }) {
   const infoHodometro = (r) =>
     r.hodometroFinal
       ? `Hodômetro: ${r.hodometroFinal.toLocaleString('pt-BR')}\n${formatarKm(r.kmRodados)} rodados`
+      : r.distanciaPrevistaKm
+      ? `Hodômetro:\n${formatarKm(r.hodometroInicial)} inicial\nPrevisto: ~${formatarKm(r.distanciaPrevistaKm)}`
       : `Hodômetro:\n${formatarKm(r.hodometroInicial)} inicial`;
 
   return (

@@ -11,7 +11,7 @@ import { autenticar, exigirPerfil, PERFIS } from '../middleware/auth.js';
 
 const router = Router();
 
-router.post('/cadastro', autenticar, exigirPerfil(PERFIS.ADMIN, PERFIS.FINANCEIRO), cadastrarUsuario);
+router.post('/cadastro', autenticar, exigirPerfil(PERFIS.ADMIN), cadastrarUsuario);
 router.post('/reenviar-confirmacao', reenviarConfirmacao);
 
 router.post('/login-email', emailController);

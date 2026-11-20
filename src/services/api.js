@@ -72,3 +72,23 @@ export async function apiJson(caminho, opcoes = {}) {
   }
   return json;
 }
+
+/** Decodifica o payload do JWT sem depender de bibliotecas externas. */
+export function decodificarToken(token) {
+  if (!token) return null;
+  try {
+    const parte = token.split('.')[1];
+    if (!parte) return null;
+    const b64 = parte.replace(/-/g, '+').replace(/_/g, '/');
+    const str = typeof atob === 'function' ? atob(b64) : Buffer.from(b64, 'base64').toString('utf-8');
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+}
+
+/** Retorna os dados do usuário autenticado ({ sub, perfil, nome }) salvos no token. */
+export async function obterUsuarioLogado() {
+  const token = await carregarToken();
+  return decodificarToken(token);
+}

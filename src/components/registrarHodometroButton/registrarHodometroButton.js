@@ -110,7 +110,7 @@ function generateLeafletHTML(origem, destino, motorista) {
     };
 
     function normalizeName(str) {
-      return (str || '')
+      return String(str ?? '')
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\\u0300-\\u036f]/g, '')

@@ -137,9 +137,10 @@ test('login Google de e-mail sem cadastro ou conta desativada é recusado', asyn
   assert.equal((await chamar('POST', '/auth/login-google', { corpo: { idToken: 'google:antigo@logfin.com' } })).status, 403);
 });
 
-test('cadastro de usuário por e-mail exige Admin ou Financeiro', async () => {
+test('cadastro de usuário por e-mail exige apenas Admin', async () => {
   assert.equal((await chamar('POST', '/auth/cadastro', { corpo: {} })).status, 401);
   assert.equal((await chamar('POST', '/auth/cadastro', { token: T.motorista1, corpo: {} })).status, 403);
+  assert.equal((await chamar('POST', '/auth/cadastro', { token: T.financeiro, corpo: {} })).status, 403);
 });
 
 // ---------------------------------------------------------------- permissões
@@ -150,11 +151,35 @@ test('motorista não vê números da empresa nem usuários', async () => {
   assert.equal((await chamar('POST', '/frota/veiculos', { token: T.motorista1, corpo: {} })).status, 403);
 });
 
-test('financeiro gerencia usuários (decisão da equipe)', async () => {
-  const r = await chamar('GET', '/usuarios', { token: T.financeiro });
+test('gerenciamento de usuários é exclusivo do Admin (Financeiro e Motorista bloqueados)', async () => {
+  assert.equal((await chamar('GET', '/usuarios', { token: T.motorista1 })).status, 403);
+  assert.equal((await chamar('GET', '/usuarios', { token: T.financeiro })).status, 403);
+  const r = await chamar('GET', '/usuarios', { token: T.admin });
   assert.equal(r.status, 200);
   assert.ok(r.json.usuarios.every((u) => u.ativo));
   assert.ok(!r.json.usuarios.some((u) => u.email === 'antigo@logfin.com'));
+});
+
+test('financeiro não acessa operações administrativas da frota mas acessa resumo e relatórios', async () => {
+  assert.equal((await chamar('GET', '/frota/veiculos', { token: T.financeiro })).status, 403);
+  assert.equal((await chamar('GET', '/frota/rotas', { token: T.financeiro })).status, 403);
+  assert.equal((await chamar('GET', '/frota/viagens-andamento', { token: T.financeiro })).status, 403);
+  assert.equal((await chamar('POST', '/frota/veiculos', { token: T.financeiro, corpo: {} })).status, 403);
+  assert.equal((await chamar('GET', '/frota/motoristas', { token: T.financeiro })).status, 403);
+  assert.equal((await chamar('GET', '/frota/manutencoes', { token: T.financeiro })).status, 403);
+  assert.equal((await chamar('GET', '/frota/resumo', { token: T.financeiro })).status, 200);
+  assert.equal((await chamar('GET', '/frota/relatorio', { token: T.financeiro })).status, 200);
+});
+
+test('motorista só vê veículos das próprias viagens', async () => {
+  const r1 = await chamar('GET', '/frota/veiculos', { token: T.motorista1 });
+  assert.equal(r1.status, 200);
+  assert.equal(r1.json.veiculos.length, 1);
+  assert.equal(r1.json.veiculos[0].placa, 'ABC-1234');
+
+  const r2 = await chamar('GET', '/frota/veiculos', { token: T.motorista2 });
+  assert.equal(r2.status, 200);
+  assert.equal(r2.json.veiculos.length, 0);
 });
 
 // ---------------------------------------------------------------- I7
@@ -258,11 +283,21 @@ test('rota: motorista precisa ter perfil Motorista (P7) e o ciclo agendada → e
   });
   assert.equal(passado.status, 400);
 
+  const distNegativa = await chamar('POST', '/frota/rotas', {
+    token: T.gestor, corpo: { origem: 'A', destino: 'B', veiculoId: VEICULO, motoristaId: MOTORISTA_2, dataSaida: futuro, receita: 1000, distanciaPrevistaKm: -10 },
+  });
+  assert.equal(distNegativa.status, 400);
+
   const criada = await chamar('POST', '/frota/rotas', {
-    token: T.gestor, corpo: { origem: 'Sorocaba', destino: 'Curitiba', veiculoId: VEICULO, motoristaId: MOTORISTA_2, dataSaida: futuro, receita: 7400 },
+    token: T.gestor, corpo: { origem: 'Sorocaba', destino: 'Curitiba', veiculoId: VEICULO, motoristaId: MOTORISTA_2, dataSaida: futuro, receita: 7400, distanciaPrevistaKm: 420 },
   });
   assert.equal(criada.status, 201);
+  assert.equal(criada.json.rota.distanciaPrevistaKm, 420);
   const id = criada.json.rota.id;
+
+  const listadas = await chamar('GET', '/frota/rotas', { token: T.gestor });
+  const rotaCriada = listadas.json.rotas.find((x) => x.id === id);
+  assert.equal(rotaCriada?.distanciaPrevistaKm, 420);
 
   // Outro motorista não abre a rota que não é dele.
   assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista1, corpo: { hodometroInicial: 46000 } })).status, 403);

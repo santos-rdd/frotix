@@ -124,6 +124,7 @@ function montarRota(viagem, { veiculosPorId, lancamentos, nomes }) {
     hodometroInicial: numero(viagem.km_inicial),
     hodometroFinal: numero(viagem.km_final),
     kmRodados: kmDaViagem(viagem),
+    distanciaPrevistaKm: numero(viagem.distancia_prevista_km),
     dataInicial: dataParaBr(viagem.data_saida || viagem.iniciada_em),
     dataFinal: dataParaBr(viagem.concluida_em),
     receita: numero(viagem.receita_prevista) ?? 0,
@@ -144,7 +145,12 @@ function montarRotas(base) {
 
 export async function listarVeiculos(req, res) {
   try {
-    const base = await carregarBase();
+    const apenasMotorista = ehMotorista(req) ? req.usuario.id : null;
+    const base = await carregarBase({ apenasMotorista });
+    if (apenasMotorista) {
+      const veiculosIds = new Set(base.viagens.map((t) => t.id_veiculo).filter(Boolean));
+      base.veiculos = base.veiculos.filter((v) => veiculosIds.has(v.id));
+    }
     return res.json({ sucesso: true, veiculos: montarVeiculos(base) });
   } catch (e) {
     return erroInterno(res, 'listar os veículos', e);
@@ -225,7 +231,7 @@ export async function listarMotoristas(req, res) {
 
 export async function cadastrarRota(req, res) {
   try {
-    const { origem, destino, veiculoId, motoristaId, dataSaida, hodometroInicial, receita } = req.body || {};
+    const { origem, destino, veiculoId, motoristaId, dataSaida, hodometroInicial, receita, distanciaPrevistaKm } = req.body || {};
 
     if (!origem || !String(origem).trim()) return res.status(400).json({ sucesso: false, erro: 'Informe a cidade de origem.' });
     if (!destino || !String(destino).trim()) return res.status(400).json({ sucesso: false, erro: 'Informe a cidade de destino.' });
@@ -235,6 +241,13 @@ export async function cadastrarRota(req, res) {
     if (!dataIso) return res.status(400).json({ sucesso: false, erro: 'Data inválida. Use DD/MM/AAAA.' });
     if (dataIso < hojeIso()) return res.status(400).json({ sucesso: false, erro: 'A data não pode estar no passado.' });
     if (!(Number(receita) > 0)) return res.status(400).json({ sucesso: false, erro: 'Informe a receita prevista do frete.' });
+
+    if (distanciaPrevistaKm !== undefined && distanciaPrevistaKm !== null && distanciaPrevistaKm !== '') {
+      const distNum = Number(distanciaPrevistaKm);
+      if (Number.isNaN(distNum) || distNum < 0) {
+        return res.status(400).json({ sucesso: false, erro: 'Distância prevista inválida.' });
+      }
+    }
 
     const [{ data: veiculo, error: eV }, { data: motorista, error: eM }] = await Promise.all([
       supabase.from('veiculos').select('id, hodometro, status').eq('id', veiculoId).eq('ativo', true).maybeSingle(),
@@ -262,6 +275,9 @@ export async function cadastrarRota(req, res) {
         data_saida: dataIso,
         km_inicial: hodometroInicial !== '' && hodometroInicial !== undefined ? Number(hodometroInicial) : Number(veiculo.hodometro),
         receita_prevista: Number(receita),
+        distancia_prevista_km: (distanciaPrevistaKm !== undefined && distanciaPrevistaKm !== null && distanciaPrevistaKm !== '')
+          ? Number(distanciaPrevistaKm)
+          : null,
         status: 'PLANEJADA',
         iniciada_em: null,
       }])
@@ -269,7 +285,17 @@ export async function cadastrarRota(req, res) {
       .single();
     if (error) throw error;
 
-    return res.status(201).json({ sucesso: true, rota: { id: data.id, origem: data.origem, destino: data.destino, dataInicial: dataParaBr(data.data_saida), status: 'agendada' } });
+    return res.status(201).json({
+      sucesso: true,
+      rota: {
+        id: data.id,
+        origem: data.origem,
+        destino: data.destino,
+        dataInicial: dataParaBr(data.data_saida),
+        distanciaPrevistaKm: numero(data.distancia_prevista_km),
+        status: 'agendada',
+      },
+    });
   } catch (e) {
     return erroInterno(res, 'cadastrar a rota', e);
   }

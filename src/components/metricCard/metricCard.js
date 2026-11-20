@@ -1,14 +1,15 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors } from '../../constants/theme';
 
-export default function MetricCard({ title, value, subtitle }) {
+export default function MetricCard({ title, value, subtitle, onPress }) {
+  const CardWrapper = onPress ? TouchableOpacity : View;
   return (
-    <View style={styles.card}>
+    <CardWrapper style={styles.card} onPress={onPress} activeOpacity={0.8}>
       <Text style={styles.value}>{value}</Text>
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-    </View>
+    </CardWrapper>
   );
 }
 

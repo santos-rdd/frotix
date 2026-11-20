@@ -68,7 +68,7 @@ export default function GeneralSummaryCard({ onMenuPress }) {
         <View style={styles.cardHeader}>
           <View>
             <Text style={styles.title}>Balanço Atual</Text>
-            <Text style={styles.subtitle}>Balanço Atual</Text>
+            <Text style={styles.subtitle}>Movimentação Recente</Text>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => carregarResumo(false)} activeOpacity={0.7}>

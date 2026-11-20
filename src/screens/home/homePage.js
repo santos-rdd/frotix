@@ -27,14 +27,16 @@ import ViagemAtualCard from '../../components/viagemAtualCard/viagemAtualCard.js
 import RegistrarHodometroButton from '../../components/registrarHodometroButton/registrarHodometroButton.js';
 import GestorHome from '../gestorHome/gestorHome.js';
 import FormaPagamentoModal from '../../components/formaPagamentoModal/formaPagamentoModal.js';
+import MetricCard from '../../components/metricCard/metricCard.js';
 import { descreverForma } from '../../constants/formasPagamento.js';
-import { listarFormas, criarForma, removerForma } from '../../services/frotix.js';
+import { listarFormas, criarForma, removerForma, listarRotas } from '../../services/frotix.js';
 
 const { height } = Dimensions.get('window');
 
 export default function HomePage({ navigation, route }) {
   const [selectedQuickAction, setSelectedQuickAction] = useState(null);
   const [viagemSelecionada, setViagemSelecionada] = useState(null);
+  const [rotasMotorista, setRotasMotorista] = useState([]);
 
   const [isSliderVisible, setIsSliderVisible] = useState(false);
   const [actionType, setActionType] = useState('entrada');
@@ -133,13 +135,41 @@ export default function HomePage({ navigation, route }) {
     4 : 'Motorista'
   };
 
-  const abrirRelatorios = () => navigation.navigate('Relatorios', { usuario });
+  const usuario = { nome: userName, foto: userPhoto, role: userRole };
+
+  const carregarRotasMotorista = useCallback(async () => {
+    if (userRole === 4) {
+      try {
+        const lista = await listarRotas();
+        setRotasMotorista(lista || []);
+      } catch (e) {
+        console.warn('Erro ao carregar rotas do motorista:', e.message);
+      }
+    }
+  }, [userRole]);
+
+  useFocusEffect(useCallback(() => {
+    carregarRotasMotorista();
+  }, [carregarRotasMotorista]));
+
+  const viagensConcluidasMotorista = rotasMotorista.filter((r) => r.status === 'concluida');
+  const kmRodadosMotorista = viagensConcluidasMotorista.reduce((acc, r) => acc + (r.kmRodados || 0), 0);
+  const viagensAgendadasMotorista = rotasMotorista.filter((r) => r.status === 'agendada');
+
+  const abrirRelatorios = () => {
+    if (userRole === 4) {
+      navigation.navigate('Viagens', { usuario, modo: 'motorista' });
+    } else {
+      navigation.navigate('Relatorios', { usuario });
+    }
+  };
 
   const acaoInicial = userRole === 1 || userRole === 3 ? 'finance' : 'rotes';
-  const acaoAtiva = selectedQuickAction ?? acaoInicial;
+  let acaoAtiva = selectedQuickAction ?? acaoInicial;
+  if (userRole === 3 && (acaoAtiva === 'users' || acaoAtiva === 'rotes')) {
+    acaoAtiva = 'finance';
+  }
   const podeEditarFormas = userRole === 1 || userRole === 3;
-
-  const usuario = { nome: userName, foto: userPhoto, role: userRole };
 
   if (userRole === 2) {
     return <GestorHome navigation={navigation} route={route} usuario={usuario} />;
@@ -166,6 +196,27 @@ export default function HomePage({ navigation, route }) {
          {(userRole === 1 || userRole === 3) &&(
             <GeneralSummaryCard onMenuPress={abrirRelatorios} />
          )}
+
+        {userRole === 4 && (
+          <View style={styles.metricasMotorista}>
+            <MetricCard
+              value={`${Math.round(kmRodadosMotorista).toLocaleString('pt-BR')}\nkm`}
+              title="km rodados"
+              subtitle="viagens concluídas"
+              onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
+            />
+            <MetricCard
+              value={String(viagensConcluidasMotorista.length)}
+              title={'Viagens\nconcluídas'}
+              onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
+            />
+            <MetricCard
+              value={String(viagensAgendadasMotorista.length)}
+              title={'Viagens\nagendadas'}
+              onPress={() => navigation.navigate('Rotas', { usuario })}
+            />
+          </View>
+        )}
 
         <QuickActions 
           selectedAction={acaoAtiva} 
@@ -212,9 +263,9 @@ export default function HomePage({ navigation, route }) {
           </View>
         )}
 
-        {acaoAtiva === 'users' && (userRole === 1 || userRole === 3) &&(
+        {acaoAtiva === 'users' && userRole === 1 && (
           <View style={styles.sectionContainer}>
-            <UserControlPanel />
+            <UserControlPanel usuario={usuario} />
           </View>
         )}
 
@@ -224,10 +275,30 @@ export default function HomePage({ navigation, route }) {
             <ViagemAtualCard 
               viagemSelecionada={viagemSelecionada}
               onSelectViagem={setViagemSelecionada}
+              onOpenTripDetails={(viagem) => {
+                if (viagem) {
+                  const rotaCorrespondente = rotasMotorista.find((r) => r.id === viagem.id);
+                  navigation.navigate('DetalhesRota', {
+                    usuario,
+                    rota: rotaCorrespondente || {
+                      id: viagem.id,
+                      origem: viagem.origem,
+                      destino: viagem.destino,
+                      status: 'em_transito',
+                      hodometroInicial: viagem.km_inicial,
+                      motorista: viagem.motorista,
+                      placa: viagem.placa,
+                      despesas: [],
+                    }
+                  });
+                } else {
+                  navigation.navigate('Viagens', { usuario, modo: userRole === 4 ? 'motorista' : undefined });
+                }
+              }}
             />
             <RegistrarHodometroButton
               viagem={viagemSelecionada}
-              onButtonPress={() => navigation.navigate('Viagens', { usuario })}
+              onButtonPress={() => navigation.navigate('Viagens', { usuario, modo: userRole === 4 ? 'motorista' : undefined })}
             />
           </View>
         )}
@@ -303,6 +374,13 @@ const styles = StyleSheet.create({
   sectionContainer: {
     paddingHorizontal: 20,
     marginTop: 20,
+  },
+  metricasMotorista: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: 20,
+    marginBottom: 10,
   },
   atalhosFinanceiro: {
     flexDirection: 'row',

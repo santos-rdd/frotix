@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
@@ -124,8 +124,14 @@ function gerarCsv(rel, periodoLabel) {
  */
 export default function Relatorios({ navigation, route }) {
   const usuario = route?.params?.usuario;
-  const [periodo, setPeriodo] = useState('30');
+  const [periodo, setPeriodo] = useState(route?.params?.periodoInicial || '30');
   const [exportando, setExportando] = useState(null); // 'pdf' | 'excel' | null
+
+  useEffect(() => {
+    if (route?.params?.periodoInicial) {
+      setPeriodo(route.params.periodoInicial);
+    }
+  }, [route?.params?.periodoInicial]);
 
   const periodoAtual = PERIODOS.find((p) => p.id === periodo);
 

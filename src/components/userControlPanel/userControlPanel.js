@@ -8,7 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 
-export default function UserControlPanel() {
+export default function UserControlPanel({ usuario }) {
   const navigation = useNavigation();
 
   return (
@@ -17,7 +17,7 @@ export default function UserControlPanel() {
 
       <TouchableOpacity 
         style={styles.actionButton}
-        onPress={() => navigation.navigate('RegisterUser')}
+        onPress={() => navigation.navigate('RegisterUser', { usuario })}
       >
         <Ionicons name="add-circle-outline" size={20} color="#121212" style={{ marginRight: 8 }} />
         <Text style={styles.actionButtonText}>Cadastrar Novo Usuário</Text>
@@ -25,7 +25,7 @@ export default function UserControlPanel() {
 
       <TouchableOpacity 
         style={styles.actionButton}
-        onPress={() => navigation.navigate('ManageUser')}
+        onPress={() => navigation.navigate('ManageUser', { usuario })}
       >
         <Ionicons name="add-circle-outline" size={20} color="#121212" style={{ marginRight: 8 }} />
         <Text style={styles.actionButtonText}>Gerenciar Usuário</Text>

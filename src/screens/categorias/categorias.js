@@ -18,7 +18,7 @@ const TIPOS = [
   { id: 'saida', label: 'Saída' },
 ];
 
-const normalizar = (texto) => texto.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+const normalizar = (texto) => String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
 /**
  * Categorias Financeiras (Admin e Financeiro): cadastro e remoção das categorias usadas

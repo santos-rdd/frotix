@@ -48,6 +48,16 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
 
   const ir = (tela, params = {}) => navigation.navigate(tela, { usuario, ...params });
 
+  const handleStatusPress = (statusId) => {
+    if (statusId === 'disponivel') {
+      ir('Veiculos', { filtroInicial: 'disponivel' });
+    } else if (statusId === 'em_viagem') {
+      ir('Veiculos', { filtroInicial: 'em_viagem' });
+    } else if (statusId === 'manutencao') {
+      ir('Manutencao');
+    }
+  };
+
   const atalhos = [
     { id: 'frota', name: 'Frota', icon: <MaterialCommunityIcons name="truck-outline" size={24} color="#121212" />, tela: 'Veiculos' },
     { id: 'rotas', name: 'Rotas', icon: <Feather name="map-pin" size={22} color="#121212" />, tela: 'Rotas' },
@@ -78,32 +88,36 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
               <Text style={styles.cardTitulo}>Status da Frota</Text>
               <Text style={styles.cardSubtitulo}>porcentagem atual</Text>
             </View>
-            <Feather name="more-horizontal" size={22} color="#FFF" />
+            <TouchableOpacity onPress={() => ir('Veiculos')} hitSlop={10} activeOpacity={0.7}>
+              <Feather name="more-horizontal" size={22} color="#FFF" />
+            </TouchableOpacity>
           </View>
 
           <View style={styles.legendaTopo}>
             {legenda.map((f) => (
-              <View key={f.id} style={styles.legendaItem}>
+              <TouchableOpacity key={f.id} style={styles.legendaItem} onPress={() => handleStatusPress(f.id)} activeOpacity={0.7}>
                 <View style={[styles.bolinha, { backgroundColor: f.color }]} />
                 <Text style={styles.legendaTexto}>{f.label}</Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
 
           <View style={styles.graficoLinha}>
-            <DonutChart
-              data={fatias}
-              radius={85}
-              innerRadius={58}
-              innerCircleColor={colors.primaryBlue}
-              trackColor="transparent"
-            />
+            <TouchableOpacity activeOpacity={0.85} onPress={() => ir('Veiculos')}>
+              <DonutChart
+                data={fatias}
+                radius={85}
+                innerRadius={58}
+                innerCircleColor={colors.primaryBlue}
+                trackColor="transparent"
+              />
+            </TouchableOpacity>
             <View style={styles.percentuais}>
               {legenda.map((f) => (
-                <View key={f.id} style={styles.legendaItem}>
+                <TouchableOpacity key={f.id} style={styles.legendaItem} onPress={() => handleStatusPress(f.id)} activeOpacity={0.7}>
                   <View style={[styles.bolinha, { backgroundColor: f.color }]} />
                   <Text style={styles.percentualTexto}>{percentual(f.value)}</Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           </View>
@@ -112,9 +126,21 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
         <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={Boolean(resumo)} />
 
         <View style={styles.metricas}>
-          <MetricCard value={String(contar('em_viagem'))} title={'Veículos em\nrota'} />
-          <MetricCard value={`${Math.round(resumo?.kmRodados || 0).toLocaleString('pt-BR')}\nkm`} title="rodados" />
-          <MetricCard value={formatarMoeda(resumo?.custoPorKm || 0)} title="Custo por km" />
+          <MetricCard
+            value={String(contar('em_viagem'))}
+            title={'Veículos em\nrota'}
+            onPress={() => ir('Viagens')}
+          />
+          <MetricCard
+            value={`${Math.round(resumo?.kmRodados || 0).toLocaleString('pt-BR')}\nkm`}
+            title="rodados"
+            onPress={() => ir('Relatorios', { periodoInicial: '30' })}
+          />
+          <MetricCard
+            value={formatarMoeda(resumo?.custoPorKm || 0)}
+            title="Custo por km"
+            onPress={() => ir('Relatorios', { periodoInicial: '30' })}
+          />
         </View>
 
         <Text style={[styles.secaoTitulo, styles.acoesTitulo]}>Ações Rápidas</Text>
@@ -144,7 +170,9 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
         </View>
 
         <Periodo style={styles.periodoGauge} texto="últimos 30 dias" />
-        <KmGauge valor={Math.round(resumo?.kmRodadosMes || 0)} meta={META_KM_MES} />
+        <TouchableOpacity activeOpacity={0.85} onPress={() => ir('Relatorios', { periodoInicial: '30' })}>
+          <KmGauge valor={Math.round(resumo?.kmRodadosMes || 0)} meta={META_KM_MES} />
+        </TouchableOpacity>
 
         <TouchableOpacity style={styles.botaoViagens} onPress={() => ir('Viagens', { modo: 'motorista' })}>
           <Text style={styles.botaoViagensTexto}>Minhas Viagens</Text>

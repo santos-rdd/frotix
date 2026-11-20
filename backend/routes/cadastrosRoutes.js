@@ -4,6 +4,7 @@ import { autenticar, exigirPerfil, PERFIS } from '../middleware/auth.js';
 
 const { ADMIN, FINANCEIRO } = PERFIS;
 const soFinanceiro = exigirPerfil(ADMIN, FINANCEIRO);
+const soAdmin = exigirPerfil(ADMIN);
 
 export const categoriasRoutes = Router()
   .use(autenticar)
@@ -17,9 +18,9 @@ export const formasRoutes = Router()
   .post('/', soFinanceiro, cadastros.criarForma)
   .delete('/:id', soFinanceiro, cadastros.removerForma);
 
-// Gerenciador de usuários: Admin e Financeiro (decisão da equipe em 19/11/2026).
+// Gerenciador de usuários: exclusivo do Administrador.
 export const usuariosRoutes = Router()
-  .use(autenticar, soFinanceiro)
+  .use(autenticar, soAdmin)
   .get('/', cadastros.listarUsuarios)
   .get('/listar', cadastros.listarUsuarios)
   .post('/google', cadastros.criarUsuarioGoogle)

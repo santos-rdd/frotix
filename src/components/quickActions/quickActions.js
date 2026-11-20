@@ -11,8 +11,14 @@ export default function QuickActions({ selectedAction, onSelectAction, userRole 
     ];
 
     const quickCardsInfos = allCards.filter(card => {
-        if (card.id === 'users' || card.id === 'finance') {
+        if (card.id === 'users') {
+            return userRole === 1;
+        }
+        if (card.id === 'finance') {
             return userRole === 1 || userRole === 3;
+        }
+        if (card.id === 'rotes') {
+            return userRole !== 3;
         }
         return true;
     });

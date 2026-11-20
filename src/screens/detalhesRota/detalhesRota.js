@@ -105,6 +105,15 @@ export default function DetalhesRota({ navigation, route }) {
             </Text>
           </View>
 
+          {rota.distanciaPrevistaKm ? (
+            <View style={styles.caixaPrevista}>
+              <MaterialCommunityIcons name="map-marker-distance" size={18} color="#93C5FD" />
+              <Text style={styles.textoPrevista}>
+                Distância prevista: ~{formatarKm(rota.distanciaPrevistaKm)} (estimativa rodoviária)
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.datas}>
             {[
               { rotulo: 'Data inicial', valor: rota.dataInicial },
@@ -200,6 +209,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   totalTexto: { color: colors.primaryBlue, fontSize: 22, fontWeight: '600' },
+  caixaPrevista: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(147, 197, 253, 0.3)',
+  },
+  textoPrevista: { color: '#93C5FD', fontSize: 13, fontWeight: '500' },
   datas: { flexDirection: 'row', gap: 8, marginTop: 20, paddingHorizontal: 16 },
   data: { ...caixaBase, flex: 1, flexDirection: 'row', alignItems: 'center', padding: 10, gap: 6 },
   dataTextos: { flex: 1 },

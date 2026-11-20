@@ -15,12 +15,14 @@ import {
 } from 'react-native';
 
 import { Feather } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { listarUsuarios } from '../../services/frotix.js';
+import { obterUsuarioLogado } from '../../services/api.js';
 
 export default function ManageUserScreen() {
     const navigation = useNavigation();
+    const route = useRoute();
     const { width: larguraTela } = useWindowDimensions();
 
     const listaRef = useRef(null);
@@ -75,9 +77,12 @@ export default function ManageUserScreen() {
             console.error('Erro ao listar usuários:', error);
 
             Alert.alert(
-                'Erro',
+                'Acesso Restrito',
                 error.message || 'Não foi possível carregar a lista de usuários.'
             );
+            if (error.message?.includes('perfil') || error.message?.includes('acesso')) {
+                navigation.goBack();
+            }
 
         } finally {
             setCarregando(false);
@@ -85,14 +90,37 @@ export default function ManageUserScreen() {
     };
 
     useEffect(() => {
-        const unsubscribe = navigation.addListener('focus', () => {
-            carregarUsuarios();
+        let montado = true;
+        const verificarPermissao = async () => {
+            const user = await obterUsuarioLogado();
+            const perfil = route?.params?.usuario?.role || user?.perfil;
+            if (perfil && Number(perfil) !== 1) {
+                if (montado) {
+                    Alert.alert('Acesso Restrito', 'O gerenciamento de usuários é exclusivo do Administrador.');
+                    navigation.goBack();
+                }
+                return false;
+            }
+            return true;
+        };
+
+        verificarPermissao().then((permitido) => {
+            if (permitido && montado) {
+                carregarUsuarios();
+            }
         });
 
-        carregarUsuarios();
+        const unsubscribe = navigation.addListener('focus', () => {
+            verificarPermissao().then((permitido) => {
+                if (permitido && montado) carregarUsuarios();
+            });
+        });
 
-        return unsubscribe;
-    }, [navigation]);
+        return () => {
+            montado = false;
+            unsubscribe();
+        };
+    }, [navigation, route?.params?.usuario?.role]);
 
     const getRole = (user) => {
         const codigoPerfil =
@@ -279,7 +307,8 @@ export default function ManageUserScreen() {
                             ...user,
                             foto: user.imagem || null,
                             role
-                        }
+                        },
+                        usuarioLogado: route?.params?.usuario || { role: 1 }
                     })
                 }
                 activeOpacity={0.8}

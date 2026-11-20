@@ -4,19 +4,20 @@ import { autenticar, exigirPerfil, PERFIS } from '../middleware/auth.js';
 
 const { ADMIN, GESTOR, FINANCEIRO, MOTORISTA } = PERFIS;
 const gestao = exigirPerfil(ADMIN, GESTOR);
+const frotaAcesso = exigirPerfil(ADMIN, GESTOR, MOTORISTA);
 
 const router = Router();
 router.use(autenticar);
 
-router.get('/veiculos', frota.listarVeiculos);
+router.get('/veiculos', frotaAcesso, frota.listarVeiculos);
 router.post('/veiculos', gestao, frota.cadastrarVeiculo);
 
 // Rotas = viagens planejadas. O motorista só vê e mexe nas dele (o controller filtra).
-router.get('/rotas', frota.listarRotas);
+router.get('/rotas', frotaAcesso, frota.listarRotas);
 router.post('/rotas', gestao, frota.cadastrarRota);
-router.post('/rotas/:id/abrir', exigirPerfil(ADMIN, GESTOR, MOTORISTA), frota.abrirViagem);
-router.post('/rotas/:id/concluir', exigirPerfil(ADMIN, GESTOR, MOTORISTA), frota.concluirViagem);
-router.get('/viagens-andamento', frota.listarViagensEmAndamento);
+router.post('/rotas/:id/abrir', frotaAcesso, frota.abrirViagem);
+router.post('/rotas/:id/concluir', frotaAcesso, frota.concluirViagem);
+router.get('/viagens-andamento', frotaAcesso, frota.listarViagensEmAndamento);
 router.get('/motoristas', gestao, frota.listarMotoristas);
 
 router.get('/manutencoes', gestao, frota.listarManutencoes);

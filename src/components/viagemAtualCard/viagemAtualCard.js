@@ -13,7 +13,7 @@ import { listarViagensEmAndamento } from '../../services/frotix.js';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
 
-export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
+export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem, onOpenTripDetails }) {
   const [viagens, setViagens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -51,6 +51,10 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
   }, []);
 
   const handleSelectTrip = (item, index) => {
+    if (viagemSelecionada?.id === item.id && onOpenTripDetails) {
+      onOpenTripDetails(item);
+      return;
+    }
     setCurrentIndex(index);
     onSelectViagem?.(item);
     scrollRef.current?.scrollTo({ x: index * CARD_WIDTH, animated: true });
@@ -67,8 +71,16 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
 
   if (erro || viagens.length === 0) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>{erro || 'Nenhuma viagem em andamento.'}</Text>
+      <View style={styles.container}>
+        <Text style={styles.headerTitle}>Viagens em curso</Text>
+        <TouchableOpacity
+          style={styles.cardVazio}
+          onPress={() => onOpenTripDetails?.(null)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.cardVazioTexto}>{erro || 'Nenhuma viagem em andamento.'}</Text>
+          <Text style={styles.cardVazioSubtexto}>Toque para consultar suas viagens ➔</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -148,9 +160,13 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem }) {
               <View style={styles.cardHeaderRow}>
                 <Text style={styles.sectionLabel}>VIAGEM ATUAL</Text>
                 {isSelected ? (
-                  <View style={styles.selectedBadge}>
-                    <Text style={styles.selectedBadgeText}>Rota ativa no mapa</Text>
-                  </View>
+                  <TouchableOpacity
+                    style={styles.selectedBadge}
+                    onPress={() => onOpenTripDetails?.(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.selectedBadgeText}>Ver detalhes ➔</Text>
+                  </TouchableOpacity>
                 ) : (
                   <Text style={styles.tapToViewText}>Toque para ver rota</Text>
                 )}
@@ -460,5 +476,26 @@ const styles = StyleSheet.create({
   paginationDotActive: {
     width: 24,
     backgroundColor: '#2541EF',
+  },
+  cardVazio: {
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  cardVazioTexto: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  cardVazioSubtexto: {
+    color: '#3B56FF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -16,11 +16,26 @@ import { Feather } from '@expo/vector-icons';
 import { atualizarUsuario, desativarUsuario } from '../../services/frotix.js';
 import { PERFIS, nomePerfil, idPerfil } from '../../constants/perfis.js';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { obterUsuarioLogado } from '../../services/api.js';
 
 export default function UserDetailScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   
+  useEffect(() => {
+    let montado = true;
+    obterUsuarioLogado().then((user) => {
+      const perfilLogado = route?.params?.usuarioLogado?.role || user?.perfil;
+      if (perfilLogado && Number(perfilLogado) !== 1) {
+        if (montado) {
+          Alert.alert('Acesso Restrito', 'A edição de usuários é exclusiva do Administrador.');
+          navigation.goBack();
+        }
+      }
+    });
+    return () => { montado = false; };
+  }, [navigation, route?.params?.usuarioLogado?.role]);
+
   // Usuário escolhido na lista (dados do banco: { id, nome, email, perfil }).
   const usuario = route.params?.usuario || {};
 

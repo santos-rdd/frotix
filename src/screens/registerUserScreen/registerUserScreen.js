@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 import {
     StyleSheet,
@@ -15,11 +15,27 @@ import {
 } from 'react-native';
 
 import { Feather, Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { criarUsuarioEmail, criarUsuarioGoogle, reenviarConfirmacao } from '../../services/frotix.js';
+import { obterUsuarioLogado } from '../../services/api.js';
 
 export default function RegisterUserScreen() {
     const navigation = useNavigation();
+    const route = useRoute();
+
+    useEffect(() => {
+        let montado = true;
+        obterUsuarioLogado().then((user) => {
+            const perfil = route?.params?.usuario?.role || user?.perfil;
+            if (perfil && Number(perfil) !== 1) {
+                if (montado) {
+                    Alert.alert('Acesso Restrito', 'O cadastro de usuários é exclusivo do Administrador.');
+                    navigation.goBack();
+                }
+            }
+        });
+        return () => { montado = false; };
+    }, [navigation, route?.params?.usuario?.role]);
 
     const [metodoCadastroConcluido, setMetodoCadastroConcluido] = useState('email');
     const [nome, setNome] = useState('');

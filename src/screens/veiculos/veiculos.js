@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -14,12 +14,18 @@ import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
 // Normaliza para a busca ignorar maiúsculas, acentos e o hífen da placa.
 const normalizar = (texto) =>
-  texto.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/-/g, '').toLowerCase();
+  String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/-/g, '').toLowerCase();
 
 export default function Veiculos({ navigation, route }) {
   const usuario = route?.params?.usuario;
-  const [filtro, setFiltro] = useState('todos');
+  const [filtro, setFiltro] = useState(route?.params?.filtroInicial || 'todos');
   const [busca, setBusca] = useState('');
+
+  useEffect(() => {
+    if (route?.params?.filtroInicial) {
+      setFiltro(route.params.filtroInicial);
+    }
+  }, [route?.params?.filtroInicial]);
   // Erro P6: a lista vem do banco e recarrega ao voltar do cadastro ou da manutenção.
   const { dados, carregando, erro, recarregar } = useDados(listarVeiculos, []);
   const veiculos = dados || [];
