@@ -88,9 +88,8 @@ const handleSave = async () => {
         setLoading(true);
         setCadastroConcluido(false);
 
-        const baseURL = API_URL.replace(/\/$/, '');
+        // const baseURL = API_URL.replace(/\/$/, '');
 
-        // Dados compartilhados pelos dois métodos.
         const userData = {
             nome: nomeLimpo,
             email: emailLimpo,
@@ -124,10 +123,11 @@ const handleSave = async () => {
     } catch (error) {
         console.error('Erro ao cadastrar usuário:', error);
 
-        Alert.alert(
-            'Erro no cadastro',
-            error.message || 'Não foi possível cadastrar o usuário.'
-        );
+        const mensagem = error instanceof Error
+            ? error.message
+            : 'Não foi possível cadastrar o usuário.';
+
+        Alert.alert('Erro no cadastro', mensagem);
 
     } finally {
         setLoading(false);
@@ -148,22 +148,14 @@ const handleSave = async () => {
                 'Verifique sua caixa de entrada e a pasta de spam.'
             );
 
-        } catch (error) {
-            console.error('Erro ao reenviar confirmação:', error);
-            Alert.alert(
-                'Erro no reenvio',
-                error.message || 'Não foi possível reenviar a confirmação.'
-            );
-        } finally {
-            setResending(false);
-        }
-    };
+       } catch (error) {
             console.error('Erro ao reenviar confirmação:', error);
 
-            Alert.alert(
-                'Erro',
-                error.message || 'Não foi possível reenviar o e-mail.'
-            );
+            const mensagem = error instanceof Error
+                ? error.message
+                : 'Não foi possível reenviar a confirmação.';
+
+            Alert.alert('Erro no reenvio', mensagem);
 
         } finally {
             setResending(false);
