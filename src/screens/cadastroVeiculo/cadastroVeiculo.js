@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, StyleSheet, Alert, KeyboardAvoidingView, Platform, TouchableOpacity, Text } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 
 import ScreenHeader from '../../components/screenHeader/screenHeader.js';
 import SelectField from '../../components/selectField/selectField.js';
@@ -7,7 +8,7 @@ import { CardFormulario, CampoTexto, BotoesFormulario } from '../../components/f
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
 import { STATUS_VEICULO, placaValida, formatarPlaca, formatarKm } from '../../constants/frota.js';
-import { cadastrarVeiculo } from '../../services/frotix.js';
+import { cadastrarVeiculo, editarVeiculo, desativarVeiculo } from '../../services/frotix.js';
 
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
 const anoAtual = new Date().getFullYear();
@@ -24,13 +25,19 @@ const opcoesStatus = [
  */
 export default function CadastroVeiculo({ navigation, route }) {
   const usuario = route?.params?.usuario;
+  // Edição: params.veiculo (da lista de Veículos). Os campos já vêm preenchidos.
+  const veiculoEditado = route?.params?.veiculo || null;
+  const editando = Boolean(veiculoEditado);
+  const emViagem = veiculoEditado?.status === 'em_viagem';
 
-  const [modelo, setModelo] = useState('');
-  const [placa, setPlaca] = useState('');
-  const [ano, setAno] = useState('');
-  const [hodometro, setHodometro] = useState('');
-  const [consumo, setConsumo] = useState('');
-  const [status, setStatus] = useState('disponivel');
+  const [modelo, setModelo] = useState(veiculoEditado?.modelo || '');
+  const [placa, setPlaca] = useState(veiculoEditado?.placa || '');
+  const [ano, setAno] = useState(veiculoEditado?.ano ? String(veiculoEditado.ano) : '');
+  const [hodometro, setHodometro] = useState(veiculoEditado ? String(Math.round(veiculoEditado.hodometro || 0)) : '');
+  const [consumo, setConsumo] = useState(
+    veiculoEditado?.consumoInformado ? String(veiculoEditado.consumoInformado).replace('.', ',') : ''
+  );
+  const [status, setStatus] = useState(veiculoEditado?.status === 'manutencao' ? 'manutencao' : 'disponivel');
   const [erros, setErros] = useState({});
   const [salvando, setSalvando] = useState(false);
 
@@ -58,14 +65,23 @@ export default function CadastroVeiculo({ navigation, route }) {
     if (!validar() || salvando) return;
     setSalvando(true);
     try {
-      const novo = await cadastrarVeiculo({
+      // Na edição só manda o hodômetro se ele mudou (o campo mostra o valor arredondado).
+      const hodometroMudou = !editando || Number(hodometro) !== Math.round(veiculoEditado.hodometro || 0);
+      const dados = {
         modelo: modelo.trim(),
         placa: formatarPlaca(placa),
         ano: ano ? Number(ano) : null,
-        hodometro: Number(hodometro),
+        ...(hodometroMudou ? { hodometro: Number(hodometro) } : {}),
         consumoMedio: consumo ? Number(consumo.replace(',', '.')) : null,
-        status,
-      });
+        // Em viagem o status é controlado pela viagem; não manda.
+        ...(emViagem ? {} : { status }),
+      };
+      if (editando) {
+        const atualizado = await editarVeiculo(veiculoEditado.id, dados);
+        Alert.alert('Veículo atualizado', `${atualizado.modelo} · ${atualizado.placa}`, [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        return;
+      }
+      const novo = await cadastrarVeiculo(dados);
       Alert.alert(
         'Veículo cadastrado',
         `${novo.modelo} · ${novo.placa}\nHodômetro: ${formatarKm(novo.hodometro)}`,
@@ -73,17 +89,40 @@ export default function CadastroVeiculo({ navigation, route }) {
       );
     } catch (e) {
       if (/placa/i.test(e.message)) setErros((atual) => ({ ...atual, placa: e.message }));
-      else Alert.alert('Não foi possível cadastrar', e.message);
+      else Alert.alert(editando ? 'Não foi possível salvar' : 'Não foi possível cadastrar', e.message);
     } finally {
       setSalvando(false);
     }
+  };
+
+  // Desativar: o veículo some das listas, mas as viagens e os custos antigos continuam.
+  const desativar = () => {
+    Alert.alert(
+      'Desativar veículo',
+      `${veiculoEditado.modelo} · ${veiculoEditado.placa} sai da frota. O histórico de viagens e custos continua nos relatórios.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Desativar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await desativarVeiculo(veiculoEditado.id);
+              navigation.goBack();
+            } catch (e) {
+              Alert.alert('Não foi possível desativar', e.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
     <>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
-          <ScreenHeader usuario={usuario} titulo="Cadastrar Veículo" />
+          <ScreenHeader usuario={usuario} titulo={editando ? 'Editar Veículo' : 'Cadastrar Veículo'} />
 
           <CardFormulario>
             <CampoTexto
@@ -126,10 +165,26 @@ export default function CadastroVeiculo({ navigation, route }) {
               keyboardType="decimal-pad"
               erro={erros.consumo}
             />
-            <SelectField label="STATUS INICIAL" opcoes={opcoesStatus} valor={status} onSelecionar={setStatus} />
+            {emViagem ? (
+              <Text style={styles.nota}>Status: em viagem (muda sozinho quando a viagem for fechada).</Text>
+            ) : (
+              <SelectField label={editando ? 'STATUS' : 'STATUS INICIAL'} opcoes={opcoesStatus} valor={status} onSelecionar={setStatus} />
+            )}
+            {editando && veiculoEditado.consumoCalculado ? (
+              <Text style={styles.nota}>
+                Consumo real pelos abastecimentos: {String(veiculoEditado.consumoCalculado).replace('.', ',')} km/l (usado no lugar do informado).
+              </Text>
+            ) : null}
 
-            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel="Cadastrar" salvando={salvando} />
+            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel={editando ? 'Salvar' : 'Cadastrar'} salvando={salvando} />
           </CardFormulario>
+
+          {editando && !emViagem ? (
+            <TouchableOpacity style={styles.desativar} onPress={desativar}>
+              <Feather name="slash" size={16} color="#FF8A80" />
+              <Text style={styles.desativarTexto}>Desativar veículo</Text>
+            </TouchableOpacity>
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -142,4 +197,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { flex: 1, backgroundColor: colors.background },
   conteudo: { paddingBottom: 150 },
+  nota: { color: 'rgba(255,255,255,0.85)', fontSize: 12, marginBottom: 12 },
+  desativar: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, paddingVertical: 14 },
+  desativarTexto: { color: '#FF8A80', fontSize: 15, fontWeight: '600' },
 });

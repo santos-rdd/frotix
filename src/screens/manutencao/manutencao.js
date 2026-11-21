@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 
 import ScreenHeader from '../../components/screenHeader/screenHeader.js';
 import SelectField from '../../components/selectField/selectField.js';
@@ -15,7 +15,9 @@ import { colors } from '../../constants/theme.js';
 import {
   TIPOS_MANUTENCAO, STATUS_MANUTENCAO, labelTipoManutencao, dataValida, formatarData, formatarMoeda,
 } from '../../constants/frota.js';
-import { listarManutencoes, listarVeiculos, agendarManutencao, avancarManutencao } from '../../services/frotix.js';
+import {
+  listarManutencoes, listarVeiculos, agendarManutencao, avancarManutencao, editarManutencao, excluirManutencao,
+} from '../../services/frotix.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
@@ -53,6 +55,9 @@ export default function Manutencao({ navigation, route }) {
   const [custo, setCusto] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [erros, setErros] = useState({});
+  // Ordem sendo editada (null = formulário de nova manutenção).
+  const [editando, setEditando] = useState(null);
+  const rolagem = useRef(null);
 
   const opcoesVeiculo = veiculos.map((v) => ({ id: v.id, label: `${v.modelo} · ${v.placa}` }));
 
@@ -64,6 +69,38 @@ export default function Manutencao({ navigation, route }) {
     setCusto('');
     setObservacoes('');
     setErros({});
+    setEditando(null);
+  };
+
+  const editar = (ordem) => {
+    setEditando(ordem);
+    setVeiculoId(ordem.veiculoId);
+    setTipo(ordem.tipo);
+    setData(ordem.data);
+    setOficina(ordem.oficina);
+    setCusto(ordem.custo ? String(ordem.custo).replace('.', ',') : '');
+    setObservacoes(ordem.observacoes || '');
+    setErros({});
+    rolagem.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  const excluir = (ordem) => {
+    Alert.alert('Excluir manutenção', `Excluir ${labelTipoManutencao(ordem.tipo)} de ${ordem.data}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await excluirManutencao(ordem.id);
+            if (editando?.id === ordem.id) limpar();
+            await recarregar();
+          } catch (e) {
+            Alert.alert('Não foi possível excluir', e.message);
+          }
+        },
+      },
+    ]);
   };
 
   const agendar = async () => {
@@ -79,6 +116,17 @@ export default function Manutencao({ navigation, route }) {
 
     setSalvando(true);
     try {
+      if (editando) {
+        // Concluída: o backend só aceita custo e observações.
+        const dados = editando.status === 'concluida'
+          ? { custo: custo ? paraNumero(custo) : 0, observacoes: observacoes.trim() }
+          : { tipo, data, oficina: oficina.trim(), custo: custo ? paraNumero(custo) : 0, observacoes: observacoes.trim() };
+        await editarManutencao(editando.id, dados);
+        limpar();
+        await recarregar();
+        Alert.alert('Manutenção atualizada');
+        return;
+      }
       const nova = await agendarManutencao({
         veiculoId,
         tipo,
@@ -91,7 +139,7 @@ export default function Manutencao({ navigation, route }) {
       await recarregar();
       Alert.alert('Manutenção agendada', `${labelTipoManutencao(nova.tipo)} em ${nova.data}.`);
     } catch (e) {
-      Alert.alert('Não foi possível agendar', e.message);
+      Alert.alert(editando ? 'Não foi possível salvar' : 'Não foi possível agendar', e.message);
     } finally {
       setSalvando(false);
     }
@@ -128,11 +176,14 @@ export default function Manutencao({ navigation, route }) {
   return (
     <>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
-          <ScreenHeader usuario={usuario} titulo="Agendar Manutenção" />
+        <ScrollView ref={rolagem} style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
+          <ScreenHeader usuario={usuario} titulo={editando ? 'Editar Manutenção' : 'Agendar Manutenção'} />
 
           <CardFormulario>
-            <SelectField label="VEÍCULO" opcoes={opcoesVeiculo} valor={veiculoId} onSelecionar={setVeiculoId} />
+            {editando?.status === 'concluida' ? (
+              <Text style={styles.notaEdicao}>Manutenção concluída: só o custo e as observações podem mudar.</Text>
+            ) : null}
+            <SelectField label="VEÍCULO" opcoes={opcoesVeiculo} valor={veiculoId} onSelecionar={editando ? () => {} : setVeiculoId} />
             {erros.veiculo ? <Text style={styles.erro}>{erros.veiculo}</Text> : null}
             <EscolhaChips label="TIPO DE SERVIÇO" opcoes={TIPOS_MANUTENCAO} valor={tipo} onSelecionar={setTipo} />
             <CampoTexto
@@ -160,7 +211,7 @@ export default function Manutencao({ navigation, route }) {
               placeholder="Descreva o serviço"
               multiline
             />
-            <BotoesFormulario onCancelar={limpar} onConfirmar={agendar} confirmarLabel="Agendar" salvando={salvando} />
+            <BotoesFormulario onCancelar={limpar} onConfirmar={agendar} confirmarLabel={editando ? 'Salvar' : 'Agendar'} salvando={salvando} />
           </CardFormulario>
 
           <View style={styles.tituloLinha}>
@@ -208,6 +259,18 @@ export default function Manutencao({ navigation, route }) {
                     </Text>
                   </TouchableOpacity>
                 ) : null}
+                <View style={styles.acoesLinha}>
+                  <TouchableOpacity style={styles.acaoLink} onPress={() => editar(o)} hitSlop={8}>
+                    <Feather name="edit-2" size={14} color="#93C5FD" />
+                    <Text style={styles.acaoLinkTexto}>Editar</Text>
+                  </TouchableOpacity>
+                  {o.status === 'agendada' ? (
+                    <TouchableOpacity style={styles.acaoLink} onPress={() => excluir(o)} hitSlop={8}>
+                      <Feather name="trash-2" size={14} color="#FF8A80" />
+                      <Text style={[styles.acaoLinkTexto, styles.perigo]}>Excluir</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
               </View>
             );
           })}
@@ -264,4 +327,9 @@ const styles = StyleSheet.create({
   },
   botaoAcaoTexto: { color: '#121212', fontSize: 13, fontWeight: '700' },
   vazio: { color: colors.textMuted, textAlign: 'center', marginVertical: 20 },
+  notaEdicao: { color: '#FFF', fontSize: 12, marginBottom: 12 },
+  acoesLinha: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20, marginTop: 10 },
+  acaoLink: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  acaoLinkTexto: { color: '#93C5FD', fontSize: 12, fontWeight: '700' },
+  perigo: { color: '#FF8A80' },
 });

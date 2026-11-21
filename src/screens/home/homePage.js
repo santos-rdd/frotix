@@ -29,7 +29,11 @@ import GestorHome from '../gestorHome/gestorHome.js';
 import FormaPagamentoModal from '../../components/formaPagamentoModal/formaPagamentoModal.js';
 import MetricCard from '../../components/metricCard/metricCard.js';
 import { descreverForma } from '../../constants/formasPagamento.js';
-import { listarFormas, criarForma, removerForma, listarRotas } from '../../services/frotix.js';
+import { listarFormas, criarForma, removerForma } from '../../services/frotix.js';
+import { listarRotasOffline } from '../../services/offline.js';
+import PrevisaoCaixaCard from '../../components/previsaoCaixaCard/previsaoCaixaCard.js';
+import AlertasCard from '../../components/alertasCard/alertasCard.js';
+import BannerOffline from '../../components/bannerOffline/bannerOffline.js';
 
 const { height } = Dimensions.get('window');
 
@@ -140,7 +144,8 @@ export default function HomePage({ navigation, route }) {
   const carregarRotasMotorista = useCallback(async () => {
     if (userRole === 4) {
       try {
-        const lista = await listarRotas();
+        // Sem internet usa as rotas salvas no celular (modo offline do motorista).
+        const lista = await listarRotasOffline();
         setRotasMotorista(lista || []);
       } catch (e) {
         console.warn('Erro ao carregar rotas do motorista:', e.message);
@@ -197,6 +202,8 @@ export default function HomePage({ navigation, route }) {
             <GeneralSummaryCard onMenuPress={abrirRelatorios} />
          )}
 
+        {userRole === 4 && <BannerOffline />}
+
         {userRole === 4 && (
           <View style={styles.metricasMotorista}>
             <MetricCard
@@ -232,6 +239,20 @@ export default function HomePage({ navigation, route }) {
             <View style={styles.atalhosFinanceiro}>
               <TouchableOpacity
                 style={styles.atalhoFinanceiro}
+                onPress={() => navigation.navigate('Extrato', { usuario })}
+              >
+                <Text style={styles.atalhoFinanceiroTexto}>Extrato</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.atalhoFinanceiro}
+                onPress={() => navigation.navigate('Dividas', { usuario })}
+              >
+                <Text style={styles.atalhoFinanceiroTexto}>Dívidas</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.atalhosFinanceiro}>
+              <TouchableOpacity
+                style={styles.atalhoFinanceiro}
                 onPress={() => navigation.navigate('Categorias', { usuario })}
               >
                 <Text style={styles.atalhoFinanceiroTexto}>Gerenciar categorias</Text>
@@ -243,6 +264,8 @@ export default function HomePage({ navigation, route }) {
                 <Text style={styles.atalhoFinanceiroTexto}>Relatórios</Text>
               </TouchableOpacity>
             </View>
+            <PrevisaoCaixaCard onVerDividas={() => navigation.navigate('Dividas', { usuario })} />
+            <AlertasCard navigation={navigation} usuario={usuario} />
           </>
         )}
 
@@ -304,12 +327,34 @@ export default function HomePage({ navigation, route }) {
         )}
 
         {userRole === 4 && (
-          <TouchableOpacity
-            style={styles.minhasViagens}
-            onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
-          >
-            <Text style={styles.minhasViagensTexto}>Minhas Viagens</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={styles.minhasViagens}
+              onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
+            >
+              <Text style={styles.minhasViagensTexto}>Minhas Viagens</Text>
+            </TouchableOpacity>
+            <View style={styles.atalhosFinanceiro}>
+              <TouchableOpacity
+                style={styles.atalhoFinanceiro}
+                onPress={() => navigation.navigate('Abastecimentos', { usuario })}
+              >
+                <Text style={styles.atalhoFinanceiroTexto}>Abastecimento</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.atalhoFinanceiro}
+                onPress={() => navigation.navigate('TransactionForm', { actionType: 'saida', amountValue: '' })}
+              >
+                <Text style={styles.atalhoFinanceiroTexto}>Lançar despesa</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={styles.linkMotorista}
+              onPress={() => navigation.navigate('Extrato', { usuario })}
+            >
+              <Text style={styles.linkMotoristaTexto}>Ver meus lançamentos</Text>
+            </TouchableOpacity>
+          </>
         )}
 
       </ScrollView>
@@ -412,6 +457,15 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  linkMotorista: {
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  linkMotoristaTexto: {
+    color: '#93C5FD',
+    fontSize: 14,
+    fontWeight: '600',
   },
   sectionTitle: {
     color: '#FFF',

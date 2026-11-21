@@ -8,7 +8,7 @@ import { CardFormulario, CampoTexto, BotoesFormulario } from '../../components/f
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
 import { dataValida, formatarData, formatarKm } from '../../constants/frota.js';
-import { listarVeiculos, listarMotoristas, cadastrarRota } from '../../services/frotix.js';
+import { listarVeiculos, listarMotoristas, cadastrarRota, editarRota } from '../../services/frotix.js';
 import { calcularDistanciaRodoviaria } from '../../services/roteamentoService.js';
 import useDados from '../../hooks/useDados.js';
 
@@ -31,16 +31,20 @@ const paraDate = (texto) => {
  */
 export default function CadastroRota({ navigation, route }) {
   const usuario = route?.params?.usuario;
+  // Edição: params.rota (só rotas agendadas). Os campos já vêm preenchidos.
+  const rotaEditada = route?.params?.rota || null;
+  const editando = Boolean(rotaEditada);
+  const valorTexto = (n) => (n === null || n === undefined ? '' : String(n).replace('.', ','));
 
-  const [origem, setOrigem] = useState('');
-  const [destino, setDestino] = useState('');
-  const [veiculoId, setVeiculoId] = useState(null);
-  const [motoristaId, setMotoristaId] = useState(null);
-  const [data, setData] = useState(hoje());
-  const [hodometroInicial, setHodometroInicial] = useState('');
-  const [receita, setReceita] = useState('');
-  const [distancia, setDistancia] = useState('');
-  const [origemDistancia, setOrigemDistancia] = useState(null); // 'sugerido' | 'manual' | null
+  const [origem, setOrigem] = useState(rotaEditada?.origem || '');
+  const [destino, setDestino] = useState(rotaEditada?.destino || '');
+  const [veiculoId, setVeiculoId] = useState(rotaEditada?.veiculoId || null);
+  const [motoristaId, setMotoristaId] = useState(rotaEditada?.motoristaId || null);
+  const [data, setData] = useState(rotaEditada?.dataInicial || hoje());
+  const [hodometroInicial, setHodometroInicial] = useState(rotaEditada?.hodometroInicial ? String(rotaEditada.hodometroInicial) : '');
+  const [receita, setReceita] = useState(valorTexto(rotaEditada?.receitaPrevista ?? rotaEditada?.receita));
+  const [distancia, setDistancia] = useState(rotaEditada?.distanciaPrevistaKm ? String(rotaEditada.distanciaPrevistaKm) : '');
+  const [origemDistancia, setOrigemDistancia] = useState(rotaEditada?.distanciaPrevistaKm ? 'manual' : null); // 'sugerido' | 'manual' | null
   const [calculandoDistancia, setCalculandoDistancia] = useState(false);
   const [sugestaoDistancia, setSugestaoDistancia] = useState(null);
   const [erros, setErros] = useState({});
@@ -167,7 +171,7 @@ export default function CadastroRota({ navigation, route }) {
     setSalvando(true);
     try {
       const distNum = distancia ? Number(distancia) : null;
-      const nova = await cadastrarRota({
+      const dadosRota = {
         origem: origem.trim(),
         destino: destino.trim(),
         veiculoId,
@@ -176,7 +180,16 @@ export default function CadastroRota({ navigation, route }) {
         hodometroInicial: Number(hodometroInicial),
         receita: Number(receita.replace(/\./g, '').replace(',', '.')),
         distanciaPrevistaKm: distNum,
-      });
+      };
+      if (editando) {
+        await editarRota(rotaEditada.id, dadosRota);
+        Alert.alert('Rota atualizada', `${dadosRota.origem} → ${dadosRota.destino}\nAgendada para ${data}`, [
+          // Volta duas telas: os detalhes abertos mostravam os dados antigos.
+          { text: 'OK', onPress: () => navigation.pop(2) },
+        ]);
+        return;
+      }
+      const nova = await cadastrarRota(dadosRota);
       const detalheDist = nova.distanciaPrevistaKm ? `\nDistância prevista: ~${formatarKm(nova.distanciaPrevistaKm)}` : '';
       Alert.alert(
         'Rota cadastrada',
@@ -184,7 +197,7 @@ export default function CadastroRota({ navigation, route }) {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e) {
-      Alert.alert('Não foi possível cadastrar', e.message);
+      Alert.alert(editando ? 'Não foi possível salvar' : 'Não foi possível cadastrar', e.message);
     } finally {
       setSalvando(false);
     }
@@ -194,7 +207,7 @@ export default function CadastroRota({ navigation, route }) {
     <>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
-          <ScreenHeader usuario={usuario} titulo="Cadastrar Rota" />
+          <ScreenHeader usuario={usuario} titulo={editando ? 'Editar Rota' : 'Cadastrar Rota'} />
 
           <CardFormulario>
             <CampoTexto label="ORIGEM" value={origem} onChangeText={mudarOrigem} placeholder="Cidade de origem (ex: Campinas - SP)" erro={erros.origem} />
@@ -298,7 +311,7 @@ export default function CadastroRota({ navigation, route }) {
               erro={erros.receita}
             />
 
-            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel="Cadastrar" salvando={salvando} />
+            <BotoesFormulario onCancelar={() => navigation.goBack()} onConfirmar={salvar} confirmarLabel={editando ? 'Salvar' : 'Cadastrar'} salvando={salvando} />
           </CardFormulario>
         </ScrollView>
       </KeyboardAvoidingView>

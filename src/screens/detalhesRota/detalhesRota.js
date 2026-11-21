@@ -6,8 +6,9 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import { STATUS_ROTA, formatarMoeda } from '../../constants/frota.js';
-import { concluirViagem } from '../../services/frotix.js';
+import { STATUS_ROTA, formatarMoeda, formatarKm } from '../../constants/frota.js';
+import { excluirRota } from '../../services/frotix.js';
+import { enviarOuGuardar } from '../../services/offline.js';
 
 /**
  * Detalhes de uma rota (params.rota).
@@ -18,6 +19,8 @@ export default function DetalhesRota({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const rota = route?.params?.rota;
   const editavel = rota?.status === 'agendada';
+  const gestao = usuario?.role === 1 || usuario?.role === 2;
+  const veFinanceiro = usuario?.role === 1 || usuario?.role === 2 || usuario?.role === 3;
   const [hodometroFinal, setHodometroFinal] = useState(rota?.hodometroFinal ? String(rota.hodometroFinal) : '');
   const [salvando, setSalvando] = useState(false);
 
@@ -34,9 +37,28 @@ export default function DetalhesRota({ navigation, route }) {
   const final = hodometroFinal ? Number(hodometroFinal) : null;
   const total = final !== null && final > inicial ? final - inicial : null;
 
-  const custos = rota.despesas.reduce((soma, d) => soma + d.valor, 0);
-  const saldo = rota.receita - custos;
-  const margem = rota.receita > 0 ? Math.round((saldo / rota.receita) * 100) : 0;
+  // Rentabilidade calculada no backend (receita lançada ou prevista − despesas ligadas à viagem).
+  const custos = rota.custos ?? rota.despesas.reduce((soma, d) => soma + d.valor, 0);
+  const saldo = rota.saldo ?? rota.receita - custos;
+  const margem = rota.margem ?? (rota.receita > 0 ? Math.round((saldo / rota.receita) * 100) : 0);
+
+  const excluir = () => {
+    Alert.alert('Excluir rota', `Excluir a rota ${rota.origem} → ${rota.destino}? Isso não pode ser desfeito.`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await excluirRota(rota.id);
+            navigation.goBack();
+          } catch (e) {
+            Alert.alert('Não foi possível excluir', e.message);
+          }
+        },
+      },
+    ]);
+  };
 
   // Registrar o hodômetro final conclui a rota no banco (antes só mudava na tela).
   const salvar = async () => {
@@ -50,8 +72,17 @@ export default function DetalhesRota({ navigation, route }) {
     if (salvando) return;
     setSalvando(true);
     try {
-      await concluirViagem(rota.id, final);
-      Alert.alert('Rota concluída', `Total percorrido: ${total.toLocaleString('pt-BR')} km.`);
+      const r = await enviarOuGuardar(
+        'concluirViagem',
+        { rotaId: rota.id, hodometroFinal: final },
+        `Fechar viagem ${rota.origem} → ${rota.destino}`
+      );
+      Alert.alert(
+        r.offline ? 'Salvo no celular' : 'Rota concluída',
+        r.offline
+          ? 'Sem internet agora. A conclusão será enviada quando a conexão voltar.'
+          : `Total percorrido: ${total.toLocaleString('pt-BR')} km.`
+      );
       navigation.goBack();
     } catch (e) {
       Alert.alert('Não foi possível salvar', e.message);
@@ -135,6 +166,19 @@ export default function DetalhesRota({ navigation, route }) {
             </TouchableOpacity>
           ) : null}
 
+          {editavel && gestao ? (
+            <View style={styles.acoesGestao}>
+              <TouchableOpacity style={styles.acaoGestao} onPress={() => navigation.navigate('CadastroRota', { usuario, rota })}>
+                <Feather name="edit-2" size={16} color="#FFF" />
+                <Text style={styles.acaoGestaoTexto}>Editar rota</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.acaoGestao, styles.acaoPerigo]} onPress={excluir}>
+                <Feather name="trash-2" size={16} color="#FFF" />
+                <Text style={styles.acaoGestaoTexto}>Excluir</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <Text style={styles.secao}>Despesas Associadas</Text>
           <View style={styles.despesas}>
             {rota.despesas.length === 0 ? (
@@ -162,7 +206,19 @@ export default function DetalhesRota({ navigation, route }) {
                 <View style={styles.rentDivisor} />
                 <Text style={styles.rentSaldo}>SALDO LÍQUIDO: {formatarMoeda(saldo)}</Text>
                 <Text style={styles.rentLinha}>({margem}%) Margem</Text>
+                {rota.custoKm ? <Text style={styles.rentLinha}>Custo por km: {formatarMoeda(rota.custoKm)}</Text> : null}
+                {rota.receitaLancada === 0 && rota.receitaPrevista ? (
+                  <Text style={styles.rentNota}>Receita prevista no cadastro (ainda sem entrada lançada para esta viagem).</Text>
+                ) : null}
               </View>
+              {veFinanceiro ? (
+                <TouchableOpacity
+                  style={styles.verLancamentos}
+                  onPress={() => navigation.navigate('Extrato', { usuario, idViagem: rota.id, titulo: `Lançamentos · ${rota.origem} → ${rota.destino}` })}
+                >
+                  <Text style={styles.verLancamentosTexto}>Ver lançamentos da viagem</Text>
+                </TouchableOpacity>
+              ) : null}
             </>
           ) : null}
         </ScrollView>
@@ -247,4 +303,11 @@ const styles = StyleSheet.create({
   rentLinha: { color: 'rgba(255,255,255,0.85)', fontSize: 13 },
   rentDivisor: { height: 1, backgroundColor: '#FFF', marginVertical: 8 },
   rentSaldo: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  rentNota: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 6 },
+  verLancamentos: { borderWidth: 1, borderColor: '#FFF', borderRadius: 20, paddingVertical: 10, alignItems: 'center', marginTop: 12 },
+  verLancamentosTexto: { color: '#FFF', fontWeight: '600' },
+  acoesGestao: { flexDirection: 'row', gap: 12, marginTop: 16, marginHorizontal: 12 },
+  acaoGestao: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6, backgroundColor: colors.primaryBlue, borderRadius: 12, paddingVertical: 14 },
+  acaoPerigo: { backgroundColor: '#B71C1C' },
+  acaoGestaoTexto: { color: '#FFF', fontWeight: '700' },
 });

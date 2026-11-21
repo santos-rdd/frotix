@@ -10,15 +10,19 @@ import VoltarButton from '../../components/voltarButton/voltarButton.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
 import { STATUS_ROTA, formatarKm } from '../../constants/frota.js';
-import { listarRotas, listarVeiculos, abrirViagem as abrirViagemApi, concluirViagem } from '../../services/frotix.js';
+import { enviarOuGuardar, listarRotasOffline, listarVeiculosOffline } from '../../services/offline.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
+import BannerOffline from '../../components/bannerOffline/bannerOffline.js';
 
 // Rotas e veículos juntos, para a tela recarregar tudo de uma vez.
+// Para o motorista, sem internet usa o que ficou salvo no celular (modo offline).
 const carregarTudo = async () => {
-  const [rotas, veiculos] = await Promise.all([listarRotas(), listarVeiculos()]);
+  const [rotas, veiculos] = await Promise.all([listarRotasOffline(), listarVeiculosOffline()]);
   return { rotas, veiculos };
 };
+
+const AVISO_OFFLINE = 'Sem internet agora. Ficou salvo no celular e será enviado quando a conexão voltar.';
 
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
 
@@ -87,9 +91,15 @@ export default function Viagens({ navigation, route }) {
     if (salvando) return;
     setSalvando(true);
     try {
-      await abrirViagemApi(rotaId, { veiculoId, hodometroInicial: inicial });
+      const rota = rotas.find((r) => r.id === rotaId);
+      const r = await enviarOuGuardar(
+        'abrirViagem',
+        { rotaId, veiculoId, hodometroInicial: inicial },
+        `Abrir viagem ${rota ? `${rota.origem} → ${rota.destino}` : ''}`
+      );
       limparFormulario();
       await recarregar();
+      if (r.offline) Alert.alert('Viagem aberta no celular', AVISO_OFFLINE);
     } catch (e) {
       Alert.alert('Não foi possível abrir a viagem', e.message);
     } finally {
@@ -107,9 +117,14 @@ export default function Viagens({ navigation, route }) {
     if (salvando) return;
     setSalvando(true);
     try {
-      await concluirViagem(viagem.id, final);
+      const r = await enviarOuGuardar(
+        'concluirViagem',
+        { rotaId: viagem.id, hodometroFinal: final },
+        `Fechar viagem ${viagem.origem} → ${viagem.destino}`
+      );
       setHodometrosFinais({ ...hodometrosFinais, [viagem.id]: '' });
       await recarregar();
+      if (r.offline) Alert.alert('Viagem fechada no celular', AVISO_OFFLINE);
     } catch (e) {
       Alert.alert('Não foi possível fechar a viagem', e.message);
     } finally {
@@ -129,6 +144,7 @@ export default function Viagens({ navigation, route }) {
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView style={styles.container} contentContainerStyle={styles.conteudo} keyboardShouldPersistTaps="handled">
           <ScreenHeader usuario={usuario} titulo={modoMotorista ? 'Minhas Viagens' : 'Viagens'} />
+          {usuario?.role === 4 ? <BannerOffline style={styles.banner} /> : null}
 
           <View style={styles.formulario}>
             <SelectField
@@ -184,6 +200,21 @@ export default function Viagens({ navigation, route }) {
               <TouchableOpacity style={[styles.botao, styles.botaoClaro, styles.botaoFechar]} onPress={() => fecharViagem(viagem)} disabled={salvando}>
                 <Text style={styles.botaoTextoEscuro}>Fechar</Text>
               </TouchableOpacity>
+              {viagem.pendenteEnvio ? <Text style={styles.pendente}>Aguardando envio</Text> : null}
+              <View style={styles.atalhos}>
+                <TouchableOpacity
+                  style={styles.atalho}
+                  onPress={() => navigation.navigate('TransactionForm', { actionType: 'saida', amountValue: '', idViagem: viagem.id, usuario })}
+                >
+                  <Text style={styles.atalhoTexto}>+ Despesa</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.atalho}
+                  onPress={() => navigation.navigate('Abastecimentos', { usuario, veiculoId: viagem.veiculoId })}
+                >
+                  <Text style={styles.atalhoTexto}>+ Abastecimento</Text>
+                </TouchableOpacity>
+              </View>
             </TripCard>
           ))}
 
@@ -192,9 +223,12 @@ export default function Viagens({ navigation, route }) {
               key={viagem.id}
               titulo="VIAGEM CONCLUÍDA"
               status={STATUS_ROTA.concluida}
-              infoDireita={`Hodômetro: ${viagem.hodometroFinal.toLocaleString('pt-BR')}\n${formatarKm(viagem.kmRodados)} rodados`}
+              infoDireita={`Hodômetro: ${Number(viagem.hodometroFinal || 0).toLocaleString('pt-BR')}\n${formatarKm(viagem.kmRodados)} rodados`}
+              onPress={viagem.pendenteEnvio ? undefined : () => navigation.navigate('DetalhesRota', { usuario, rota: viagem })}
               {...dadosCard(viagem)}
-            />
+            >
+              {viagem.pendenteEnvio ? <Text style={styles.pendente}>Aguardando envio</Text> : null}
+            </TripCard>
           ))}
 
           <EstadoDados carregando={carregando} erro={erro} onTentarDeNovo={recarregar} temDados={rotas.length > 0} />
@@ -245,4 +279,9 @@ const styles = StyleSheet.create({
   botaoTextoClaro: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   botaoTextoEscuro: { color: '#121212', fontSize: 15, fontWeight: '700' },
   vazio: { color: colors.textMuted, textAlign: 'center', marginVertical: 20 },
+  banner: { marginBottom: 16 },
+  pendente: { color: '#FCD34D', fontSize: 12, fontWeight: '700', textAlign: 'center', marginTop: 10 },
+  atalhos: { flexDirection: 'row', gap: 10, marginTop: 14 },
+  atalho: { flex: 1, borderWidth: 1, borderColor: '#FFF', borderRadius: 20, paddingVertical: 8, alignItems: 'center' },
+  atalhoTexto: { color: '#FFF', fontSize: 13, fontWeight: '600' },
 });
