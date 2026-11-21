@@ -7,6 +7,7 @@ import frotaRoutes from './routes/frotaRoutes.js';
 import comprovantesRoutes from './routes/comprovantesRoutes.js';
 import { categoriasRoutes, formasRoutes, usuariosRoutes } from './routes/cadastrosRoutes.js';
 import financialRoutes from './routes/financialRoutes.js';
+import alertasRoutes from './routes/alertasRoutes.js';
 
 // O app fica separado do listen() para os testes automatizados conseguirem usá-lo.
 const app = express();
@@ -49,6 +50,7 @@ app.use('/usuarios', usuariosRoutes);
 app.use('/frota', frotaRoutes);
 app.use('/comprovantes', comprovantesRoutes);
 app.use('/financial', financialRoutes);
+app.use('/alertas', alertasRoutes);
 
 app.use((req, res) => res.status(404).json({ sucesso: false, erro: 'Rota não encontrada.' }));
 

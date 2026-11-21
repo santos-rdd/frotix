@@ -402,3 +402,334 @@ test('tipo de arquivo não aceito é recusado', async () => {
   form.append('comprovante', new Blob(['oi'], { type: 'text/plain' }), 'a.txt');
   assert.equal((await chamar('POST', '/comprovantes/upload', { token: T.admin, form })).status, 400);
 });
+
+// =============================================================================
+// Funcionalidades novas (branch feature/funcionalidades-faltando)
+// =============================================================================
+
+const diaBr = (dias) => {
+  const d = new Date(Date.now() + dias * 86400000);
+  return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+};
+const diaIso = (dias) => new Date(Date.now() + dias * 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+const novoLancamento = async (tk, corpo) => {
+  const r = await chamar('POST', '/financeiro/transacoes', { token: tk, corpo: { descricao: 'Teste', valorParcela: '100', ...corpo } });
+  assert.equal(r.status, 201, JSON.stringify(r.json));
+  return r.json.lancamento;
+};
+
+// ---------------------------------------------------------------- estorno / rollback
+test('estorno: só Admin/Financeiro, exige motivo, não estorna duas vezes e sai das contas', async () => {
+  const antes = await chamar('GET', '/financeiro/resumo-geral', { token: T.admin });
+  const l = await novoLancamento(T.financeiro, { tipo: 'entrada', valorParcela: '1000', idCategoria: CAT_FRETE });
+  const depois = await chamar('GET', '/financeiro/resumo-geral', { token: T.admin });
+  assert.equal(depois.json.totalEntradas, antes.json.totalEntradas + 1000);
+
+  assert.equal((await chamar('POST', `/financeiro/lancamentos/${l.id}/estornar`, { token: T.motorista1, corpo: { motivo: 'erro' } })).status, 403);
+  assert.equal((await chamar('POST', `/financeiro/lancamentos/${l.id}/estornar`, { token: T.financeiro, corpo: {} })).status, 400);
+
+  const r = await chamar('POST', `/financeiro/lancamentos/${l.id}/estornar`, { token: T.financeiro, corpo: { motivo: 'Lançado em dobro' } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.lancamento.status, 'cancelado');
+  assert.equal(r.json.lancamento.cancelamento.motivo, 'Lançado em dobro');
+  const linha = fake.tabelas.lancamentos_financeiros.find((x) => x.id === l.id);
+  assert.equal(linha.cancelado_por, FINANCEIRO);
+
+  assert.equal((await chamar('POST', `/financeiro/lancamentos/${l.id}/estornar`, { token: T.financeiro, corpo: { motivo: 'de novo' } })).status, 409);
+  const final = await chamar('GET', '/financeiro/resumo-geral', { token: T.admin });
+  assert.equal(final.json.totalEntradas, antes.json.totalEntradas);
+
+  const atividades = await chamar('GET', '/resumo/atividades-recentes?limite=50', { token: T.admin });
+  assert.ok(!atividades.json.atividades.some((a) => a.id === l.id));
+});
+
+test('pagar e desfazer pagamento de um lançamento pendente', async () => {
+  const l = await novoLancamento(T.financeiro, { tipo: 'saida', estadoOuStatus: 'pendente', idCategoria: CAT_DIESEL });
+  assert.equal(l.status, 'PENDENTE');
+  assert.equal((await chamar('POST', `/financeiro/lancamentos/${l.id}/pagar`, { token: T.financeiro, corpo: { data: diaIso(5) } })).status, 400);
+  const pago = await chamar('POST', `/financeiro/lancamentos/${l.id}/pagar`, { token: T.financeiro, corpo: {} });
+  assert.equal(pago.status, 200);
+  assert.equal(pago.json.lancamento.status, 'pago');
+  assert.equal((await chamar('POST', `/financeiro/lancamentos/${l.id}/pagar`, { token: T.financeiro })).status, 409);
+  const desfeito = await chamar('POST', `/financeiro/lancamentos/${l.id}/desfazer-pagamento`, { token: T.admin });
+  assert.equal(desfeito.status, 200);
+  assert.equal(desfeito.json.lancamento.status, 'pendente');
+  assert.equal(desfeito.json.lancamento.pagamento, null);
+});
+
+// ---------------------------------------------------------------- dívidas
+test('dívidas: listar, pagar parcela, detalhar e cancelar (rollback das pendentes)', async () => {
+  const r = await chamar('POST', '/financeiro/transacoes', {
+    token: T.financeiro,
+    corpo: { tipo: 'divida', descricao: 'Financiamento caminhão', valorParcela: '2500', quantidadeParcelas: '3', vencimentoPrimeira: diaIso(-40), credor: 'Banco X', idCategoria: CAT_DIESEL },
+  });
+  assert.equal(r.status, 201);
+  const id = r.json.financiamentoId;
+
+  assert.equal((await chamar('GET', '/financeiro/dividas', { token: T.motorista1 })).status, 403);
+  const lista = await chamar('GET', '/financeiro/dividas', { token: T.financeiro });
+  const divida = lista.json.dividas.find((d) => d.id === id);
+  assert.equal(divida.pendentes, 3);
+  assert.equal(divida.valorRestante, 7500);
+  assert.equal(divida.status, 'atrasada'); // a 1ª venceu há 40 dias
+  assert.ok(lista.json.totais.parcelasAtrasadas >= 1);
+
+  const det = await chamar('GET', `/financeiro/dividas/${id}`, { token: T.financeiro });
+  const [p1] = det.json.divida.parcelas;
+  assert.equal(p1.parcela, '1/3');
+  assert.equal(p1.atrasada, true);
+
+  // Parcela não é estornada sozinha.
+  assert.equal((await chamar('POST', `/financeiro/lancamentos/${p1.id}/estornar`, { token: T.financeiro, corpo: { motivo: 'teste' } })).status, 400);
+
+  assert.equal((await chamar('POST', `/financeiro/lancamentos/${p1.id}/pagar`, { token: T.financeiro })).status, 200);
+  const det2 = await chamar('GET', `/financeiro/dividas/${id}`, { token: T.financeiro });
+  assert.equal(det2.json.divida.pagas, 1);
+  assert.equal(det2.json.divida.valorPago, 2500);
+
+  assert.equal((await chamar('POST', `/financeiro/dividas/${id}/cancelar`, { token: T.financeiro, corpo: {} })).status, 400);
+  const canc = await chamar('POST', `/financeiro/dividas/${id}/cancelar`, { token: T.financeiro, corpo: { motivo: 'Renegociada' } });
+  assert.equal(canc.status, 200);
+  assert.equal(canc.json.parcelasCanceladas, 2);
+  const det3 = await chamar('GET', `/financeiro/dividas/${id}`, { token: T.financeiro });
+  assert.equal(det3.json.divida.status, 'cancelada');
+  assert.equal(det3.json.divida.pagas, 1); // a paga continua no histórico
+  assert.equal((await chamar('POST', `/financeiro/dividas/${id}/cancelar`, { token: T.financeiro, corpo: { motivo: 'de novo' } })).status, 409);
+});
+
+test('resumo geral soma o valor da parcela (sem dividir de novo pelo total)', async () => {
+  const antes = await chamar('GET', '/financeiro/resumo-geral', { token: T.admin });
+  await chamar('POST', '/financeiro/transacoes', {
+    token: T.financeiro,
+    corpo: { tipo: 'divida', descricao: 'Pneus', valorParcela: '600', quantidadeParcelas: '2', vencimentoPrimeira: diaIso(10), idCategoria: CAT_DIESEL },
+  });
+  const depois = await chamar('GET', '/financeiro/resumo-geral', { token: T.admin });
+  assert.equal(Number((depois.json.detalhes.dividasPendentes - antes.json.detalhes.dividasPendentes).toFixed(2)), 1200);
+});
+
+// ---------------------------------------------------------------- previsão e fluxo
+test('previsão de caixa: saldo atual, meses e permissão', async () => {
+  assert.equal((await chamar('GET', '/financeiro/previsao', { token: T.motorista1 })).status, 403);
+  assert.equal((await chamar('GET', '/financeiro/previsao', { token: T.gestor })).status, 403);
+  const r = await chamar('GET', '/financeiro/previsao?meses=4', { token: T.financeiro });
+  assert.equal(r.status, 200);
+  const { previsao } = r.json;
+  assert.equal(previsao.meses.length, 4);
+  // saldo projetado = saldo atual + resultado acumulado
+  const acumulado = previsao.meses.reduce((s, m) => s + m.resultado, previsao.saldoAtual);
+  assert.equal(Number(acumulado.toFixed(2)), previsao.saldoFinal);
+  assert.match(previsao.meses[0].rotulo, /^[A-Z][a-z]{2}\/\d{2}$/);
+});
+
+test('fluxo mensal devolve entradas e saídas pagas dos últimos meses', async () => {
+  const r = await chamar('GET', '/financeiro/fluxo-mensal?meses=3', { token: T.admin });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.meses.length, 3);
+  const atual = r.json.meses[2];
+  assert.ok(atual.entradas >= 5000); // l1 (frete pago hoje)
+});
+
+// ---------------------------------------------------------------- extrato
+test('extrato: motorista vê só os dele; filtros e validação', async () => {
+  const mot = await chamar('GET', '/financeiro/lancamentos?limite=100', { token: T.motorista1 });
+  assert.equal(mot.status, 200);
+  assert.ok(mot.json.lancamentos.length > 0);
+  const donos = new Set(fake.tabelas.lancamentos_financeiros.filter((l) => l.id_usuario === MOTORISTA_1).map((l) => l.id));
+  assert.ok(mot.json.lancamentos.every((l) => donos.has(l.id)));
+
+  const adm = await chamar('GET', '/financeiro/lancamentos?tipo=divida&limite=100', { token: T.admin });
+  assert.ok(adm.json.lancamentos.length >= 5);
+  assert.ok(adm.json.lancamentos.every((l) => l.tipo === 'divida'));
+
+  const diesel = await chamar('GET', '/financeiro/lancamentos?busca=diesel', { token: T.admin });
+  assert.ok(diesel.json.lancamentos.some((l) => l.id === 'l2'));
+  assert.equal(diesel.json.lancamentos.find((l) => l.id === 'l2').viagem.label.startsWith('São Paulo → BH'), true);
+
+  assert.equal((await chamar('GET', '/financeiro/lancamentos?tipo=xyz', { token: T.admin })).status, 400);
+  assert.equal((await chamar('GET', '/financeiro/lancamentos?inicio=21/11/2026', { token: T.admin })).status, 400);
+});
+
+// ---------------------------------------------------------------- offline (idCliente) e vínculo com viagem
+test('lançamento reenviado com o mesmo idCliente não duplica (modo offline)', async () => {
+  const idCliente = '11111111-2222-4333-8444-555555555555';
+  const corpo = { tipo: 'saida', descricao: 'Pedágio offline', valorParcela: '12,50', idCategoria: CAT_DIESEL, idViagem: 'v3', idCliente };
+  const a = await chamar('POST', '/financeiro/transacoes', { token: T.motorista1, corpo });
+  assert.equal(a.status, 201);
+  const b = await chamar('POST', '/financeiro/transacoes', { token: T.motorista1, corpo });
+  assert.equal(b.status, 200);
+  assert.equal(b.json.duplicado, true);
+  assert.equal(fake.tabelas.lancamentos_financeiros.filter((l) => l.id_local === idCliente).length, 1);
+  assert.equal((await chamar('POST', '/financeiro/transacoes', { token: T.motorista1, corpo: { ...corpo, idCliente: 'abc' } })).status, 400);
+});
+
+test('motorista não liga lançamento à viagem de outro motorista', async () => {
+  const r = await chamar('POST', '/financeiro/transacoes', {
+    token: T.motorista1, corpo: { tipo: 'saida', descricao: 'X', valorParcela: '10', idViagem: 'v2' },
+  });
+  assert.equal(r.status, 403);
+  const inexistente = await chamar('POST', '/financeiro/transacoes', {
+    token: T.motorista1, corpo: { tipo: 'saida', descricao: 'X', valorParcela: '10', idViagem: 'nao-existe' },
+  });
+  assert.equal(inexistente.status, 400);
+});
+
+// ---------------------------------------------------------------- alertas
+test('alertas: financeiro vê os financeiros, gestor os de frota, motorista nenhum', async () => {
+  await novoLancamento(T.financeiro, { tipo: 'saida', estadoOuStatus: 'pendente', data: diaIso(-3), idCategoria: CAT_DIESEL, descricao: 'Boleto vencido' });
+  assert.equal((await chamar('GET', '/alertas', { token: T.motorista1 })).status, 403);
+
+  const fin = await chamar('GET', '/alertas', { token: T.financeiro });
+  assert.equal(fin.status, 200);
+  assert.ok(fin.json.alertas.length > 0);
+  assert.ok(fin.json.alertas.every((a) => a.area === 'financeiro'));
+  assert.ok(fin.json.alertas.some((a) => a.id === 'contas-vencidas'));
+
+  await chamar('POST', '/frota/manutencoes', { token: T.gestor, corpo: { veiculoId: VEICULO, tipo: 'revisao', data: diaBr(-2), oficina: 'Oficina Atrasada' } });
+  const ges = await chamar('GET', '/alertas', { token: T.gestor });
+  assert.ok(ges.json.alertas.every((a) => a.area === 'frota'));
+  assert.ok(ges.json.alertas.some((a) => a.id.startsWith('manutencao-atrasada')));
+  // a ordem vai do mais grave para o menos grave
+  const niveis = { critico: 0, atencao: 1, info: 2 };
+  const adm = await chamar('GET', '/alertas', { token: T.admin });
+  for (let i = 1; i < adm.json.alertas.length; i++) {
+    assert.ok(niveis[adm.json.alertas[i - 1].nivel] <= niveis[adm.json.alertas[i].nivel]);
+  }
+});
+
+// ---------------------------------------------------------------- edição e exclusão na frota
+test('veículos: editar com validação e desativar', async () => {
+  const novo = await chamar('POST', '/frota/veiculos', { token: T.gestor, corpo: { modelo: 'Volvo FH', placa: 'XYZ1A23', hodometro: 1000 } });
+  assert.equal(novo.status, 201);
+  const id = novo.json.veiculo.id;
+
+  assert.equal((await chamar('PUT', `/frota/veiculos/${id}`, { token: T.motorista1, corpo: { modelo: 'X' } })).status, 403);
+  assert.equal((await chamar('PUT', `/frota/veiculos/${id}`, { token: T.gestor, corpo: { placa: '123' } })).status, 400);
+  assert.equal((await chamar('PUT', `/frota/veiculos/${id}`, { token: T.gestor, corpo: { placa: 'ABC-1234' } })).status, 409);
+  assert.equal((await chamar('PUT', `/frota/veiculos/${id}`, { token: T.gestor, corpo: {} })).status, 400);
+  const ok = await chamar('PUT', `/frota/veiculos/${id}`, { token: T.gestor, corpo: { modelo: 'Volvo FH 540', consumoMedio: 2.6, status: 'manutencao' } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.veiculo.modelo, 'Volvo FH 540');
+  assert.equal(ok.json.veiculo.status, 'manutencao');
+
+  // O hodômetro não volta para trás de uma viagem registrada.
+  assert.equal((await chamar('PUT', `/frota/veiculos/${VEICULO}`, { token: T.gestor, corpo: { hodometro: 100 } })).status, 400);
+
+  assert.equal((await chamar('DELETE', `/frota/veiculos/${id}`, { token: T.gestor })).status, 200);
+  assert.equal((await chamar('DELETE', `/frota/veiculos/${id}`, { token: T.gestor })).status, 404);
+  const lista = await chamar('GET', '/frota/veiculos', { token: T.gestor });
+  assert.ok(!lista.json.veiculos.some((v) => v.id === id));
+});
+
+test('rotas agendadas: editar e excluir; viagens abertas/concluídas não', async () => {
+  const criada = await chamar('POST', '/frota/rotas', {
+    token: T.gestor,
+    corpo: { origem: 'Varginha', destino: 'Três Corações', veiculoId: VEICULO, motoristaId: MOTORISTA_1, dataSaida: diaBr(2), receita: 900 },
+  });
+  assert.equal(criada.status, 201);
+  const id = criada.json.rota.id;
+
+  // O veículo com rota agendada não pode ser desativado.
+  assert.equal((await chamar('DELETE', `/frota/veiculos/${VEICULO}`, { token: T.gestor })).status, 400);
+
+  assert.equal((await chamar('PUT', `/frota/rotas/${id}`, { token: T.motorista1, corpo: { receita: 1 } })).status, 403);
+  assert.equal((await chamar('PUT', `/frota/rotas/${id}`, { token: T.gestor, corpo: { destino: 'varginha' } })).status, 400);
+  assert.equal((await chamar('PUT', `/frota/rotas/${id}`, { token: T.gestor, corpo: { dataSaida: diaBr(-1) } })).status, 400);
+  assert.equal((await chamar('PUT', `/frota/rotas/${id}`, { token: T.gestor, corpo: { motoristaId: GESTOR } })).status, 400);
+  const ed = await chamar('PUT', `/frota/rotas/${id}`, { token: T.gestor, corpo: { receita: 1200, dataSaida: diaBr(3) } });
+  assert.equal(ed.status, 200);
+  assert.equal(fake.tabelas.viagens.find((v) => v.id === id).receita_prevista, 1200);
+
+  assert.equal((await chamar('PUT', '/frota/rotas/v1', { token: T.gestor, corpo: { receita: 1 } })).status, 400);
+  assert.equal((await chamar('DELETE', '/frota/rotas/v1', { token: T.gestor })).status, 400);
+
+  assert.equal((await chamar('DELETE', `/frota/rotas/${id}`, { token: T.gestor })).status, 200);
+  assert.ok(!fake.tabelas.viagens.some((v) => v.id === id));
+});
+
+test('manutenções: editar e excluir só enquanto agendada', async () => {
+  const r = await chamar('POST', '/frota/manutencoes', { token: T.gestor, corpo: { veiculoId: VEICULO, tipo: 'pneus', data: diaBr(5), oficina: 'Borracharia' } });
+  const id = r.json.manutencao.id;
+  const ed = await chamar('PUT', `/frota/manutencoes/${id}`, { token: T.gestor, corpo: { custo: 1800, oficina: 'Borracharia Sul' } });
+  assert.equal(ed.status, 200);
+  assert.equal(ed.json.manutencao.custo, 1800);
+  assert.equal((await chamar('PUT', `/frota/manutencoes/${id}`, { token: T.gestor, corpo: { tipo: 'xyz' } })).status, 400);
+
+  await chamar('POST', `/frota/manutencoes/${id}/avancar`, { token: T.gestor });
+  assert.equal((await chamar('DELETE', `/frota/manutencoes/${id}`, { token: T.gestor })).status, 400);
+  await chamar('POST', `/frota/manutencoes/${id}/avancar`, { token: T.gestor });
+  // Concluída: custo pode mudar, a data não.
+  assert.equal((await chamar('PUT', `/frota/manutencoes/${id}`, { token: T.gestor, corpo: { data: diaBr(6) } })).status, 400);
+  assert.equal((await chamar('PUT', `/frota/manutencoes/${id}`, { token: T.gestor, corpo: { custo: 1950 } })).status, 200);
+
+  const outra = await chamar('POST', '/frota/manutencoes', { token: T.gestor, corpo: { veiculoId: VEICULO, tipo: 'freios', data: diaBr(9), oficina: 'X' } });
+  assert.equal((await chamar('DELETE', `/frota/manutencoes/${outra.json.manutencao.id}`, { token: T.gestor })).status, 200);
+});
+
+// ---------------------------------------------------------------- abastecimentos e consumo
+test('abastecimentos: motorista registra, gera saída na viagem e calcula o consumo', async () => {
+  const hodo = Number(fake.tabelas.veiculos.find((v) => v.id === VEICULO).hodometro);
+  const corpo = (km, litros, extra = {}) => ({ veiculoId: VEICULO, viagemId: 'v1', data: diaBr(0), litros, valor: litros * 6, hodometro: km, posto: 'Posto BR', ...extra });
+
+  assert.equal((await chamar('POST', '/frota/abastecimentos', { token: T.motorista2, corpo: corpo(hodo + 10, 100) })).status, 403);
+  assert.equal((await chamar('POST', '/frota/abastecimentos', { token: T.motorista1, corpo: corpo(hodo + 10, 0) })).status, 400);
+  assert.equal((await chamar('POST', '/frota/abastecimentos', { token: T.motorista1, corpo: { ...corpo(hodo + 10, 100), data: diaBr(3) } })).status, 400);
+
+  const a1 = await chamar('POST', '/frota/abastecimentos', { token: T.motorista1, corpo: corpo(hodo + 10, 300) });
+  assert.equal(a1.status, 201, JSON.stringify(a1.json));
+  assert.equal(a1.json.consumoMedio, null); // um abastecimento só não dá consumo
+
+  const saida = fake.tabelas.lancamentos_financeiros.find((l) => l.descricao === 'Abastecimento ABC-1234 · Posto BR');
+  assert.equal(saida.tipo, 'SAIDA');
+  assert.equal(saida.id_viagem, 'v1');
+  assert.equal(saida.id_categoria, CAT_DIESEL);
+
+  assert.equal((await chamar('POST', '/frota/abastecimentos', { token: T.motorista1, corpo: corpo(hodo + 5, 50) })).status, 400);
+
+  const idCliente = '99999999-2222-4333-8444-555555555555';
+  const a2 = await chamar('POST', '/frota/abastecimentos', { token: T.motorista1, corpo: corpo(hodo + 760, 250, { idCliente }) });
+  assert.equal(a2.status, 201);
+  assert.equal(a2.json.consumoMedio, 3); // 750 km / 250 l
+  const repetido = await chamar('POST', '/frota/abastecimentos', { token: T.motorista1, corpo: corpo(hodo + 760, 250, { idCliente }) });
+  assert.equal(repetido.json.duplicado, true);
+
+  const veics = await chamar('GET', '/frota/veiculos', { token: T.gestor });
+  const v = veics.json.veiculos.find((x) => x.id === VEICULO);
+  assert.equal(v.consumoCalculado, 3);
+  assert.equal(v.consumoMedio, 3);
+  assert.equal(v.hodometro, hodo + 760);
+
+  const doMot2 = await chamar('GET', '/frota/abastecimentos', { token: T.motorista2 });
+  assert.equal(doMot2.json.abastecimentos.length, 0);
+  const todos = await chamar('GET', `/frota/abastecimentos?veiculoId=${VEICULO}`, { token: T.gestor });
+  assert.equal(todos.json.abastecimentos.length, 2);
+  assert.equal(todos.json.consumoMedio, 3);
+});
+
+// ---------------------------------------------------------------- relatório
+test('relatório traz rentabilidade por viagem, ranking por rota e fluxo mensal', async () => {
+  const r = await chamar('GET', '/frota/relatorio?dias=tudo', { token: T.gestor });
+  assert.equal(r.status, 200);
+  const rel = r.json.relatorio;
+  assert.equal(rel.porMes.length, 6);
+  assert.ok(rel.rankingRotas.length >= 1);
+  const sp = rel.rankingRotas.find((x) => x.trajeto === 'São Paulo → BH');
+  assert.ok(sp);
+  assert.ok(sp.custos > 0);
+
+  const rotas = await chamar('GET', '/frota/rotas', { token: T.gestor });
+  const v1 = rotas.json.rotas.find((x) => x.id === 'v1');
+  assert.equal(v1.custos, Number(v1.despesas.reduce((s, d) => s + d.valor, 0).toFixed(2)));
+  assert.equal(v1.saldo, Number((v1.receita - v1.custos).toFixed(2)));
+  assert.ok(v1.custoKm > 0);
+});
+
+test('viagens para vincular: motorista vê as dele, financeiro vê todas', async () => {
+  const mot = await chamar('GET', '/financeiro/viagens-vinculo', { token: T.motorista1 });
+  assert.equal(mot.status, 200);
+  const minhas = fake.tabelas.viagens.filter((v) => v.id_motorista === MOTORISTA_1).length;
+  assert.equal(mot.json.viagens.length, minhas);
+  const fin = await chamar('GET', '/financeiro/viagens-vinculo', { token: T.financeiro });
+  assert.equal(fin.json.viagens.length, fake.tabelas.viagens.length);
+  assert.equal(fin.json.viagens[0].status, 'em_andamento'); // em andamento primeiro
+  assert.match(fin.json.viagens[0].label, / → /);
+});

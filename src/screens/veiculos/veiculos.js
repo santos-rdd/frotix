@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 
 import ScreenHeader from '../../components/screenHeader/screenHeader.js';
 import FilterSearchBar from '../../components/filterSearchBar/filterSearchBar.js';
@@ -18,6 +18,7 @@ const normalizar = (texto) =>
 
 export default function Veiculos({ navigation, route }) {
   const usuario = route?.params?.usuario;
+  const gestao = usuario?.role === 1 || usuario?.role === 2;
   const [filtro, setFiltro] = useState(route?.params?.filtroInicial || 'todos');
   const [busca, setBusca] = useState('');
 
@@ -97,6 +98,15 @@ export default function Veiculos({ navigation, route }) {
                   <View style={[styles.selo, { backgroundColor: status.cor }]}>
                     <Text style={styles.seloTexto}>{status.label.toUpperCase()}</Text>
                   </View>
+                  {gestao ? (
+                    <TouchableOpacity
+                      style={styles.editar}
+                      hitSlop={10}
+                      onPress={() => navigation.navigate('CadastroVeiculo', { usuario, veiculo: v })}
+                    >
+                      <Feather name="edit-2" size={16} color="#FFF" />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
 
                 <View style={styles.hodometroLinha}>
@@ -110,10 +120,21 @@ export default function Veiculos({ navigation, route }) {
                   </View>
                 </View>
 
+                {v.consumoMedio ? (
+                  <Text style={styles.consumo}>
+                    Consumo: {String(v.consumoMedio).replace('.', ',')} km/l{v.consumoCalculado ? ' (real)' : ' (informado)'}
+                  </Text>
+                ) : null}
+
                 <View style={styles.divisor} />
-                <TouchableOpacity onPress={acao.onPress}>
-                  <Text style={styles.atalho}>{acao.label} {'>'}</Text>
-                </TouchableOpacity>
+                <View style={styles.atalhosLinha}>
+                  <TouchableOpacity onPress={acao.onPress}>
+                    <Text style={styles.atalho}>{acao.label} {'>'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => navigation.navigate('Abastecimentos', { usuario, veiculoId: v.id })}>
+                    <Text style={styles.atalho}>Abastecimentos {'>'}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           );
@@ -168,5 +189,8 @@ const styles = StyleSheet.create({
   custoRotulo: { color: colors.primaryBlue },
   divisor: { height: 2, backgroundColor: '#AAA', marginTop: 4, marginBottom: 6 },
   atalho: { color: '#FFF', fontSize: 12, textAlign: 'right' },
+  atalhosLinha: { flexDirection: 'row', justifyContent: 'space-between' },
+  editar: { marginLeft: 8, padding: 4 },
+  consumo: { color: '#CCC', fontSize: 11, marginTop: 4 },
   vazio: { color: colors.textMuted, textAlign: 'center', marginVertical: 20 },
 });

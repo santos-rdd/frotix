@@ -12,7 +12,7 @@ import {
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import GOOGLE_CONFIG from '../../config/google.js';
 import { API_URL } from '../../config/api.js';
-import { salvarToken } from '../../services/api.js';
+import { salvarSessao } from '../../services/api.js';
 import { CommonActions } from '@react-navigation/native';
 
 // Depois do login a Home vira a única tela da pilha: assim o "voltar" do Android
@@ -58,16 +58,18 @@ const logIn = async (idToken, googleData) => {
 
         if (response.ok) {
             console.log('Login Google autorizado!', data.usuario);
-            if (data.token) {
-                await salvarToken(data.token);
-            }
-
-            irParaHome(navigation, {
+            const paramsHome = {
                 auth: {
                     user: googleData?.user || {}
                 },
                 bankUser: data.usuario
-            });
+            };
+            // Guarda o token e os dados da Home: na próxima vez o app já abre logado.
+            if (data.token) {
+                await salvarSessao(data.token, paramsHome);
+            }
+
+            irParaHome(navigation, paramsHome);
 
         } else {
             console.log('Acesso negado:', data.erro);
@@ -162,13 +164,13 @@ async function singIn() {
 
       if (response.ok) {
           console.log('Login por email autorizado!', data.usuario);
+          // auth: null de propósito, para não herdar nome/foto do Google de um login anterior.
+          const paramsHome = { auth: null, bankUser: data.usuario };
           if (data.token) {
-              await salvarToken(data.token);
+              await salvarSessao(data.token, paramsHome);
           }
 
-          irParaHome(navigation, {
-              bankUser: data.usuario
-          });
+          irParaHome(navigation, paramsHome);
       } else {
         Alert.alert("Acesso Negado", data.erro || "Credenciais inválidas.");
       }

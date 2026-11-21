@@ -13,6 +13,8 @@ import { STATUS_ROTA, formatarKm, formatarMoeda } from '../../constants/frota.js
 import { relatorio as buscarRelatorio } from '../../services/frotix.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
+import FluxoMensalChart from '../../components/fluxoMensalChart/fluxoMensalChart.js';
+import { gerarXlsx } from '../../utils/xlsx.js';
 
 const PERIODOS = [
   { id: '30', label: 'Últimos 30 dias', dias: 30 },
@@ -23,7 +25,7 @@ const PERIODOS = [
 // Relatório vazio, mostrado enquanto os dados do servidor não chegam.
 const RELATORIO_VAZIO = {
   rotasPeriodo: [], manutencoesPeriodo: [], receita: 0, despesasViagem: 0, custoManutencao: 0,
-  despesas: 0, saldo: 0, margem: 0, kmRodados: 0, custoKm: 0, porStatus: [], ranking: [],
+  despesas: 0, saldo: 0, margem: 0, kmRodados: 0, custoKm: 0, porStatus: [], ranking: [], rankingRotas: [], porMes: [],
 };
 
 // Põe nome e cor de cada status (o backend manda só o id e o total).
@@ -45,6 +47,12 @@ function gerarHtml(rel, periodoLabel) {
     .join('');
   const linhasRanking = rel.ranking
     .map((v, i) => `<tr><td>${i + 1}º</td><td>${v.modelo}</td><td>${v.placa}</td><td>${formatarMoeda(v.custoKm)} / km</td></tr>`)
+    .join('');
+  const linhasRankingRotas = (rel.rankingRotas || [])
+    .map((r, i) => `<tr><td>${i + 1}º</td><td>${r.trajeto}</td><td>${r.viagens}</td><td>${formatarMoeda(r.saldo)}</td><td>${r.margem}%</td><td>${formatarMoeda(r.custoKm)} / km</td></tr>`)
+    .join('');
+  const linhasMes = (rel.porMes || [])
+    .map((m) => `<tr><td>${m.rotulo}</td><td>${formatarMoeda(m.entradas)}</td><td>${formatarMoeda(m.saidas)}</td><td>${formatarMoeda(m.resultado)}</td></tr>`)
     .join('');
 
   return `
@@ -81,41 +89,94 @@ function gerarHtml(rel, periodoLabel) {
     <table><tr><th>Data</th><th>Rota</th><th>Placa</th><th>Status</th><th>Receita</th><th>Despesas</th></tr>${linhasRotas}</table>
     <h3>Ranking de eficiência (custo por km)</h3>
     <table><tr><th>#</th><th>Modelo</th><th>Placa</th><th>Custo</th></tr>${linhasRanking}</table>
+    <h3>Ranking por rota (margem)</h3>
+    <table><tr><th>#</th><th>Trajeto</th><th>Viagens</th><th>Saldo</th><th>Margem</th><th>Custo</th></tr>${linhasRankingRotas}</table>
+    <h3>Fluxo de caixa mensal (pago/recebido)</h3>
+    <table><tr><th>Mês</th><th>Entradas</th><th>Saídas</th><th>Resultado</th></tr>${linhasMes}</table>
   </body></html>`;
 }
 
-// CSV com ";" e BOM: o Excel em português abre direto, com acentos e colunas certas.
-function gerarCsv(rel, periodoLabel) {
-  const numero = (v) => Number(v).toFixed(2).replace('.', ',');
-  const linhas = [
-    ['Relatório FrotiX', periodoLabel],
-    [],
-    ['Resumo'],
-    ['Receita', numero(rel.receita)],
-    ['Despesas lançadas', numero(rel.despesasViagem)],
-    ['Manutenção', numero(rel.custoManutencao)],
-    ['Saldo líquido', numero(rel.saldo)],
-    ['Margem (%)', rel.margem],
-    ['Km rodados', rel.kmRodados],
-    ['Custo por km', numero(rel.custoKm)],
-    [],
-    ['Data', 'Origem', 'Destino', 'Placa', 'Motorista', 'Status', 'Receita', 'Despesas'],
-    ...rel.rotasPeriodo.map((r) => [
-      r.dataInicial || '',
-      r.origem,
-      r.destino,
-      r.placa || '',
-      r.motorista,
-      STATUS_ROTA[r.status].label,
-      numero(r.receita),
-      numero(r.despesas.reduce((s, d) => s + d.valor, 0)),
-    ]),
-  ];
-  const escapar = (c) => {
-    const t = String(c ?? '');
-    return /[;"\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
-  };
-  return '﻿' + linhas.map((l) => l.map(escapar).join(';')).join('\n');
+// Planilha Excel (.xlsx) com uma aba para cada parte do relatório.
+function gerarPlanilha(rel, periodoLabel) {
+  const t = (v) => ({ v, negrito: true });
+  const moeda = (v) => ({ v: Number(v) || 0, moeda: true });
+  return gerarXlsx([
+    {
+      nome: 'Resumo',
+      larguras: [26, 18],
+      linhas: [
+        [t('Relatório FrotiX'), periodoLabel],
+        ['Gerado em', new Date().toLocaleString('pt-BR')],
+        [],
+        [t('Financeiro')],
+        ['Receita', moeda(rel.receita)],
+        ['Despesas lançadas', moeda(rel.despesasViagem)],
+        ['Manutenção', moeda(rel.custoManutencao)],
+        ['Despesas totais', moeda(rel.despesas)],
+        [t('Saldo líquido'), { ...moeda(rel.saldo), negrito: true }],
+        ['Margem (%)', rel.margem],
+        [],
+        [t('Operacional')],
+        ['Km rodados', Number(rel.kmRodados) || 0],
+        ['Custo por km', moeda(rel.custoKm)],
+        ['Rotas no período', rel.rotasPeriodo.length],
+      ],
+    },
+    {
+      nome: 'Rotas',
+      larguras: [12, 22, 22, 11, 20, 13, 14, 14, 14, 10],
+      linhas: [
+        ['Data', 'Origem', 'Destino', 'Placa', 'Motorista', 'Status', 'Receita', 'Custos', 'Saldo', 'Km'].map(t),
+        ...rel.rotasPeriodo.map((r) => {
+          const custos = r.custos ?? r.despesas.reduce((s, d) => s + d.valor, 0);
+          return [
+            r.dataInicial || '',
+            r.origem,
+            r.destino,
+            r.placa || '',
+            r.motorista,
+            STATUS_ROTA[r.status]?.label || r.status,
+            moeda(r.receita),
+            moeda(custos),
+            moeda(r.saldo ?? r.receita - custos),
+            Number(r.kmRodados) || 0,
+          ];
+        }),
+      ],
+    },
+    {
+      nome: 'Ranking veículos',
+      larguras: [6, 22, 12, 14, 14, 12],
+      linhas: [
+        ['#', 'Modelo', 'Placa', 'Custo/km', 'Gastos', 'Km'].map(t),
+        ...rel.ranking.map((v, i) => [i + 1, v.modelo, v.placa, moeda(v.custoKm), moeda(v.gastos), Number(v.kmRodados) || 0]),
+      ],
+    },
+    {
+      nome: 'Ranking rotas',
+      larguras: [6, 34, 10, 14, 14, 14, 10, 12],
+      linhas: [
+        ['#', 'Trajeto', 'Viagens', 'Receita', 'Custos', 'Saldo', 'Margem %', 'Custo/km'].map(t),
+        ...(rel.rankingRotas || []).map((r, i) => [i + 1, r.trajeto, r.viagens, moeda(r.receita), moeda(r.custos), moeda(r.saldo), r.margem, moeda(r.custoKm)]),
+      ],
+    },
+    {
+      nome: 'Fluxo mensal',
+      larguras: [10, 16, 16, 16],
+      linhas: [
+        ['Mês', 'Entradas', 'Saídas', 'Resultado'].map(t),
+        ...(rel.porMes || []).map((m) => [m.rotulo, moeda(m.entradas), moeda(m.saidas), moeda(m.resultado)]),
+      ],
+    },
+    {
+      nome: 'Manutenções',
+      larguras: [12, 20, 24, 14, 14],
+      linhas: [
+        ['Data', 'Tipo', 'Oficina', 'Status', 'Custo'].map(t),
+        ...rel.manutencoesPeriodo.map((m) => [m.data, m.tipo, m.oficina, m.status, moeda(m.custo)]),
+      ],
+    },
+  ]);
 }
 
 /**
@@ -178,11 +239,15 @@ export default function Relatorios({ navigation, route }) {
   const exportarExcel = async () => {
     setExportando('excel');
     try {
-      const arquivo = new File(Paths.cache, nomeArquivo('csv'));
+      const arquivo = new File(Paths.cache, nomeArquivo('xlsx'));
       if (arquivo.exists) arquivo.delete();
       arquivo.create();
-      arquivo.write(gerarCsv(rel, periodoAtual.label));
-      await compartilhar(arquivo.uri, 'text/csv', 'public.comma-separated-values-text');
+      arquivo.write(gerarPlanilha(rel, periodoAtual.label));
+      await compartilhar(
+        arquivo.uri,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'org.openxmlformats.spreadsheetml.sheet'
+      );
     } catch (erro) {
       Alert.alert('Erro', `Não foi possível gerar a planilha: ${erro.message || erro}`);
     } finally {
@@ -274,6 +339,29 @@ export default function Relatorios({ navigation, route }) {
           ))}
         </View>
 
+        <View style={styles.cardEscuro}>
+          <Text style={styles.cardEscuroTitulo}>Ranking por rota</Text>
+          {(rel.rankingRotas || []).length === 0 ? (
+            <Text style={styles.vazio}>Nenhuma viagem concluída no período.</Text>
+          ) : (
+            rel.rankingRotas.map((r, i) => (
+              <View key={r.trajeto} style={styles.rankingLinha}>
+                <Text style={styles.rankingPosicao}>{i + 1}º</Text>
+                <View style={styles.flex}>
+                  <Text style={styles.rankingModelo}>{r.trajeto}</Text>
+                  <Text style={styles.rankingPlaca}>{r.viagens} viagem(ns) · {formatarMoeda(r.custoKm)}/km</Text>
+                </View>
+                <View style={styles.alinhaDireita}>
+                  <Text style={[styles.rankingCusto, { color: r.saldo >= 0 ? colors.greenSuccess : colors.redDanger }]}>{r.margem}%</Text>
+                  <Text style={styles.rankingPlaca}>{formatarMoeda(r.saldo)}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        <FluxoMensalChart meses={rel.porMes} titulo="Fluxo de caixa (últimos 6 meses)" />
+
         <Text style={styles.secao}>Exportar</Text>
         <View style={styles.exportar}>
           <TouchableOpacity style={[styles.botaoExportar, styles.botaoPdf]} onPress={exportarPdf} disabled={!!exportando}>
@@ -299,7 +387,7 @@ export default function Relatorios({ navigation, route }) {
         </View>
         <View style={styles.aviso}>
           <Feather name="info" size={14} color={colors.textMuted} />
-          <Text style={styles.avisoTexto}>A planilha é gerada em CSV, que abre direto no Excel.</Text>
+          <Text style={styles.avisoTexto}>A planilha sai em .xlsx (Excel), com uma aba para cada parte do relatório.</Text>
         </View>
 
         <VoltarButton navigation={navigation} />
@@ -369,4 +457,6 @@ const styles = StyleSheet.create({
   botaoExportarTexto: { color: '#FFF', fontSize: 15, fontWeight: '700' },
   aviso: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 18, marginTop: 10 },
   avisoTexto: { color: colors.textMuted, fontSize: 12, flex: 1 },
+  vazio: { color: colors.textMuted, fontSize: 12 },
+  alinhaDireita: { alignItems: 'flex-end' },
 });

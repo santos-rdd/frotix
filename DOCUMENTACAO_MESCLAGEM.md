@@ -1,5 +1,7 @@
 # 📘 Documentação Detalhada da Mesclagem (Front-End) - FrotiX
 
+> **Atualização 21/11/2026:** as telas `adminHomeScreen`, `gestorHomeScreen`, `financeiroHomeScreen`, `motoristaHomeScreen` e `admFormaPag`, e os componentes `rotasSection`, `userControlSection`, `cadastrarUsuario`, `gerenciarUsuariosGrid`, `actionGrid`, `generalGrafo` e `recentActivityList` foram removidos: nenhuma tela usava. A Home de cada perfil está em `src/screens/home/homePage.js` e `src/screens/gestorHome/gestorHome.js`. Este documento fica como histórico da mesclagem.
+
 Este documento explica detalhadamente como o projeto **FrotiX** recebeu e integrou as telas vindas da pasta `TelasFrotix-main`, respeitando estritamente a arquitetura de pastas, o padrão de código em JavaScript puro (`.js`) e as dependências já existentes no projeto original.
 
 ---

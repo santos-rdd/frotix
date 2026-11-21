@@ -5,10 +5,12 @@ import {
   View,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { CommonActions } from '@react-navigation/native';
 import { limparSessao } from '../../services/api.js';
+import { contarPendentes, descartarTudo } from '../../services/offline.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation';
 
 
@@ -18,12 +20,14 @@ export default function UserProfileScreen({ navigation, route }) {
   const userPhoto = auth?.user?.photo || bankUser?.fotoUrl || usuario?.foto;
   const PERFIS = { 1: 'Admin', 2: 'Gestor de Frota', 3: 'Financeiro', 4: 'Motorista' };
 
-  const handleLogout = async () => {
+  const sair = async () => {
     try {
       await GoogleSignin.signOut();
     } catch (error) {
       console.log('Erro ao deslogar do Google:', error);
     }
+    // A fila offline é do usuário que está saindo: não pode ir com o login de outra pessoa.
+    await descartarTudo();
     await limparSessao();
 
     navigation.dispatch(
@@ -31,6 +35,23 @@ export default function UserProfileScreen({ navigation, route }) {
         index: 0,
         routes: [{ name: 'Home' }],
       })
+    );
+  };
+
+  // Avisa se ainda há registros do modo offline que não foram enviados.
+  const handleLogout = async () => {
+    const pendentes = await contarPendentes();
+    if (pendentes === 0) {
+      sair();
+      return;
+    }
+    Alert.alert(
+      'Registros não enviados',
+      `Há ${pendentes} registro(s) feitos sem internet que ainda não foram enviados. Se sair agora, eles serão apagados do celular.`,
+      [
+        { text: 'Ficar', style: 'cancel' },
+        { text: 'Sair e apagar', style: 'destructive', onPress: sair },
+      ]
     );
   };
 

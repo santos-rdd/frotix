@@ -13,6 +13,7 @@ import { formatarMoeda, META_KM_MES } from '../../constants/frota.js';
 import { resumoFrota } from '../../services/frotix.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
+import AlertasCard from '../../components/alertasCard/alertasCard.js';
 
 // Cores do donut conforme o Figma (diferentes dos selos de status das listas).
 const FATIAS = [
@@ -69,6 +70,7 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
     { id: 'viagem', name: 'Registrar\nViagem', icon: <Feather name="navigation" size={24} color="#121212" />, onPress: () => ir('Viagens') },
     { id: 'relatorios', name: 'Relatórios', icon: <Feather name="edit" size={24} color="#121212" />, onPress: () => ir('Relatorios') },
     { id: 'manutencao', name: 'Agendar\nManutenção', icon: <MaterialCommunityIcons name="calendar-clock-outline" size={26} color="#121212" />, onPress: () => ir('Manutencao') },
+    { id: 'abastecimentos', name: 'Abaste-\ncimentos', icon: <MaterialCommunityIcons name="gas-station-outline" size={26} color="#121212" />, onPress: () => ir('Abastecimentos') },
   ];
 
   return (
@@ -173,6 +175,8 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
         <TouchableOpacity activeOpacity={0.85} onPress={() => ir('Relatorios', { periodoInicial: '30' })}>
           <KmGauge valor={Math.round(resumo?.kmRodadosMes || 0)} meta={META_KM_MES} />
         </TouchableOpacity>
+
+        <AlertasCard navigation={navigation} usuario={usuario} />
 
         <TouchableOpacity style={styles.botaoViagens} onPress={() => ir('Viagens', { modo: 'motorista' })}>
           <Text style={styles.botaoViagensTexto}>Minhas Viagens</Text>

@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Alert } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, View, ActivityIndicator } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -24,12 +24,20 @@ import CadastroRota from './src/screens/cadastroRota/cadastroRota.js';
 import Manutencao from './src/screens/manutencao/manutencao.js';
 import Relatorios from './src/screens/relatorios/relatorios.js';
 import Categorias from './src/screens/categorias/categorias.js';
-import { definirAoExpirarSessao } from './src/services/api.js';
+import Extrato from './src/screens/extrato/extrato.js';
+import Dividas from './src/screens/dividas/dividas.js';
+import DetalheDivida from './src/screens/detalheDivida/detalheDivida.js';
+import Abastecimentos from './src/screens/abastecimentos/abastecimentos.js';
+import { definirAoExpirarSessao, carregarSessao } from './src/services/api.js';
+import { iniciarModoOffline } from './src/services/offline.js';
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
 
 export default function App() {
+  // undefined = ainda conferindo; null = sem sessão (abre o onboarding); objeto = entra direto.
+  const [sessao, setSessao] = useState(undefined);
+
   // Se o backend responder 401 (token vencido ou inválido), volta para o login.
   useEffect(() => {
     definirAoExpirarSessao(() => {
@@ -37,17 +45,29 @@ export default function App() {
       Alert.alert('Sessão encerrada', 'Entre novamente para continuar.');
       navigationRef.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }));
     });
+    // Login salvo: se o token ainda vale, abre direto na Home (persistência de sessão).
+    carregarSessao().then(setSessao).catch(() => setSessao(null));
+    // Fila do modo offline do motorista: envia sozinha quando a internet volta.
+    iniciarModoOffline();
   }, []);
+
+  if (sessao === undefined) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#121212', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator color="#FFF" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer ref={navigationRef}>
       <Stack.Navigator 
-        initialRouteName="Home" 
+        initialRouteName={sessao ? 'HomePage' : 'Home'}
         screenOptions={{ headerShown: false }} 
       >
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
-        <Stack.Screen name="HomePage" component={HomePage} />
+        <Stack.Screen name="HomePage" component={HomePage} initialParams={sessao || undefined} />
         <Stack.Screen name="LoginEmail" component={ForgotPasswordScreen} />
         <Stack.Screen name="VerifyCodeScreen" component={VerifyCodeScreen} />
         <Stack.Screen name="userProfile" component={UserProfileScreen} />
@@ -66,6 +86,10 @@ export default function App() {
         <Stack.Screen name="Manutencao" component={Manutencao} />
         <Stack.Screen name="Relatorios" component={Relatorios} />
         <Stack.Screen name="Categorias" component={Categorias} />
+        <Stack.Screen name="Extrato" component={Extrato} />
+        <Stack.Screen name="Dividas" component={Dividas} />
+        <Stack.Screen name="DetalheDivida" component={DetalheDivida} />
+        <Stack.Screen name="Abastecimentos" component={Abastecimentos} />
       </Stack.Navigator>
     </NavigationContainer>
   );

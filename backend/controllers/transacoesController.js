@@ -2,6 +2,8 @@ import supabase from '../database/db.js';
 import { PERFIS } from '../middleware/auth.js';
 import { viagensConcluidasNoPeriodo, somarKm, custoPorKm, arredondar } from '../utils/calculos.js';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const parseValor = (val) => {
   if (typeof val === 'string') {
     return parseFloat(val.replace(',', '.')) || 0;
@@ -55,6 +57,7 @@ const listarAtividadesRecentes = async (req, res) => {
     const lancamentos = (data || []).filter((item) => {
       const tipo = (item.tipo || '').toUpperCase().trim();
       const status = (item.status || '').toUpperCase().trim();
+      if (status === 'CANCELADO') return false; // estornados não aparecem nem mexem no saldo
       if (tipo === 'DIVIDA') return status === 'PAGO';
       return tipo === 'ENTRADA' || tipo === 'SAIDA';
     });
@@ -147,7 +150,8 @@ const cadastrarTransacao = async (req, res) => {
       quantidadeParcelas,
       vencimentoPrimeira,
       valorQuitacaoAntecipada,
-      anexos
+      anexos,
+      idCliente
     } = req.body || {};
 
     const tipoTransacao = String(tipo || actionType || '').toUpperCase().trim();
@@ -169,6 +173,43 @@ const cadastrarTransacao = async (req, res) => {
 
     // Erro I5: antes todo lançamento ia para um id_usuario fixo.
     const usuarioId = req.usuario.id;
+
+    // Modo offline: o app manda um idCliente gerado no celular. Se a internet caiu
+    // depois de salvar e o app reenviar, devolve o mesmo lançamento em vez de duplicar.
+    const idClienteValido = typeof idCliente === 'string' && UUID.test(idCliente) ? idCliente : null;
+    if (idCliente && !idClienteValido) {
+      return res.status(400).json({ sucesso: false, mensagem: 'idCliente inválido.' });
+    }
+    if (idClienteValido) {
+      const { data: existente, error: erroExistente } = await supabase
+        .from('lancamentos_financeiros')
+        .select('*')
+        .eq('id_local', idClienteValido)
+        .limit(1);
+      if (erroExistente) throw erroExistente;
+      if (existente?.length) {
+        return res.status(200).json({
+          sucesso: true,
+          mensagem: 'Lançamento já registrado.',
+          lancamento: existente[0],
+          duplicado: true
+        });
+      }
+    }
+
+    // Vínculo com a viagem: precisa existir e, para o motorista, ser uma viagem dele.
+    if (idViagem) {
+      const { data: viagem, error: erroViagem } = await supabase
+        .from('viagens')
+        .select('id, id_motorista')
+        .eq('id', idViagem)
+        .maybeSingle();
+      if (erroViagem) throw erroViagem;
+      if (!viagem) return res.status(400).json({ sucesso: false, mensagem: 'Viagem não encontrada.' });
+      if (req.usuario.perfil === PERFIS.MOTORISTA && viagem.id_motorista !== usuarioId) {
+        return res.status(403).json({ sucesso: false, mensagem: 'Essa viagem é de outro motorista.' });
+      }
+    }
 
     // Erro I3: o app agora manda o id; o nome fica só como alternativa.
     const categoriaId = idCategoria || (await idPorNome('categorias_financeiras', categoria));
@@ -267,7 +308,9 @@ const cadastrarTransacao = async (req, res) => {
         status,
         comprovante_url: primeiroAnexo(anexos?.comprovantes),
         foto_url: primeiroAnexo(anexos?.fotos),
-        documento_url: primeiroAnexo(anexos?.documentos)
+        documento_url: primeiroAnexo(anexos?.documentos),
+        // Só vai quando o app manda (envio offline); assim nada muda para quem não usa.
+        ...(idClienteValido ? { id_local: idClienteValido } : {})
       }])
       .select()
       .single();
@@ -334,6 +377,7 @@ const obterResumoGeral = async (req, res) => {
       const status = (item.status || '').toUpperCase().trim();
       const valor = Number(item.valor) || 0;
       const totalParcelas = Number(item.total_parcelas) > 0 ? Number(item.total_parcelas) : 1;
+      if (status === 'CANCELADO') continue; // estornos ficam fora do resumo
 
       const dataRef = item.data_pagamento || item.data_vencimento || item.data_lancamento;
       let itemAno = null;
@@ -369,7 +413,9 @@ const obterResumoGeral = async (req, res) => {
           data: dataRef
         });
       } else if (tipo === 'DIVIDA') {
-        const valorParcela = valor / totalParcelas;
+        // Cada linha DIVIDA já é uma parcela (valor = valor da parcela). Antes dividia
+        // de novo pelo total de parcelas e o resumo mostrava um valor bem menor.
+        const valorParcela = valor;
 
         if (status === 'PENDENTE') {
           somaParcelasDivida += valorParcela;
@@ -462,6 +508,7 @@ const obterVisaoGeralFrota = async (req, res) => {
     const todasDespesas = (lancamentos || []).filter((item) => {
       const tipo = (item.tipo || '').toUpperCase().trim();
       const status = (item.status || '').toUpperCase().trim();
+      if (status === 'CANCELADO') return false;
       if (tipo === 'DIVIDA') return status === 'PAGO';
       return tipo === 'SAIDA';
     });

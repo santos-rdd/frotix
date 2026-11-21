@@ -9,7 +9,7 @@ import {
   ActivityIndicator
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { enviarComprovante } from '../../services/frotix.js';
+import { enviarOuGuardar } from '../../services/offline.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation';
 
 export default function UploadProofScreen({ navigation, route }) {
@@ -81,8 +81,12 @@ export default function UploadProofScreen({ navigation, route }) {
 
     try {
       // Erro I1/P12: a rota /comprovantes/upload agora existe e guarda o arquivo no Storage.
-      await enviarComprovante({ uri: imageUri });
-      Alert.alert("Sucesso", "Comprovante enviado com sucesso!");
+      // Sem internet (motorista), a foto fica guardada no celular e vai quando a conexão voltar.
+      const r = await enviarOuGuardar('comprovante', { arquivo: { uri: imageUri } }, 'Comprovante avulso');
+      Alert.alert(
+        r.offline ? "Salvo no celular" : "Sucesso",
+        r.offline ? "Sem internet agora. O comprovante será enviado quando a conexão voltar." : "Comprovante enviado com sucesso!"
+      );
       setImageUri(null);
       navigation.goBack();
     } catch (error) {

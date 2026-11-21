@@ -17,11 +17,15 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { listarCategorias, listarFormas, registrarTransacao, enviarComprovante } from '../../services/frotix.js';
 import { descreverForma } from '../../constants/formasPagamento.js';
+import {
+  enviarOuGuardar, listarCategoriasOffline, listarFormasOffline, listarViagensVinculoOffline,
+} from '../../services/offline.js';
+
+const SEM_VIAGEM = 'Nenhuma viagem';
 
 export default function TransactionFormScreen({ route, navigation }) {
-  const { actionType, amountValue, formaPagamento, idFormaPagamento } = route.params || { actionType: 'entrada', amountValue: '0' };
+  const { actionType, amountValue, formaPagamento, idFormaPagamento, idViagem: idViagemInicial } = route.params || { actionType: 'entrada', amountValue: '0' };
 
   const [step, setStep] = useState('form');
 
@@ -56,10 +60,17 @@ export default function TransactionFormScreen({ route, navigation }) {
   const [idCategoria, setIdCategoria] = useState(null);
   const [idForma, setIdForma] = useState(idFormaPagamento || null);
   const [enviando, setEnviando] = useState(false);
+  const [salvoOffline, setSalvoOffline] = useState(false);
+  // Viagem ligada ao lançamento (custo por km e rentabilidade da viagem dependem disso).
+  const [viagens, setViagens] = useState([]);
+  const [idViagem, setIdViagem] = useState(idViagemInicial || null);
+  const viagemSelecionada = viagens.find((v) => v.id === idViagem);
 
   useEffect(() => {
-    listarCategorias().then(setCategorias).catch((e) => console.warn('Categorias:', e.message));
-    listarFormas().then(setFormas).catch((e) => console.warn('Formas:', e.message));
+    // Sem internet, o motorista usa as listas salvas no celular.
+    listarCategoriasOffline().then(setCategorias).catch((e) => console.warn('Categorias:', e.message));
+    listarFormasOffline().then(setFormas).catch((e) => console.warn('Formas:', e.message));
+    listarViagensVinculoOffline().then(setViagens).catch((e) => console.warn('Viagens:', e.message));
   }, []);
 
   // Função para validar e atualizar campos numéricos (bloqueia letras e caracteres inválidos)
@@ -83,6 +94,8 @@ export default function TransactionFormScreen({ route, navigation }) {
       options = [...formas.map(descreverForma), 'Outros'];
     } else if (type === 'estadoOuStatus') {
       options = ['Pago', 'Pendente', 'Cancelado'];
+    } else if (type === 'viagem') {
+      options = [SEM_VIAGEM, ...viagens.map((v) => v.label)];
     } else if (type === 'data') {
       const hoje = new Date().toISOString().split('T')[0];
       const ontem = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -95,6 +108,11 @@ export default function TransactionFormScreen({ route, navigation }) {
   };
 
   const selectOption = (value) => {
+    if (modalType === 'viagem') {
+      setIdViagem(viagens.find((v) => v.label === value)?.id || null);
+      setModalVisible(false);
+      return;
+    }
     updateField(modalType, value);
     if (modalType === 'categoria') {
       setIdCategoria(categorias.find((c) => c.nome === value)?.id || null);
@@ -193,16 +211,6 @@ export default function TransactionFormScreen({ route, navigation }) {
     );
   };
 
-  // Envia os anexos para o Storage e devolve os caminhos salvos (erro I4: antes ia
-  // para o backend o caminho do arquivo no celular, que ninguém mais consegue abrir).
-  const enviarAnexos = async (lista) => {
-    const caminhos = [];
-    for (const arquivo of lista) {
-      caminhos.push(await enviarComprovante(arquivo));
-    }
-    return caminhos;
-  };
-
   const handleFinalSubmit = async () => {
     if (enviando) return;
     if (!formData.descricao.trim()) {
@@ -223,21 +231,25 @@ export default function TransactionFormScreen({ route, navigation }) {
     try {
       const dataAtual = new Date().toISOString().split('T')[0];
 
-      const anexos = {
-        fotos: await enviarAnexos(fotos),
-        documentos: await enviarAnexos(documentos),
-        comprovantes: await enviarAnexos(comprovantes),
-      };
-
       // Erro I2: antes a URL era "http://localhost:3000" fixa; agora usa o API_URL e o token.
-      await registrarTransacao({
-        tipo: actionType,
-        ...formData,
-        idCategoria,
-        idFormaPagamento: idForma,
-        data: formData.data || dataAtual,
-        anexos,
-      });
+      // Os anexos vão para o Storage antes do lançamento (erro I4). Sem internet, o motorista
+      // tem tudo guardado no celular (fotos inclusive) e enviado quando a conexão voltar.
+      const r = await enviarOuGuardar(
+        'transacao',
+        {
+          transacao: {
+            tipo: actionType,
+            ...formData,
+            idCategoria,
+            idFormaPagamento: idForma,
+            idViagem,
+            data: formData.data || dataAtual,
+          },
+          arquivos: { fotos, documentos, comprovantes },
+        },
+        `${currentConfig.title}: ${formData.descricao.trim()}`
+      );
+      setSalvoOffline(r.offline);
 
       setStep('success');
 
@@ -329,7 +341,10 @@ export default function TransactionFormScreen({ route, navigation }) {
             <Animated.View style={[styles.successCircle, { backgroundColor: currentConfig.btnColor, transform: [{ scale: scaleAnim }] }]}>
               <Feather name="check" size={60} color="#FFF" />
             </Animated.View>
-            <Text style={styles.successText}>Sucesso</Text>
+            <Text style={styles.successText}>{salvoOffline ? 'Salvo no celular' : 'Sucesso'}</Text>
+            {salvoOffline ? (
+              <Text style={styles.offlineText}>Sem internet agora. Será enviado quando a conexão voltar.</Text>
+            ) : null}
           </View>
         ) : (
           <>
@@ -405,6 +420,15 @@ export default function TransactionFormScreen({ route, navigation }) {
                     </View>
 
                     <View style={styles.inputGroup}>
+                      <Text style={styles.label}>Frete / Viagem:</Text>
+                      <TouchableOpacity style={styles.inputContainer} onPress={() => openSelectionModal('viagem')}>
+                        <Text style={[styles.inputText, !viagemSelecionada && styles.placeholderText]} numberOfLines={1}>
+                          {viagemSelecionada ? viagemSelecionada.label : 'Selecione a viagem (opcional)'}
+                        </Text>
+                        <Feather name="chevron-down" size={20} color="#888" style={styles.iconRight} />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.inputGroup}>
                       <Text style={styles.label}>Estado De Liquidação:</Text>
                       <TouchableOpacity style={styles.inputContainer} onPress={() => openSelectionModal('estadoOuStatus')}>
                         <Text style={[styles.inputText, !formData.estadoOuStatus && styles.placeholderText]}>
@@ -461,15 +485,13 @@ export default function TransactionFormScreen({ route, navigation }) {
                     </View>
 
                     <View style={styles.inputGroup}>
-                      <Text style={styles.label}>Vincula Com Veículo / Rota:</Text>
-                      <View style={styles.inputContainer}>
-                        <TextInput 
-                          style={styles.input} 
-                          placeholderTextColor="#888"
-                          value={formData.clienteOuVeiculo}
-                          onChangeText={(val) => updateField('clienteOuVeiculo', val)}
-                        />
-                      </View>
+                      <Text style={styles.label}>Vincula Com Viagem / Rota:</Text>
+                      <TouchableOpacity style={styles.inputContainer} onPress={() => openSelectionModal('viagem')}>
+                        <Text style={[styles.inputText, !viagemSelecionada && styles.placeholderText]} numberOfLines={1}>
+                          {viagemSelecionada ? viagemSelecionada.label : 'Selecione a viagem (opcional)'}
+                        </Text>
+                        <Feather name="chevron-down" size={20} color="#888" style={styles.iconRight} />
+                      </TouchableOpacity>
                     </View>
 
                     <View style={styles.inputGroup}>
@@ -837,6 +859,13 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 22,
     fontWeight: 'bold',
+  },
+  offlineText: {
+    color: '#CCC',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 30,
   },
   modalOverlay: {
     flex: 1,
