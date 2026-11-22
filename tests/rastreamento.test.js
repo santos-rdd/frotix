@@ -12,6 +12,7 @@ import {
   pararRastreamento,
   estaRastreando,
   converterLeitura,
+  encerrarRastreamentoDaViagem,
 } from '../src/services/rastreamentoService.js';
 
 // Adaptador: mesma API assíncrona do expo-sqlite em cima do node:sqlite.
@@ -153,4 +154,25 @@ test('sem permissão ou GPS desligado não rastreia', async () => {
 
   definirDependenciasRastreamento({ location: { ...base, hasServicesEnabledAsync: async () => false } });
   assert.deepEqual(await iniciarRastreamento({ usuarioId: 'm1', viagemId: 'v6' }), { ativo: false, motivo: 'gps_desligado' });
+});
+
+test('concluir a viagem para o GPS e limpa só a fila dela', async () => {
+  let removido = false;
+  definirDependenciasRastreamento({
+    location: {
+      hasServicesEnabledAsync: async () => true,
+      requestForegroundPermissionsAsync: async () => ({ status: 'granted' }),
+      watchPositionAsync: async () => ({ remove: () => { removido = true; } }),
+    },
+  });
+  await iniciarRastreamento({ usuarioId: 'm1', viagemId: 'v7' });
+  respostaServidor = 'offline';
+  await registrarLeitura('m1', 'v7', leitura(-22.1, -47.1, Date.now()));
+  await registrarLeitura('m1', 'v8', leitura(-22.2, -47.2, Date.now()));
+  assert.equal(pendentes(db).length, 2);
+
+  await encerrarRastreamentoDaViagem('v7');
+  assert.equal(removido, true);
+  assert.equal(estaRastreando(), false);
+  assert.deepEqual(pendentes(db).map((p) => p.id_viagem), ['v8']);
 });

@@ -21,6 +21,7 @@ import {
   atualizarCacheVeiculos,
 } from '../../services/localDataService.js';
 import { obterUsuarioLogado } from '../../services/api.js';
+import { encerrarRastreamentoDaViagem } from '../../services/rastreamentoService.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
@@ -191,6 +192,8 @@ export default function Viagens({ navigation, route }) {
     setSalvando(true);
     try {
       await concluirViagem(viagem.id, final);
+      // Viagem encerrada: para o GPS na hora (sem esperar a Home) e descarta a fila dela.
+      await encerrarRastreamentoDaViagem(viagem.id).catch(() => {});
       setHodometrosFinais({ ...hodometrosFinais, [viagem.id]: '' });
       await recarregar();
     } catch (e) {
@@ -202,6 +205,7 @@ export default function Viagens({ navigation, route }) {
           const uId = usuario?.id || uLogado?.id || uLogado?.sub;
           if (uId) {
             await concluirViagemOffline(uId, viagem.id, { hodometroFinal: final });
+            await encerrarRastreamentoDaViagem(viagem.id).catch(() => {});
             setHodometrosFinais({ ...hodometrosFinais, [viagem.id]: '' });
             await recarregar();
             Alert.alert(

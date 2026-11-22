@@ -6,10 +6,11 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import { colors } from '../../constants/theme.js';
-import { STATUS_ROTA, formatarMoeda } from '../../constants/frota.js';
+import { STATUS_ROTA, formatarMoeda, formatarKm } from '../../constants/frota.js';
 import { concluirViagem } from '../../services/frotix.js';
 import { concluirViagemOffline } from '../../services/localDataService.js';
 import { obterUsuarioLogado } from '../../services/api.js';
+import { encerrarRastreamentoDaViagem } from '../../services/rastreamentoService.js';
 
 /**
  * Detalhes de uma rota (params.rota).
@@ -54,6 +55,7 @@ export default function DetalhesRota({ navigation, route }) {
     setSalvando(true);
     try {
       await concluirViagem(rota.id, final);
+      await encerrarRastreamentoDaViagem(rota.id).catch(() => {});
       Alert.alert('Rota concluída', `Total percorrido: ${total.toLocaleString('pt-BR')} km.`);
       navigation.goBack();
     } catch (e) {
@@ -65,6 +67,7 @@ export default function DetalhesRota({ navigation, route }) {
           const uId = usuario?.id || uLogado?.id || uLogado?.sub;
           if (uId) {
             await concluirViagemOffline(uId, rota.id, { hodometroFinal: final });
+            await encerrarRastreamentoDaViagem(rota.id).catch(() => {});
             Alert.alert(
               'Conclusão salva no dispositivo',
               `Total percorrido: ${total.toLocaleString('pt-BR')} km.\nA conclusão foi salva localmente e será sincronizada assim que a internet voltar.`,

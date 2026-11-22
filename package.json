@@ -48,5 +48,14 @@
     "test": "node --test --experimental-test-module-mocks backend/tests/api.test.js backend/tests/offlineSync.test.js tests/navigationPermissions.test.js tests/rastreamento.test.js",
     "test:rastreamento": "node --test tests/rastreamento.test.js"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "android": {
+        "buildFromSource": [
+          "expo-sqlite"
+        ]
+      }
+    }
+  }
 }

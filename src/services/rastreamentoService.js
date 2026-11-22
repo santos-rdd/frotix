@@ -19,6 +19,7 @@ import {
   removerPosicoesPendentes,
   descartarPosicoesAntigas,
   limitarPosicoesPendentes,
+  limparPosicoesDaViagem,
 } from '../database/index.js';
 import { apiFetch } from './api.js';
 
@@ -273,6 +274,26 @@ export function pararRastreamento() {
   if (timerReenvio) clearInterval(timerReenvio);
   timerReenvio = null;
   atual = { usuarioId: null, viagemId: null };
+}
+
+/**
+ * Chamar logo depois de concluir uma viagem (online ou offline): para o GPS se era
+ * essa a viagem rastreada e apaga as leituras dela que ainda estavam na fila, porque
+ * o servidor recusaria (409) tudo que chegasse depois da conclusão.
+ */
+export async function encerrarRastreamentoDaViagem(viagemId) {
+  if (!viagemId) return;
+  const vId = String(viagemId);
+  if (atual.viagemId === vId) pararRastreamento();
+  bloqueadoAte.delete(vId);
+  const db = await bancoOuNulo();
+  if (db) {
+    await limparPosicoesDaViagem(db, vId);
+  } else {
+    for (let i = filaMemoria.length - 1; i >= 0; i -= 1) {
+      if (filaMemoria[i].id_viagem === vId) filaMemoria.splice(i, 1);
+    }
+  }
 }
 
 export function estaRastreando(viagemId) {

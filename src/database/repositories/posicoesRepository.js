@@ -48,3 +48,8 @@ export async function limitarPosicoesPendentes(db, usuarioId, idViagem, maximo =
     [String(usuarioId), String(idViagem), String(usuarioId), String(idViagem), maximo]
   );
 }
+
+/** Apaga a fila de uma viagem (ex.: depois de concluída, nada mais dela será aceito). */
+export async function limparPosicoesDaViagem(db, idViagem) {
+  await db.runAsync(`DELETE FROM posicoes_pendentes WHERE id_viagem = ?`, [String(idViagem)]);
+}

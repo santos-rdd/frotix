@@ -159,6 +159,8 @@ function generateLeafletHTML(origem, destino, motorista) {
 
     // Até esta distância da linha, o caminhão é "grudado" na rota (o GPS oscila alguns metros).
     const DISTANCIA_MAX_ROTA_M = 500;
+    // Altura (px) do HUD que o app desenha por cima do topo do mapa. O app manda o valor real.
+    let margemTopo = 150;
     const RAIO_TERRA_M = 6371000;
     const RAD = Math.PI / 180;
 
@@ -255,6 +257,7 @@ function generateLeafletHTML(origem, destino, motorista) {
     let indiceAnterior = 0;
     let posicaoPendente = null;
     let animacao = null;
+    let ultimoProgresso = null; // { progresso, restanteKm } da última posição dentro da rota
 
     /**
      * Acha o ponto da rota mais perto da posição do GPS.
@@ -315,6 +318,23 @@ function generateLeafletHTML(origem, destino, motorista) {
       if (classe) wrap.classList.add(classe);
     }
 
+    /** Centraliza o caminhão se ele sair da área livre (fora das bordas ou embaixo do HUD). */
+    function manterCaminhaoVisivel(ponto) {
+      const tamanho = map.getSize();
+      const p = map.latLngToContainerPoint(ponto);
+      const folga = 30;
+      const visivel = p.x > folga && p.x < tamanho.x - folga &&
+        p.y > margemTopo + folga && p.y < tamanho.y - folga;
+      if (visivel) return;
+      // Centro da área livre fica abaixo do HUD: desloca o centro para cima metade da margem.
+      const alvo = map.project(ponto).subtract([0, margemTopo / 2]);
+      map.panTo(map.unproject(alvo), { animate: true });
+    }
+
+    window.definirMargemTopo = function (px) {
+      if (Number.isFinite(px) && px > 0) margemTopo = px;
+    };
+
     /** Chamado pelo app com a última posição do motorista ({ latitude, longitude, semSinal }). */
     window.atualizarPosicao = function (posicao) {
       if (!map || rota.length < 2) {
@@ -331,31 +351,36 @@ function generateLeafletHTML(origem, destino, motorista) {
       const naRota = proj && proj.dist <= DISTANCIA_MAX_ROTA_M;
       const total = acumulado[acumulado.length - 1] || 0;
 
-      let percorridoM;
       let pontoCaminhao;
+      let progresso = null;
       if (naRota) {
         indiceAnterior = proj.i;
-        percorridoM = acumulado[proj.i] + proj.t * (acumulado[proj.i + 1] - acumulado[proj.i]);
+        const percorridoM = acumulado[proj.i] + proj.t * (acumulado[proj.i + 1] - acumulado[proj.i]);
         pontoCaminhao = proj.ponto;
+        progresso = {
+          progresso: total > 0 ? Math.max(0, Math.min(1, percorridoM / total)) : 0,
+          restanteKm: Math.max(0, (total - percorridoM) / 1000),
+        };
+        ultimoProgresso = progresso;
         linhaPercorrida.setLatLngs([...rota.slice(0, proj.i + 1), proj.ponto]);
         linhaRestante.setLatLngs([proj.ponto, ...rota.slice(proj.i + 1)]);
         haloRestante.setLatLngs([proj.ponto, ...rota.slice(proj.i + 1)]);
       } else {
-        // Fora da rota (desvio, outra estrada): mostra onde ele está de verdade.
-        percorridoM = proj ? acumulado[proj.i] + proj.t * (acumulado[proj.i + 1] - acumulado[proj.i]) : 0;
+        // Fora da rota (desvio, outra estrada): mostra onde ele está de verdade e mantém
+        // o último progresso medido na rota. O ponto mais próximo da linha pode ser o destino,
+        // e aí o HUD mostraria "100%" para quem está a 45 km dele.
         pontoCaminhao = gps;
+        progresso = ultimoProgresso;
       }
 
       moverCaminhao(pontoCaminhao);
       definirEstadoCaminhao(posicao.semSinal ? 'sem-sinal' : null);
-      if (!map.getBounds().pad(-0.1).contains(pontoCaminhao)) {
-        map.panTo(pontoCaminhao, { animate: true });
-      }
+      manterCaminhaoVisivel(pontoCaminhao);
 
       avisarApp({
         tipo: 'progresso',
-        progresso: total > 0 ? Math.max(0, Math.min(1, percorridoM / total)) : 0,
-        restanteKm: Math.max(0, (total - percorridoM) / 1000),
+        progresso: progresso ? progresso.progresso : null,
+        restanteKm: progresso ? progresso.restanteKm : null,
         foraDaRota: !naRota,
       });
     };
@@ -367,15 +392,20 @@ function generateLeafletHTML(origem, destino, motorista) {
         if (dados && dados.origem === 'frotix-app' && dados.tipo === 'posicao') {
           window.atualizarPosicao(dados.posicao);
         }
+        if (dados && dados.origem === 'frotix-app' && dados.tipo === 'margemTopo') {
+          window.definirMargemTopo(dados.px);
+        }
       } catch (e) {}
     });
 
     async function init() {
       map = null;
       const mapa = L.map('map', {
-        zoomControl: true,
+        zoomControl: false,
         attributionControl: false
       }).setView([-23.5505, -46.6333], 6);
+      // Zoom embaixo à direita: no canto de cima ficava por baixo do HUD.
+      L.control.zoom({ position: 'bottomright' }).addTo(mapa);
 
       // Camada de mapa real (OpenStreetMap)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -445,7 +475,7 @@ function generateLeafletHTML(origem, destino, motorista) {
       }).addTo(mapa);
 
       // Ajusta o zoom e centro do mapa automaticamente para caber toda a rota
-      mapa.fitBounds(L.latLngBounds(rota), { padding: [50, 50] });
+      mapa.fitBounds(L.latLngBounds(rota), { paddingTopLeft: [40, margemTopo + 30], paddingBottomRight: [40, 40] });
 
       // Caminhão começa apagado na origem até chegar a primeira posição do GPS
       caminhao = L.marker(rota[0], {
@@ -570,6 +600,7 @@ function MapaDaViagem({ onButtonPress, viagem }) {
   const iframeRef = useRef(null);
   const [mapaPronto, setMapaPronto] = useState(false);
   const [progresso, setProgresso] = useState(null);
+  const [alturaHud, setAlturaHud] = useState(0);
 
   const { posicao, statusViagem, carregou } = usePosicaoMotorista(viagemAtiva.id);
 
@@ -611,6 +642,22 @@ function MapaDaViagem({ onButtonPress, viagem }) {
     }
   }, [mapaPronto, posicao, semSinal]);
 
+  // O mapa precisa saber quanto do topo o HUD cobre, para não esconder o caminhão embaixo dele.
+  useEffect(() => {
+    if (!mapaPronto || !alturaHud) return;
+    const px = Math.round(alturaHud + 16);
+    if (Platform.OS === 'web') {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ origem: 'frotix-app', tipo: 'margemTopo', px }),
+        '*'
+      );
+    } else {
+      webViewRef.current?.injectJavaScript(
+        `window.definirMargemTopo && window.definirMargemTopo(${px}); true;`
+      );
+    }
+  }, [mapaPronto, alturaHud]);
+
   const tratarMensagemMapa = useCallback((texto) => {
     let msg;
     try {
@@ -645,7 +692,7 @@ function MapaDaViagem({ onButtonPress, viagem }) {
     estiloLocalizacao = [styles.locationText, styles.locationTextMuted];
   } else {
     const partes = [];
-    if (progresso) {
+    if (progresso && Number.isFinite(progresso.progresso)) {
       partes.push(`${Math.round(progresso.progresso * 100)}% da rota`);
       const restante = formatarKm(progresso.restanteKm);
       if (restante) partes.push(`faltam ${restante}`);
@@ -688,7 +735,11 @@ function MapaDaViagem({ onButtonPress, viagem }) {
         )}
 
         {/* HUD Superior sobre o mapa com informações da viagem selecionada */}
-        <View style={styles.hudOverlay} pointerEvents="box-none">
+        <View
+          style={styles.hudOverlay}
+          pointerEvents="box-none"
+          onLayout={(e) => setAlturaHud(e.nativeEvent.layout.height)}
+        >
           <View style={styles.hudHeaderRow}>
             <View style={styles.statusBadge}>
               <View style={styles.liveDot} />
@@ -707,10 +758,15 @@ function MapaDaViagem({ onButtonPress, viagem }) {
 
           <Text style={estiloLocalizacao} numberOfLines={1}>
             {textoLocalizacao}
-            {progresso?.foraDaRota && posicao ? ' · fora da rota' : ''}
           </Text>
 
-          {progresso && posicao ? (
+          {progresso?.foraDaRota && posicao ? (
+            <Text style={[styles.locationText, styles.locationTextAlert]} numberOfLines={1}>
+              Fora da rota planejada
+            </Text>
+          ) : null}
+
+          {progresso && posicao && Number.isFinite(progresso.progresso) ? (
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${Math.round(progresso.progresso * 100)}%` }]} />
             </View>
