@@ -176,7 +176,7 @@ export default function Viagens({ navigation, route }) {
       }
       Alert.alert('Não foi possível abrir a viagem', e.message || 'Ocorreu um erro ao iniciar a viagem.');
     } finally {
-      setSalvando(false);
+      setSalvando(false); 
     }
   };
 

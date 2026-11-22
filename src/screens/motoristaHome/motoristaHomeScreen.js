@@ -1,21 +1,35 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   ScrollView,
+  FlatList,
   TouchableOpacity,
   Image,
+  Animated,
+  Dimensions,
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { 
-  Ionicons, 
-} from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
+import QuickActionsCards from '../../components/quickActionsCards/quickActionsCards.js';
+import PaymentCardsCarousel from '../../components/paymentCardsCarousel/paymentCardsCarousel.js';
+import InteractiveCarousel from '../../components/interactiveCarousel/interactiveCarousel.js';
+import ViagemAtualCard from '../../components/viagemAtualCard/viagemAtualCard.js';
+import RegistrarHodometroButton from '../../components/registrarHodometroButton/registrarHodometroButton.js';
+import ValueSliderModal from '../../components/valueSliderModal/valueSliderModal.js';
 import { colors } from '../../constants/theme.js';
-import { listarVeiculos, listarRotas, listarViagensEmAndamento } from '../../services/frotix.js';
+
+import {
+  listarVeiculos,
+  listarRotas,
+  listarViagensEmAndamento,
+  listarFormas,
+} from '../../services/frotix.js';
+
 import {
   listarVeiculosPermitidosLocais,
   listarRotasLocais,
@@ -23,19 +37,24 @@ import {
   atualizarCacheVeiculos,
   atualizarCacheRotas,
 } from '../../services/localDataService.js';
+
 import { obterUsuarioLogado } from '../../services/api.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 import { iniciarRastreamento, pararRastreamento } from '../../services/rastreamentoService.js';
 
+const { height } = Dimensions.get('window');
+
 export default function MotoristaHomeScreen(props) {
   const insets = useSafeAreaInsets();
+
   const safeAreaPadding = {
     paddingTop: insets.top,
     paddingRight: insets.right,
     paddingBottom: insets.bottom,
     paddingLeft: insets.left,
   };
+
   const navigation = props.navigation;
   const route = props.route || {};
   const authGoogle = route?.params?.auth || null;
@@ -48,37 +67,75 @@ export default function MotoristaHomeScreen(props) {
       ? String(authenticatedUser.id || bankUser?.id || usuarioParam?.id)
       : null
   );
+
   const [usuarioNome, setUsuarioNome] = useState(
-    authenticatedUser.nome || props.userName || usuarioParam?.nome || authGoogle?.user?.givenName || bankUser?.nome || bankUser?.name || 'Motorista'
+    authenticatedUser.nome ||
+      props.userName ||
+      usuarioParam?.nome ||
+      authGoogle?.user?.givenName ||
+      bankUser?.nome ||
+      bankUser?.name ||
+      'Motorista'
   );
+
   const usuarioFoto =
-    props.userPhoto || usuarioParam?.foto || authGoogle?.user?.photo || bankUser?.imagem || null;
+    props.userPhoto ||
+    usuarioParam?.foto ||
+    authGoogle?.user?.photo ||
+    bankUser?.imagem ||
+    null;
+
   const [usuarioRole, setUsuarioRole] = useState(
-    authenticatedUser.role || bankUser?.role || authGoogle?.user?.role || usuarioParam?.role || 4
+    authenticatedUser.role ||
+      bankUser?.role ||
+      authGoogle?.user?.role ||
+      usuarioParam?.role ||
+      4
   );
+
+  // Os dois cartões apenas alternam o conteúdo exibido abaixo.
+  const [selectedAction, setSelectedAction] = useState('finance');
+  const [formasPagamento, setFormasPagamento] = useState([]);
+  const [viagemSelecionada, setViagemSelecionada] = useState(null);
+  const [viagensUsandoCache, setViagensUsandoCache] = useState(false);
+
+  const [isSliderVisible, setIsSliderVisible] = useState(false);
+  const [actionType, setActionType] = useState('entrada');
+  const [amountValue, setAmountValue] = useState('0');
+  const [isEditingAmount, setIsEditingAmount] = useState(false);
+
+  const slideAnim = useRef(new Animated.Value(height)).current;
 
   const carregarDadosMotorista = useCallback(async () => {
     try {
       const uLogado = await obterUsuarioLogado();
+
       const id = uLogado?.id || uLogado?.sub || usuarioParam?.id;
       const nome = uLogado?.nome || usuarioNome;
       const perfil = uLogado?.perfil ?? usuarioRole;
-      if (id) {
-        setUsuarioId(String(id));
-      }
+
+      if (id) setUsuarioId(String(id));
+
       setUsuarioNome(nome || 'Motorista');
       setUsuarioRole(Number(perfil) || 4);
+
       return id;
     } catch {
       return null;
     }
-  }, [usuarioNome, usuarioRole]);
+  }, [usuarioNome, usuarioRole, usuarioParam?.id]);
 
   const carregarVeiculos = useCallback(async () => {
     if (!usuarioId) return [];
+
     try {
       const servidor = await listarVeiculos();
-      await atualizarCacheVeiculos(usuarioId, servidor || []).catch(() => {});
+
+      await atualizarCacheVeiculos(
+        usuarioId,
+        servidor || []
+      ).catch(() => {});
+
       return servidor || [];
     } catch {
       return await listarVeiculosPermitidosLocais(usuarioId);
@@ -87,9 +144,15 @@ export default function MotoristaHomeScreen(props) {
 
   const carregarRotas = useCallback(async () => {
     if (!usuarioId) return [];
+
     try {
       const servidor = await listarRotas();
-      await atualizarCacheRotas(usuarioId, servidor || []).catch(() => {});
+
+      await atualizarCacheRotas(
+        usuarioId,
+        servidor || []
+      ).catch(() => {});
+
       return servidor || [];
     } catch {
       return await listarRotasLocais(usuarioId);
@@ -97,19 +160,55 @@ export default function MotoristaHomeScreen(props) {
   }, [usuarioId]);
 
   const carregarViagens = useCallback(async () => {
-    if (!usuarioId) return [];
+    if (!usuarioId) {
+      setViagensUsandoCache(false);
+      return [];
+    }
+
     try {
-      const serv = await listarViagensEmAndamento();
-      return Array.isArray(serv) ? serv : [];
+      const servidor = await listarViagensEmAndamento();
+
+      setViagensUsandoCache(false);
+
+      return Array.isArray(servidor) ? servidor : [];
     } catch {
+      setViagensUsandoCache(true);
+
       const locais = await listarViagensLocais(usuarioId);
-      return (locais || []).filter((r) => r.status === 'em_transito');
+
+      return (locais || []).filter(
+        (viagem) => viagem.status === 'em_transito'
+      );
     }
   }, [usuarioId]);
 
   useEffect(() => {
     carregarDadosMotorista();
   }, [carregarDadosMotorista]);
+
+  useEffect(() => {
+    let ativo = true;
+
+    const carregarFormasPagamento = async () => {
+      try {
+        const formas = await listarFormas();
+
+        if (ativo) {
+          setFormasPagamento(
+            Array.isArray(formas) ? formas : []
+          );
+        }
+      } catch {
+        if (ativo) setFormasPagamento([]);
+      }
+    };
+
+    carregarFormasPagamento();
+
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   const {
     dados: veiculos,
@@ -135,17 +234,16 @@ export default function MotoristaHomeScreen(props) {
   const veiculosLista = veiculos || [];
   const rotasLista = rotas || [];
   const andamentoLista = viagensEmAndamento || [];
-  const veiculosDisponiveis = veiculosLista.filter((v) => v.status === 'disponivel');
-  const rotasAgendadas = rotasLista.filter((r) => r.status === 'agendada');
-  const viagemEmAndamento = andamentoLista[0] || null;
-  const rotaEmDestaque = viagemEmAndamento || rotasAgendadas[0] || null;
-  const veiculoEmDestaque = veiculosLista.find((v) =>
-    [v.id, v.idLocal].some(
-      (id) => id != null && String(id) === String(rotaEmDestaque?.veiculoId)
-    )
+
+  const rotasAgendadas = rotasLista.filter(
+    (rota) => rota.status === 'agendada'
   );
-  const modeloEmDestaque = rotaEmDestaque?.veiculoModelo || veiculoEmDestaque?.modelo;
-  const placaEmDestaque = rotaEmDestaque?.placa || veiculoEmDestaque?.placa || 'Sem veículo atribuído';
+
+  const viagemEmAndamento = andamentoLista[0] || null;
+
+  const rotaEmDestaque =
+    viagemEmAndamento || rotasAgendadas[0] || null;
+
   const idViagemEmAndamento = viagemEmAndamento?.id ? String(viagemEmAndamento.id) : null;
 
   // Enquanto houver viagem em andamento, envia o GPS para o mapa do Admin/Gestor.
@@ -174,365 +272,477 @@ export default function MotoristaHomeScreen(props) {
 
   useEffect(() => () => pararRastreamento(), []);
 
-  const carregandoDados = carregandoVeiculos || carregandoRotas || carregandoViagens;
-  const erroDados = erroVeiculos || erroRotas || erroViagens;
+  const veiculoEmDestaque = veiculosLista.find((veiculo) =>
+    [veiculo.id, veiculo.idLocal].some(
+      (id) =>
+        id != null &&
+        String(id) === String(rotaEmDestaque?.veiculoId)
+    )
+  );
+
+  const modeloEmDestaque =
+    rotaEmDestaque?.veiculoModelo || veiculoEmDestaque?.modelo;
+
+  const placaEmDestaque =
+    rotaEmDestaque?.placa ||
+    veiculoEmDestaque?.placa ||
+    'Sem veículo atribuído';
+
+  const carregandoDados =
+    carregandoVeiculos ||
+    carregandoRotas ||
+    carregandoViagens;
+
+  const erroDados =
+    erroVeiculos || erroRotas || erroViagens;
 
   const recarregarTudo = async () => {
-    await Promise.all([recarregarVeiculos(), recarregarRotas(), recarregarViagens()]);
+    await Promise.all([
+      recarregarVeiculos(),
+      recarregarRotas(),
+      recarregarViagens(),
+    ]);
   };
 
   const abrirViagens = () => {
-    navigation.navigate('Viagens', { usuario: usuarioParam, modo: 'motorista' });
-  };
-
-  const abrirRotas = () => {
-    navigation.navigate('Rotas', { usuario: usuarioParam });
-  };
-
-  const abrirVeiculos = () => {
-    navigation.navigate('Veiculos', { usuario: usuarioParam });
-  };
-
-  const abrirFormularioFinanceiro = (actionType) => {
-    navigation.navigate('TransactionForm', {
+    navigation.navigate('Viagens', {
       usuario: usuarioParam,
-      actionType,
-      amountValue: '0',
+      modo: 'motorista',
     });
   };
 
-  const abrirDividas = () => {
-    navigation.navigate('Dividas', { usuario: usuarioParam });
+  const handleOpenSlider = (type) => {
+    setActionType(type);
+    setIsSliderVisible(true);
+
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
+  const handleCloseSlider = () => {
+    Animated.timing(slideAnim, {
+      toValue: height,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setIsSliderVisible(false);
+      setIsEditingAmount(false);
+    });
+  };
+
+  const handleNextStep = () => handleCloseSlider();
+
   const abrirExtrato = () => {
-    navigation.navigate('Extrato', { usuario: usuarioParam });
+    navigation.navigate('Extrato', {
+      usuario: usuarioParam,
+    });
+  };
+
+  const abrirDetalhesViagem = (viagem) => {
+    if (!viagem) {
+      abrirViagens();
+      return;
+    }
+
+    navigation.navigate('DetalhesRota', {
+      usuario: usuarioParam,
+      rota: {
+        id: viagem.id,
+        origem: viagem.origem,
+        destino: viagem.destino,
+        status: 'em_transito',
+        hodometroInicial:
+          viagem.hodometroInicial ?? viagem.km_inicial,
+        veiculoId: viagem.veiculoId,
+        veiculoModelo: viagem.veiculoModelo,
+        motorista: viagem.motorista,
+        placa: viagem.placa,
+        despesas: [],
+      },
+    });
   };
 
   if (Number(usuarioRole) !== 4) {
     return (
       <View style={[styles.container, safeAreaPadding]}>
-        <Text style={styles.cityName}>Esta área é exclusiva para motoristas.</Text>
+        <Text style={styles.cityName}>
+          Esta área é exclusiva para motoristas.
+        </Text>
       </View>
     );
   }
 
+  const acoesPrincipais = [
+    {
+      id: 'finance',
+      name: 'Financeiro',
+      image: '',
+    },
+    {
+      id: 'routes',
+      name: 'Rotas',
+      image: '',
+    },
+  ];
+
   return (
     <View style={[styles.container, safeAreaPadding]}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Boa Tarde</Text>
             <Text style={styles.userName}>{usuarioNome}</Text>
           </View>
+
           {usuarioFoto ? (
-            <Image source={{ uri: usuarioFoto }} style={styles.avatar} />
+            <Image
+              source={{ uri: usuarioFoto }}
+              style={styles.avatar}
+            />
           ) : (
             <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={20} color="#FFFFFF" />
+              <Ionicons
+                name="person"
+                size={20}
+                color="#FFFFFF"
+              />
             </View>
           )}
         </View>
 
-        <Text style={styles.sectionTitle}>Ações Rápidas</Text>
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.cardLight }]}
-            activeOpacity={0.8}
-            onPress={abrirVeiculos}
-          >
-            <Ionicons name="car-outline" size={24} color="#0F172A" />
-            <Text style={styles.actionTextDark}>Veículos disponíveis ({veiculosDisponiveis.length})</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, { backgroundColor: colors.primaryBlue }]}
-            activeOpacity={0.8}
-            onPress={abrirRotas}
-          >
-            <Ionicons name="location-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.actionTextLight}>Rotas</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Finanças pessoais</Text>
-        <View style={styles.actionsRow}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            style={[styles.actionBtn, { backgroundColor: colors.cardLight }]}
-            activeOpacity={0.8}
-            onPress={() => abrirFormularioFinanceiro('entrada')}
-          >
-            <Ionicons name="cash-outline" size={24} color="#0F172A" />
-            <Text style={styles.actionTextDark}>Registrar Frete</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            accessibilityRole="button"
-            style={[styles.actionBtn, { backgroundColor: colors.primaryBlue }]}
-            activeOpacity={0.8}
-            onPress={() => abrirFormularioFinanceiro('saida')}
-          >
-            <Ionicons name="receipt-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.actionTextLight}>Lançar Despesa</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={[styles.actionsRow, styles.financialActionsRow]}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            style={[styles.actionBtn, { backgroundColor: colors.cardLight }]}
-            activeOpacity={0.8}
-            onPress={abrirDividas}
-          >
-            <Ionicons name="wallet-outline" size={24} color="#0F172A" />
-            <Text style={styles.actionTextDark}>Minhas Dívidas</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            accessibilityRole="button"
-            style={[styles.actionBtn, { backgroundColor: colors.primaryBlue }]}
-            activeOpacity={0.8}
-            onPress={abrirExtrato}
-          >
-            <Ionicons name="document-text-outline" size={24} color="#FFFFFF" />
-            <Text style={styles.actionTextLight}>Meu Extrato</Text>
-          </TouchableOpacity>
-        </View>
-
-        {(carregandoDados || erroDados) ? (
-          <EstadoDados
-            carregando={carregandoDados}
-            erro={erroDados}
-            onTentarDeNovo={recarregarTudo}
-            temDados={veiculosLista.length > 0 || rotasLista.length > 0 || andamentoLista.length > 0}
-          />
-        ) : null}
-
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Viagens em curso</Text>
-        <View style={styles.tripCard}>
-          <Text style={styles.tripTag}>
-            {rotaEmDestaque?.status === 'em_transito'
-              ? 'VIAGEM EM ANDAMENTO'
-              : rotaEmDestaque?.status === 'agendada'
-                ? 'VIAGEM AGENDADA'
-                : 'VIAGENS EM CURSO'}
+        <View style={styles.quickActionsContainer}>
+          <Text style={styles.quickActionsTitle}>
+            Ações Rápidas
           </Text>
 
-          {rotaEmDestaque ? (
-            <>
-              <View style={styles.routeTimeline}>
-                <View style={styles.dotStart} />
-                <View style={styles.line} />
-                <View style={styles.dotEnd} />
-              </View>
-
-              <View style={styles.routeLabels}>
-                <View>
-                  <Text style={styles.cityTitle}>Origem</Text>
-                  <Text style={styles.cityName}>{rotaEmDestaque.origem}</Text>
-                </View>
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={styles.cityTitle}>Destino</Text>
-                  <Text style={styles.cityName}>{rotaEmDestaque.destino}</Text>
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.licenseBox}>
-                <Text
-                  style={[styles.licenseText, { flexShrink: 1 }]}
-                  numberOfLines={1}
-                >
-                  {modeloEmDestaque || 'Veículo'}
-                </Text>
-                <View style={styles.licenseDashedLine} />
-                <Text style={styles.plateText} numberOfLines={1}>{placaEmDestaque}</Text>
-              </View>
-            </>
-          ) : (
-            <Text style={styles.cityName}>Nenhuma viagem agendada ou em andamento.</Text>
-          )}
+          <FlatList
+            data={acoesPrincipais}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.actionsCarousel}
+            renderItem={({ item }) => (
+              <QuickActionsCards
+                {...item}
+                onPress={() => setSelectedAction(item.id)}
+                selectCardPass={
+                  selectedAction === item.id
+                    ? selectedAction
+                    : null
+                }
+              />
+            )}
+          />
         </View>
 
-        <TouchableOpacity style={styles.primaryButton} activeOpacity={0.8} onPress={abrirViagens}>
-          <Text style={styles.primaryButtonText}>Registrar Hodômetro</Text>
-        </TouchableOpacity>
+        {selectedAction === 'finance' ? (
+          <View>
+            <PaymentCardsCarousel
+              key={`formas-pagamento-${formasPagamento.length}`}
+              formas={formasPagamento}
+            />
+
+            <InteractiveCarousel
+              onOpenSlider={handleOpenSlider}
+              onMenuAtividades={abrirExtrato}
+            />
+          </View>
+        ) : null}
+
+        {selectedAction === 'routes' ? (
+          <View>
+            {(carregandoDados || erroDados) ? (
+              <EstadoDados
+                carregando={carregandoDados}
+                erro={erroDados}
+                onTentarDeNovo={recarregarTudo}
+                temDados={
+                  veiculosLista.length > 0 ||
+                  rotasLista.length > 0 ||
+                  andamentoLista.length > 0
+                }
+              />
+            ) : null}
+
+            {andamentoLista.length > 0 && !viagensUsandoCache ? (
+              <ViagemAtualCard
+                key={`viagens-${andamentoLista.length}-${viagemEmAndamento?.id || 'lista'}`}
+                viagemSelecionada={viagemSelecionada}
+                onSelectViagem={setViagemSelecionada}
+                onOpenTripDetails={abrirDetalhesViagem}
+              />
+            ) : (
+              <View style={styles.tripCard}>
+                <Text style={styles.tripTag}>
+                  {rotaEmDestaque?.status === 'em_transito'
+                    ? 'VIAGEM EM ANDAMENTO'
+                    : rotaEmDestaque?.status === 'agendada'
+                      ? 'VIAGEM AGENDADA'
+                      : 'VIAGENS EM CURSO'}
+                </Text>
+
+                {rotaEmDestaque ? (
+                  <>
+                    <View style={styles.routeTimeline}>
+                      <View style={styles.dotStart} />
+                      <View style={styles.line} />
+                      <View style={styles.dotEnd} />
+                    </View>
+
+                    <View style={styles.routeLabels}>
+                      <View>
+                        <Text style={styles.cityTitle}>
+                          Origem
+                        </Text>
+
+                        <Text style={styles.cityName}>
+                          {rotaEmDestaque.origem}
+                        </Text>
+                      </View>
+
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.cityTitle}>
+                          Destino
+                        </Text>
+
+                        <Text style={styles.cityName}>
+                          {rotaEmDestaque.destino}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.divider} />
+
+                    <View style={styles.licenseBox}>
+                      <Text
+                        style={[
+                          styles.licenseText,
+                          { flexShrink: 1 },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {modeloEmDestaque || 'Veículo'}
+                      </Text>
+
+                      <View style={styles.licenseDashedLine} />
+
+                      <Text
+                        style={styles.plateText}
+                        numberOfLines={1}
+                      >
+                        {placaEmDestaque}
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.cityName}>
+                    Nenhuma viagem agendada ou em andamento.
+                  </Text>
+                )}
+              </View>
+            )}
+
+            <RegistrarHodometroButton
+              viagem={
+                viagensUsandoCache
+                  ? null
+                  : viagemSelecionada || viagemEmAndamento
+              }
+              onButtonPress={abrirViagens}
+            />
+          </View>
+        ) : null}
       </ScrollView>
 
-      <BottomNavigation navigation={navigation} userRole={usuarioRole} usuario={usuarioParam} />
+      <ValueSliderModal
+        visible={isSliderVisible}
+        actionType={actionType}
+        amountValue={amountValue}
+        setAmountValue={setAmountValue}
+        isEditingAmount={isEditingAmount}
+        setIsEditingAmount={setIsEditingAmount}
+        slideAnim={slideAnim}
+        onClose={handleCloseSlider}
+        onNext={handleNextStep}
+        formasPagamento={formasPagamento}
+      />
+
+      <BottomNavigation
+        navigation={navigation}
+        userRole={usuarioRole}
+        usuario={usuarioParam}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.background 
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  scrollContent: { 
-    padding: 16, 
-    paddingBottom: 40 
+
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 120,
   },
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 20,
-    marginTop: 10 
+    marginTop: 10,
   },
-  greeting: { 
-    color: colors.textSecondary, 
-    fontSize: 14 
+
+  greeting: {
+    color: colors.textSecondary,
+    fontSize: 14,
   },
-  userName: { 
-    color: colors.textPrimary, 
-    fontSize: 22, 
-    fontWeight: 'bold' 
+
+  userName: {
+    color: colors.textPrimary,
+    fontSize: 22,
+    fontWeight: 'bold',
   },
-  avatar: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    borderWidth: 2, 
-    borderColor: '#374151' 
+
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 2,
+    borderColor: '#374151',
   },
-  avatarPlaceholder: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    backgroundColor: '#1E1E22', 
-    justifyContent: 'center', 
+
+  avatarPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#1E1E22',
+    justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#3B56FF' 
+    borderColor: '#3B56FF',
   },
 
-  sectionTitle: { 
-    color: colors.textPrimary, 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    marginBottom: 14 
-  },
-  
-  actionsRow: { 
-    flexDirection: 'row', 
-    gap: 12 
-  },
-  financialActionsRow: {
-    marginTop: 12,
-  },
-  actionBtn: { 
-    width: 120, 
-    height: 110, 
-    borderRadius: 18, 
-    padding: 14, 
-    justifyContent: 'space-between' 
-  },
-  actionTextDark: { 
-    color: '#000000', 
-    fontSize: 11, 
-    fontWeight: '600' 
-  },
-  actionTextLight: { 
-    color: '#FFFFFF', 
-    fontSize: 11, 
-    fontWeight: '600' 
+  quickActionsContainer: {
+    width: '100%',
+    height: 200,
+    flexDirection: 'column',
   },
 
-  tripCard: { 
-    backgroundColor: colors.primaryBlue, 
-    borderRadius: 20, 
-    padding: 20, 
-    marginVertical: 8 
-  },
-  tripTag: { 
-    color: '#FFFFFF', 
-    fontSize: 13, 
-    fontWeight: '800', 
-    letterSpacing: 0.5 
-  },
-  
-  routeTimeline: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginVertical: 18, 
-    paddingHorizontal: 10 
-  },
-  dotStart: { 
-    width: 12, 
-    height: 12, 
-    borderRadius: 6, 
-    borderWidth: 3, 
-    borderColor: '#FFFFFF', 
-    backgroundColor: colors.primaryBlue 
-  },
-  line: { 
-    flex: 1, 
-    height: 2, 
-    backgroundColor: '#FFFFFF' 
-  },
-  dotEnd: { 
-    width: 12, 
-    height: 12, 
-    borderRadius: 6, 
-    backgroundColor: '#FFFFFF' 
-  },
-  
-  routeLabels: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between' 
-  },
-  cityTitle: { 
-    color: '#FFFFFF', 
-    fontSize: 14, 
-    fontWeight: 'bold' 
-  },
-  cityName: { 
-    color: '#E0E0E0', 
-    fontSize: 12 
+  quickActionsTitle: {
+    fontSize: 24,
+    fontWeight: '400',
+    paddingTop: 15,
+    paddingLeft: 20,
+    paddingBottom: 10,
+    color: 'white',
   },
 
-  divider: { 
-    height: 1, 
-    backgroundColor: 'rgba(255, 255, 255, 0.2)', 
-    marginVertical: 16 
+  actionsCarousel: {
+    height: 120,
+    padding: 10,
+    gap: 15,
   },
 
-  licenseBox: { 
-    backgroundColor: '#1D3BBD', 
-    borderRadius: 12, 
-    padding: 14, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between' 
-  },
-  licenseText: { 
-    color: '#FFFFFF', 
-    fontSize: 12, 
-    fontWeight: '600' 
-  },
-  licenseDashedLine: { 
-    flex: 1, 
-    height: 1, 
-    backgroundColor: 'rgba(255,255,255,0.3)', 
-    marginHorizontal: 10 
-  },
-  plateText: { 
-    color: '#FFFFFF', 
-    fontSize: 13, 
-    fontWeight: 'bold' 
+  tripCard: {
+    backgroundColor: colors.primaryBlue,
+    borderRadius: 20,
+    padding: 20,
+    marginVertical: 8,
   },
 
-  primaryButton: { 
-    backgroundColor: colors.primaryBlue, 
-    height: 54, 
-    borderRadius: 16, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginTop: 8 
+  tripTag: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
-  primaryButtonText: { 
-    color: '#FFFFFF', 
-    fontSize: 16, 
-    fontWeight: 'bold' 
+
+  routeTimeline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 18,
+    paddingHorizontal: 10,
+  },
+
+  dotStart: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    backgroundColor: colors.primaryBlue,
+  },
+
+  line: {
+    flex: 1,
+    height: 2,
+    backgroundColor: '#FFFFFF',
+  },
+
+  dotEnd: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+  },
+
+  routeLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+
+  cityTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+
+  cityName: {
+    color: '#E0E0E0',
+    fontSize: 12,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginVertical: 16,
+  },
+
+  licenseBox: {
+    backgroundColor: '#1D3BBD',
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  licenseText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  licenseDashedLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginHorizontal: 10,
+  },
+
+  plateText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
 });
