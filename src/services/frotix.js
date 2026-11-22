@@ -16,6 +16,7 @@ export const cadastrarRota = async (dados) => (await post('/frota/rotas', dados)
 export const abrirViagem = (rotaId, dados) => post(`/frota/rotas/${rotaId}/abrir`, dados);
 export const concluirViagem = (rotaId, hodometroFinal) => post(`/frota/rotas/${rotaId}/concluir`, { hodometroFinal });
 export const listarViagensEmAndamento = async () => (await apiJson('/frota/viagens-andamento')).viagens;
+export const obterPosicaoViagem = (rotaId) => apiJson(`/frota/rotas/${encodeURIComponent(rotaId)}/posicao`);
 export const listarMotoristas = async () => (await apiJson('/frota/motoristas')).motoristas;
 
 export const listarManutencoes = async () => (await apiJson('/frota/manutencoes')).manutencoes; 

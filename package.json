@@ -15,6 +15,7 @@
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-image-picker": "~57.0.20",
+    "expo-location": "~57.0.23",
     "expo-navigation-bar": "~57.0.2",
     "expo-print": "~57.0.2",
     "expo-secure-store": "~57.0.4",
@@ -44,7 +45,8 @@
     "backend": "node --watch ./backend/server.js",
     "test:backend": "node --test --experimental-test-module-mocks backend/tests/api.test.js",
     "test:offline": "node --test --experimental-test-module-mocks backend/tests/offlineSync.test.js",
-    "test": "node --test --experimental-test-module-mocks backend/tests/api.test.js backend/tests/offlineSync.test.js tests/navigationPermissions.test.js"
+    "test": "node --test --experimental-test-module-mocks backend/tests/api.test.js backend/tests/offlineSync.test.js tests/navigationPermissions.test.js tests/rastreamento.test.js",
+    "test:rastreamento": "node --test tests/rastreamento.test.js"
   },
   "private": true
 }

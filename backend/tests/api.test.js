@@ -544,3 +544,53 @@ test('motorista não vincula lançamento a viagem de outro motorista', async () 
   assert.equal(propria.json.lancamento.id_usuario, MOTORISTA_1);
   assert.equal(propria.json.lancamento.id_viagem, 'v1');
 });
+
+// ---------------------------------------------------------------- Localização do motorista
+
+test('localização: só o motorista da viagem envia, e reenvio da fila não duplica', async () => {
+  const t1 = new Date(Date.now() - 60_000).toISOString();
+  const t2 = new Date(Date.now() - 30_000).toISOString();
+  const lote = {
+    posicoes: [
+      { latitude: -22.95, longitude: -46.5, precisao: 12, velocidade: 22.5, registradaEm: t1 },
+      { latitude: -22.96, longitude: -46.3, registradaEm: t2 },
+    ],
+  };
+
+  // Outro motorista, gestor e admin não podem enviar posição desta viagem.
+  assert.equal((await chamar('POST', '/frota/rotas/v2/posicoes', { token: T.motorista1, corpo: lote })).status, 403);
+  assert.equal((await chamar('POST', '/frota/rotas/v2/posicoes', { token: T.gestor, corpo: lote })).status, 403);
+  // Viagem concluída não recebe posição.
+  assert.equal((await chamar('POST', '/frota/rotas/v1/posicoes', { token: T.motorista1, corpo: lote })).status, 409);
+  // Coordenada inválida.
+  const invalida = await chamar('POST', '/frota/rotas/v2/posicoes', {
+    token: T.motorista2, corpo: { latitude: 200, longitude: 10, registradaEm: t1 },
+  });
+  assert.equal(invalida.status, 400);
+
+  const envio = await chamar('POST', '/frota/rotas/v2/posicoes', { token: T.motorista2, corpo: lote });
+  assert.equal(envio.status, 200);
+  assert.equal(envio.json.gravadas, 2);
+
+  const reenvio = await chamar('POST', '/frota/rotas/v2/posicoes', { token: T.motorista2, corpo: lote });
+  assert.equal(reenvio.status, 200);
+  assert.equal(reenvio.json.gravadas, 0);
+  assert.equal(fake.tabelas.posicoes_viagem.filter((p) => p.id_viagem === 'v2').length, 2);
+  assert.ok(fake.tabelas.posicoes_viagem.every((p) => p.id_motorista === MOTORISTA_2));
+});
+
+test('localização: gestor vê a última posição; motorista não vê a de outra viagem', async () => {
+  const r = await chamar('GET', '/frota/rotas/v2/posicao', { token: T.gestor });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.status, 'em_transito');
+  assert.equal(r.json.posicao.latitude, -22.96);
+  assert.equal(r.json.posicao.longitude, -46.3);
+
+  assert.equal((await chamar('GET', '/frota/rotas/v2/posicao', { token: T.admin })).status, 200);
+  assert.equal((await chamar('GET', '/frota/rotas/v2/posicao', { token: T.motorista1 })).status, 403);
+  assert.equal((await chamar('GET', '/frota/rotas/v2/posicao', { token: T.financeiro })).status, 403);
+
+  const semPosicao = await chamar('GET', '/frota/rotas/v3/posicao', { token: T.gestor });
+  assert.equal(semPosicao.status, 200);
+  assert.equal(semPosicao.json.posicao, null);
+});

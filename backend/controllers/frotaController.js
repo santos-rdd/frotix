@@ -474,6 +474,123 @@ export async function listarViagensEmAndamento(req, res) {
 }
 
 // -----------------------------------------------------------------------------
+// Localização do motorista durante a viagem
+// -----------------------------------------------------------------------------
+
+const MAX_POSICOES_POR_ENVIO = 200;
+const TOLERANCIA_RELOGIO_MS = 5 * 60 * 1000; // relógio do celular pode estar um pouco adiantado
+
+/** Valida uma leitura de GPS vinda do app. Devolve a linha do banco ou null. */
+function normalizarPosicao(p) {
+  const latitude = Number(p?.latitude);
+  const longitude = Number(p?.longitude);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null;
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+
+  const instante = new Date(p?.registradaEm);
+  if (Number.isNaN(instante.getTime())) return null;
+  if (instante.getTime() > Date.now() + TOLERANCIA_RELOGIO_MS) return null;
+
+  const precisao = numero(p?.precisao);
+  const velocidade = numero(p?.velocidade);
+  return {
+    latitude,
+    longitude,
+    precisao_m: Number.isFinite(precisao) && precisao >= 0 ? precisao : null,
+    velocidade_ms: Number.isFinite(velocidade) && velocidade >= 0 ? velocidade : null,
+    registrada_em: instante.toISOString(),
+  };
+}
+
+const montarPosicao = (linha) => linha && ({
+  latitude: Number(linha.latitude),
+  longitude: Number(linha.longitude),
+  precisao: numero(linha.precisao_m),
+  velocidade: numero(linha.velocidade_ms),
+  registradaEm: linha.registrada_em,
+});
+
+/**
+ * POST /frota/rotas/:id/posicoes  { posicoes: [{ latitude, longitude, precisao?, velocidade?, registradaEm }] }
+ * Só o motorista da viagem, e só enquanto ela está EM_ANDAMENTO.
+ * Leituras repetidas (mesmo registradaEm) são ignoradas — o app pode reenviar a fila offline.
+ */
+export async function registrarPosicoes(req, res) {
+  try {
+    if (!ehMotorista(req)) {
+      return res.status(403).json({ sucesso: false, erro: 'Só o motorista da viagem envia a localização.' });
+    }
+    const viagem = await buscarViagemPermitida(req, res);
+    if (!viagem) return null;
+    if (viagem.status !== 'EM_ANDAMENTO') {
+      return res.status(409).json({ sucesso: false, erro: 'A viagem não está em andamento.' });
+    }
+
+    const recebidas = Array.isArray(req.body?.posicoes) ? req.body.posicoes : [req.body];
+    if (recebidas.length === 0 || recebidas.length > MAX_POSICOES_POR_ENVIO) {
+      return res.status(400).json({ sucesso: false, erro: `Envie de 1 a ${MAX_POSICOES_POR_ENVIO} posições por vez.` });
+    }
+
+    const validas = recebidas.map(normalizarPosicao).filter(Boolean);
+    if (validas.length === 0) {
+      return res.status(400).json({ sucesso: false, erro: 'Nenhuma posição válida (latitude, longitude e registradaEm).' });
+    }
+
+    // Tira as que já estão gravadas (reenvio da fila) e as repetidas no mesmo lote.
+    const instantes = [...new Set(validas.map((p) => p.registrada_em))];
+    const { data: existentes, error: eExistentes } = await supabase
+      .from('posicoes_viagem')
+      .select('registrada_em')
+      .eq('id_viagem', viagem.id)
+      .in('registrada_em', instantes);
+    if (eExistentes) throw eExistentes;
+    const jaGravadas = new Set((existentes || []).map((p) => new Date(p.registrada_em).toISOString()));
+
+    const vistas = new Set();
+    const novas = validas.filter((p) => {
+      if (jaGravadas.has(p.registrada_em) || vistas.has(p.registrada_em)) return false;
+      vistas.add(p.registrada_em);
+      return true;
+    }).map((p) => ({ ...p, id_viagem: viagem.id, id_motorista: req.usuario.id }));
+
+    if (novas.length > 0) {
+      const { error } = await supabase.from('posicoes_viagem').insert(novas);
+      // 23505 = outro envio gravou a mesma leitura ao mesmo tempo; não é erro para o app.
+      if (error && error.code !== '23505') throw error;
+    }
+
+    return res.json({ sucesso: true, gravadas: novas.length, ignoradas: recebidas.length - novas.length });
+  } catch (e) {
+    return erroInterno(res, 'registrar a localização', e);
+  }
+}
+
+/** GET /frota/rotas/:id/posicao — última posição conhecida do motorista nesta viagem. */
+export async function obterPosicaoAtual(req, res) {
+  try {
+    const viagem = await buscarViagemPermitida(req, res);
+    if (!viagem) return null;
+
+    const { data, error } = await supabase
+      .from('posicoes_viagem')
+      .select('*')
+      .eq('id_viagem', viagem.id)
+      .order('registrada_em', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+
+    res.set('Cache-Control', 'no-store');
+    return res.json({
+      sucesso: true,
+      status: STATUS_ROTA[String(viagem.status).toUpperCase()] || 'agendada',
+      posicao: montarPosicao((data || [])[0]) || null,
+    });
+  } catch (e) {
+    return erroInterno(res, 'consultar a localização', e);
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Manutenções
 // -----------------------------------------------------------------------------
 
