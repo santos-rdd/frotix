@@ -9,6 +9,7 @@ import {
   Image,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +41,7 @@ import {
 import { obterUsuarioLogado } from '../../services/api.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
+import { iniciarRastreamento, pararRastreamento } from '../../services/rastreamentoService.js';
 
 const { height } = Dimensions.get('window');
 
@@ -241,6 +243,34 @@ export default function MotoristaHomeScreen(props) {
 
   const rotaEmDestaque =
     viagemEmAndamento || rotasAgendadas[0] || null;
+
+  const idViagemEmAndamento = viagemEmAndamento?.id ? String(viagemEmAndamento.id) : null;
+
+  // Enquanto houver viagem em andamento, envia o GPS para o mapa do Admin/Gestor.
+  // Para sozinho quando a viagem é concluída (a lista volta vazia) ou a tela sai.
+  useEffect(() => {
+    if (!usuarioId || !idViagemEmAndamento) {
+      pararRastreamento();
+      return undefined;
+    }
+    let ativo = true;
+    iniciarRastreamento({ usuarioId, viagemId: idViagemEmAndamento }).then((r) => {
+      if (!ativo || r.ativo) return;
+      if (r.motivo === 'sem_permissao') {
+        Alert.alert(
+          'Localização desativada',
+          'Sem a permissão de localização, o gestor não consegue acompanhar em que ponto da rota você está.'
+        );
+      } else if (r.motivo === 'gps_desligado') {
+        Alert.alert('GPS desligado', 'Ligue a localização do celular para compartilhar sua posição na rota.');
+      }
+    });
+    return () => {
+      ativo = false;
+    };
+  }, [usuarioId, idViagemEmAndamento]);
+
+  useEffect(() => () => pararRastreamento(), []);
 
   const veiculoEmDestaque = veiculosLista.find((veiculo) =>
     [veiculo.id, veiculo.idLocal].some(

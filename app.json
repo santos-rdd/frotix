@@ -25,7 +25,13 @@
       ],
       "@react-native-google-signin/google-signin",
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O Frotix usa sua localização durante a viagem para mostrar ao gestor em que ponto da rota você está."
+        }
+      ]
     ]
   }
 }
