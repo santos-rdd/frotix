@@ -47,6 +47,12 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
           if (nome === 'usuarios' && linhas().some((l) => l.email === n.email)) {
             return { data: null, error: { code: '23505', message: 'duplicate key' } };
           }
+          if (n.id_local && nome === 'financiamentos' && linhas().some((l) => l.id_usuario === n.id_usuario && l.id_local === n.id_local)) {
+            return { data: null, error: { code: '23505', message: 'duplicate key' } };
+          }
+          if (n.id_local && nome === 'lancamentos_financeiros' && linhas().some((l) => l.id_usuario === n.id_usuario && l.id_local === n.id_local)) {
+            return { data: null, error: { code: '23505', message: 'duplicate key' } };
+          }
         }
         linhas().push(...novos);
         resultado = novos;
@@ -74,6 +80,99 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
     return api;
   }
 
+  async function rpc(nomeFuncao, parametros = {}) {
+    if (nomeFuncao === 'cadastrar_financiamento_com_parcelas') {
+      const {
+        p_id_usuario,
+        p_descricao,
+        p_valor_total,
+        p_valor_parcela,
+        p_quantidade_parcelas,
+        p_data_primeiro_vencimento,
+        p_valor_quitacao_antecipada,
+        p_credor,
+        p_id_categoria,
+        p_id_forma_pagamento,
+        p_id_viagem,
+        p_id_local,
+        p_data_lancamento
+      } = parametros;
+
+      const fins = (tabelas.financiamentos ||= []);
+      const lancs = (tabelas.lancamentos_financeiros ||= []);
+
+      if (p_id_local) {
+        const existente = fins.find((f) => f.id_usuario === p_id_usuario && f.id_local === p_id_local);
+        if (existente) {
+          return {
+            data: {
+              sucesso: true,
+              mensagem: 'Dívida e parcelas já cadastradas anteriormente.',
+              financiamentoId: existente.id,
+              jaExistente: true
+            },
+            error: null
+          };
+        }
+      }
+
+      const fid = crypto.randomUUID();
+      const novoFin = {
+        id: fid,
+        descricao: p_descricao,
+        valor_total: p_valor_total,
+        valor_parcela: p_valor_parcela,
+        quantidade_parcelas: p_quantidade_parcelas,
+        data_primeiro_vencimento: p_data_primeiro_vencimento,
+        valor_quitacao_antecipada: p_valor_quitacao_antecipada || null,
+        credor: p_credor || null,
+        id_usuario: p_id_usuario,
+        id_categoria: p_id_categoria || null,
+        id_forma_pagamento: p_id_forma_pagamento || null,
+        id_local: p_id_local || null,
+        ativo: true,
+        criado_em: new Date().toISOString()
+      };
+      fins.push(novoFin);
+
+      const dataBase = new Date(`${p_data_primeiro_vencimento}T12:00:00`);
+      const dataLanc = p_data_lancamento || new Date().toISOString().split('T')[0];
+
+      for (let i = 1; i <= p_quantidade_parcelas; i++) {
+        lancs.push({
+          id: crypto.randomUUID(),
+          descricao: `${p_descricao} Parcela ${i}/${p_quantidade_parcelas}`,
+          valor: p_valor_parcela,
+          tipo: 'DIVIDA',
+          id_categoria: p_id_categoria || null,
+          id_forma_pagamento: p_id_forma_pagamento || null,
+          id_usuario: p_id_usuario,
+          id_viagem: p_id_viagem || null,
+          data_lancamento: dataLanc,
+          data_vencimento: dataBase.toISOString().split('T')[0],
+          status: 'PENDENTE',
+          id_financiamento: fid,
+          numero_parcela: i,
+          total_parcelas: p_quantidade_parcelas,
+          ativo: true
+        });
+        dataBase.setMonth(dataBase.getMonth() + 1);
+      }
+
+      return {
+        data: {
+          sucesso: true,
+          mensagem: 'Dívida e parcelas cadastradas com sucesso!',
+          financiamentoId: fid,
+          jaExistente: false
+        },
+        error: null
+      };
+    }
+
+    return { data: null, error: { code: '42883', message: `function ${nomeFuncao} does not exist` } };
+  }
+
   const storage = {
     async getBucket(id) { return { data: buckets.has(id) ? { id } : null, error: null }; },
     async createBucket(id) { buckets.add(id); return { data: { name: id }, error: null }; },
@@ -85,5 +184,5 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
     },
   };
 
-  return { from: consulta, storage, tabelas, arquivos, buckets };
+  return { from: consulta, rpc, storage, tabelas, arquivos, buckets };
 }

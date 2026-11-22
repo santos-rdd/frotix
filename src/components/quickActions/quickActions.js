@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList } from 'react-native';
 import QuickActionsCards from '../quickActionsCards/quickActionsCards';
 
 export default function QuickActions({ selectedAction, onSelectAction, userRole }) {
+    const role = Number(userRole);
     const allCards = [
         { id: 'finance', name: 'Categorias Financeiras', image: ''},
         { id: 'payment', name: 'Entradas e Saídas', image: ''},
@@ -12,13 +13,16 @@ export default function QuickActions({ selectedAction, onSelectAction, userRole 
 
     const quickCardsInfos = allCards.filter(card => {
         if (card.id === 'users') {
-            return userRole === 1;
+            return role === 1;
         }
         if (card.id === 'finance') {
-            return userRole === 1 || userRole === 3;
+            return role === 1 || role === 3;
+        }
+        if (card.id === 'payment') {
+            return role !== 4;
         }
         if (card.id === 'rotes') {
-            return userRole !== 3;
+            return role !== 3 && role !== 4;
         }
         return true;
     });

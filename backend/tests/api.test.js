@@ -36,7 +36,7 @@ const fake = criarFakeSupabase({
     // Os mesmos números do banco que geraram o erro I7 (134.910 km).
     { id: 'v1', origem: 'São Paulo', destino: 'BH', id_motorista: MOTORISTA_1, status: 'CONCLUIDA', km_inicial: 45200.5, km_final: 45789.2, iniciada_em: agora, concluida_em: agora, id_veiculo: VEICULO },
     { id: 'v2', origem: 'Campinas', destino: 'Rio', id_motorista: MOTORISTA_2, status: 'EM_ANDAMENTO', km_inicial: 89120, km_final: null, iniciada_em: agora },
-    { id: 'v3', origem: 'Curitiba', destino: 'Santos', id_motorista: MOTORISTA_1, status: 'EM_ANDAMENTO', km_inicial: 45790, km_final: null, iniciada_em: agora },
+    { id: 'v3', origem: 'Curitiba', destino: 'Santos', id_motorista: MOTORISTA_1, id_veiculo: VEICULO, status: 'EM_ANDAMENTO', km_inicial: 45790, km_final: null, iniciada_em: agora },
   ],
   categorias_financeiras: [
     { id: CAT_FRETE, nome: 'Frete e Serviços de Transporte', tipo: 'ENTRADA', ativo: true },
@@ -99,6 +99,7 @@ after(() => servidor?.close());
 test('rotas protegidas recusam pedido sem token (C2)', async () => {
   for (const [m, c] of [
     ['GET', '/financeiro/resumo-geral'], ['GET', '/frota/veiculos'], ['GET', '/resumo/atividades-recentes'],
+    ['GET', '/financeiro/lancamentos'], ['GET', '/financeiro/dividas'],
     ['POST', '/financeiro/transacoes'], ['GET', '/usuarios'], ['GET', '/categorias'], ['POST', '/comprovantes/upload'],
   ]) {
     const r = await chamar(m, c);
@@ -244,6 +245,71 @@ test('dívida exige 2+ parcelas e grava dono e categoria no financiamento (I6)',
   assert.deepEqual(parcelas.map((p) => p.data_vencimento), ['2026-12-10', '2027-01-10', '2027-02-10']);
 });
 
+test('idempotência: repetição de requisição com idLocal não duplica transação', async () => {
+  const idLocal = 'tx_idemp_teste_001';
+  const totalAntes = fake.tabelas.lancamentos_financeiros.length;
+
+  const r1 = await chamar('POST', '/financeiro/transacoes', {
+    token: T.financeiro,
+    corpo: { idLocal, tipo: 'saida', descricao: 'Troca de filtro', valorParcela: 120, idCategoria: CAT_DIESEL },
+  });
+  assert.equal(r1.status, 201);
+  assert.equal(fake.tabelas.lancamentos_financeiros.length, totalAntes + 1);
+
+  const r2 = await chamar('POST', '/financeiro/transacoes', {
+    token: T.financeiro,
+    corpo: { idLocal, tipo: 'saida', descricao: 'Troca de filtro', valorParcela: 120, idCategoria: CAT_DIESEL },
+  });
+  assert.equal(r2.status, 200);
+  assert.equal(r2.json.jaExistente, true);
+  assert.equal(r2.json.lancamento.id, r1.json.lancamento.id);
+  assert.equal(fake.tabelas.lancamentos_financeiros.length, totalAntes + 1);
+});
+
+test('idempotência: repetição de dívida com idLocal não duplica financiamento nem parcelas', async () => {
+  const idLocal = 'divida_idemp_001';
+  const totalFinAntes = fake.tabelas.financiamentos.length;
+  const totalLancAntes = fake.tabelas.lancamentos_financeiros.length;
+
+  const r1 = await chamar('POST', '/financeiro/transacoes', {
+    token: T.financeiro,
+    corpo: { idLocal, tipo: 'divida', descricao: 'Caminhão Novo', valorParcela: 2000, quantidadeParcelas: 4, idCategoria: CAT_DIESEL },
+  });
+  assert.equal(r1.status, 201);
+  assert.equal(fake.tabelas.financiamentos.length, totalFinAntes + 1);
+  assert.equal(fake.tabelas.lancamentos_financeiros.length, totalLancAntes + 4);
+
+  const r2 = await chamar('POST', '/financeiro/transacoes', {
+    token: T.financeiro,
+    corpo: { idLocal, tipo: 'divida', descricao: 'Caminhão Novo', valorParcela: 2000, quantidadeParcelas: 4, idCategoria: CAT_DIESEL },
+  });
+  assert.equal(r2.status, 200);
+  assert.equal(r2.json.jaExistente, true);
+  assert.equal(r2.json.financiamentoId, r1.json.financiamentoId);
+  assert.equal(fake.tabelas.financiamentos.length, totalFinAntes + 1);
+  assert.equal(fake.tabelas.lancamentos_financeiros.length, totalLancAntes + 4);
+});
+
+test('idempotência: requisições simultâneas com mesmo idLocal tratam concorrência', async () => {
+  const idLocal = 'concorrente_001';
+  const totalAntes = fake.tabelas.lancamentos_financeiros.length;
+
+  const [r1, r2] = await Promise.all([
+    chamar('POST', '/financeiro/transacoes', {
+      token: T.financeiro,
+      corpo: { idLocal, tipo: 'entrada', descricao: 'Adiantamento', valorParcela: 750 },
+    }),
+    chamar('POST', '/financeiro/transacoes', {
+      token: T.financeiro,
+      corpo: { idLocal, tipo: 'entrada', descricao: 'Adiantamento', valorParcela: 750 },
+    }),
+  ]);
+
+  assert.ok([200, 201].includes(r1.status));
+  assert.ok([200, 201].includes(r2.status));
+  assert.equal(fake.tabelas.lancamentos_financeiros.length, totalAntes + 1);
+});
+
 test('atividades recentes: motorista só vê os próprios lançamentos', async () => {
   const r = await chamar('GET', '/resumo/atividades-recentes?limite=50', { token: T.motorista1 });
   assert.equal(r.status, 200);
@@ -257,6 +323,26 @@ test('motorista só vê as próprias rotas (P10, P11)', async () => {
   assert.deepEqual(r.json.rotas.map((x) => x.id).sort(), ['v1', 'v3']);
   const andamento = await chamar('GET', '/frota/viagens-andamento', { token: T.motorista1 });
   assert.deepEqual(andamento.json.viagens.map((x) => x.id), ['v3']);
+  assert.deepEqual(
+    {
+      status: andamento.json.viagens[0].status,
+      hodometroInicial: andamento.json.viagens[0].hodometroInicial,
+      motoristaId: andamento.json.viagens[0].motoristaId,
+      motorista: andamento.json.viagens[0].motorista,
+      veiculoId: andamento.json.viagens[0].veiculoId,
+      veiculoModelo: andamento.json.viagens[0].veiculoModelo,
+      placa: andamento.json.viagens[0].placa,
+    },
+    {
+      status: 'em_transito',
+      hodometroInicial: 45790,
+      motoristaId: MOTORISTA_1,
+      motorista: 'João Silva',
+      veiculoId: VEICULO,
+      veiculoModelo: 'Scania R450',
+      placa: 'ABC-1234',
+    }
+  );
   const gestor = await chamar('GET', '/frota/viagens-andamento', { token: T.gestor });
   assert.equal(gestor.json.viagens.length, 2);
 });
@@ -301,18 +387,31 @@ test('rota: motorista precisa ter perfil Motorista (P7) e o ciclo agendada → e
 
   // Outro motorista não abre a rota que não é dele.
   assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista1, corpo: { hodometroInicial: 46000 } })).status, 403);
+  assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, {
+    token: T.motorista2,
+    corpo: { veiculoId: 'b0000000-0000-0000-0000-000000000099', hodometroInicial: 45800 },
+  })).status, 403);
   // Hodômetro menor que o do veículo é recusado.
   assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 100 } })).status, 400);
+  // Concluir uma rota agendada não pode pular a abertura.
+  assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46000 } })).status, 400);
 
   const aberta = await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 45800 } });
   assert.equal(aberta.status, 200);
   assert.equal(fake.tabelas.veiculos.find((v) => v.id === VEICULO).status, 'EM_VIAGEM');
-  assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 45800 } })).status, 400);
+  const aberturaRepetida = await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 45800 } });
+  assert.equal(aberturaRepetida.status, 200);
+  assert.equal(aberturaRepetida.json.jaExistente, true);
+  assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 45801 } })).status, 409);
 
   assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 45000 } })).status, 400);
   const fim = await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46300 } });
   assert.equal(fim.status, 200);
   assert.equal(fim.json.kmRodados, 500);
+  const conclusaoRepetida = await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46300 } });
+  assert.equal(conclusaoRepetida.status, 200);
+  assert.equal(conclusaoRepetida.json.jaExistente, true);
+  assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46301 } })).status, 409);
   const veiculo = fake.tabelas.veiculos.find((v) => v.id === VEICULO);
   assert.equal(veiculo.status, 'DISPONIVEL');
   assert.equal(veiculo.hodometro, 46300);
@@ -401,4 +500,47 @@ test('tipo de arquivo não aceito é recusado', async () => {
   const form = new FormData();
   form.append('comprovante', new Blob(['oi'], { type: 'text/plain' }), 'a.txt');
   assert.equal((await chamar('POST', '/comprovantes/upload', { token: T.admin, form })).status, 400);
+});
+
+test('motorista consulta apenas os próprios lançamentos e dívidas', async () => {
+  const idFinProprio = 'd0000000-0000-0000-0000-000000000001';
+  const idFinAlheio = 'd0000000-0000-0000-0000-000000000002';
+  fake.tabelas.financiamentos.push(
+    { id: idFinProprio, id_usuario: MOTORISTA_1, descricao: 'Dívida própria', valor_total: 200, valor_parcela: 100, quantidade_parcelas: 2 },
+    { id: idFinAlheio, id_usuario: MOTORISTA_2, descricao: 'Dívida de outro motorista', valor_total: 900, valor_parcela: 900, quantidade_parcelas: 1 }
+  );
+  fake.tabelas.lancamentos_financeiros.push(
+    { id: 'e0000000-0000-0000-0000-000000000001', id_usuario: MOTORISTA_1, id_financiamento: idFinProprio, tipo: 'DIVIDA', descricao: 'Parcela própria', valor: 100, status: 'PENDENTE', numero_parcela: 1, data_vencimento: hoje },
+    { id: 'e0000000-0000-0000-0000-000000000002', id_usuario: MOTORISTA_2, id_financiamento: idFinAlheio, tipo: 'DIVIDA', descricao: 'Parcela alheia', valor: 900, status: 'PENDENTE', numero_parcela: 1, data_vencimento: hoje },
+    { id: 'e0000000-0000-0000-0000-000000000003', id_usuario: MOTORISTA_2, tipo: 'SAIDA', descricao: 'Lançamento de outro motorista', valor: 777, status: 'PAGO', data_lancamento: hoje }
+  );
+
+  const lancamentos = await chamar('GET', '/financeiro/lancamentos?limite=100', { token: T.motorista1 });
+  assert.equal(lancamentos.status, 200);
+  assert.ok(lancamentos.json.lancamentos.some((item) => item.id === 'l2'));
+  assert.ok(!lancamentos.json.lancamentos.some((item) => item.descricao === 'Lançamento de outro motorista'));
+
+  const dividas = await chamar('GET', '/financeiro/dividas', { token: T.motorista1 });
+  assert.equal(dividas.status, 200);
+  assert.deepEqual(dividas.json.dividas.map((item) => item.id), [idFinProprio]);
+  assert.equal(dividas.json.totais.valorRestante, 100);
+  assert.equal((await chamar('GET', `/financeiro/dividas/${idFinAlheio}`, { token: T.motorista1 })).status, 404);
+});
+
+test('motorista não vincula lançamento a viagem de outro motorista', async () => {
+  const totalAntes = fake.tabelas.lancamentos_financeiros.length;
+  const tentativa = await chamar('POST', '/financeiro/transacoes', {
+    token: T.motorista1,
+    corpo: { tipo: 'saida', descricao: 'Despesa em viagem alheia', valorParcela: 30, idViagem: 'v2' },
+  });
+  assert.equal(tentativa.status, 403);
+  assert.equal(fake.tabelas.lancamentos_financeiros.length, totalAntes);
+
+  const propria = await chamar('POST', '/financeiro/transacoes', {
+    token: T.motorista1,
+    corpo: { tipo: 'saida', descricao: 'Despesa em viagem própria', valorParcela: 30, idViagem: 'v1' },
+  });
+  assert.equal(propria.status, 201);
+  assert.equal(propria.json.lancamento.id_usuario, MOTORISTA_1);
+  assert.equal(propria.json.lancamento.id_viagem, 'v1');
 });

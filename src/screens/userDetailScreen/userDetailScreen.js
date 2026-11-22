@@ -36,7 +36,6 @@ export default function UserDetailScreen() {
     return () => { montado = false; };
   }, [navigation, route?.params?.usuarioLogado?.role]);
 
-  // Usuário escolhido na lista (dados do banco: { id, nome, email, perfil }).
   const usuario = route.params?.usuario || {};
 
   const [nome, setNome] = useState(usuario.nome || '');
@@ -63,7 +62,6 @@ export default function UserDetailScreen() {
     }
   };
 
-  // "Remover" desativa a conta: ela some da lista e não consegue mais entrar.
   const handleDelete = () => {
     Alert.alert('Remover usuário', `Deseja remover o acesso de ${usuario.nome}?`, [
       { text: 'Cancelar', style: 'cancel' },

@@ -10,19 +10,12 @@ const GOOGLE_WEB_CLIENT_ID =
 
 const googleClient = new OAuth2Client(GOOGLE_WEB_CLIENT_ID);
 
-// Permite trocar a verificação nos testes automatizados.
 export let verificarIdTokenGoogle = async (idToken) => {
     const ticket = await googleClient.verifyIdToken({ idToken, audience: GOOGLE_WEB_CLIENT_ID });
     return ticket.getPayload();
 };
 export const definirVerificadorGoogle = (fn) => { verificarIdTokenGoogle = fn; };
 
-/**
- * POST /auth/login-google  { idToken }
- * Confere com o Google que o idToken é válido e pertence ao app, e só então
- * libera o usuário cadastrado com aquele e-mail (erro C1: antes bastava mandar
- * um e-mail qualquer).
- */
 export default async function authController(req, res) {
     const { idToken } = req.body || {};
 

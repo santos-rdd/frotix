@@ -1,9 +1,13 @@
-// Chamadas ao backend usadas pelas telas. Substituem os antigos *Mock.js.
 import { apiJson, apiFetch } from './api.js';
 
 const post = (caminho, body) => apiJson(caminho, { method: 'POST', body });
+const query = (params) => {
+  const partes = Object.entries(params || {})
+    .filter(([, valor]) => valor !== undefined && valor !== null && valor !== '')
+    .map(([chave, valor]) => `${encodeURIComponent(chave)}=${encodeURIComponent(valor)}`);
+  return partes.length ? `?${partes.join('&')}` : '';
+};
 
-// Frota ------------------------------------------------------------------------
 export const listarVeiculos = async () => (await apiJson('/frota/veiculos')).veiculos;
 export const cadastrarVeiculo = async (dados) => (await post('/frota/veiculos', dados)).veiculo;
 
@@ -14,14 +18,13 @@ export const concluirViagem = (rotaId, hodometroFinal) => post(`/frota/rotas/${r
 export const listarViagensEmAndamento = async () => (await apiJson('/frota/viagens-andamento')).viagens;
 export const listarMotoristas = async () => (await apiJson('/frota/motoristas')).motoristas;
 
-export const listarManutencoes = async () => (await apiJson('/frota/manutencoes')).manutencoes;
+export const listarManutencoes = async () => (await apiJson('/frota/manutencoes')).manutencoes; 
 export const agendarManutencao = async (dados) => (await post('/frota/manutencoes', dados)).manutencao;
 export const avancarManutencao = (id) => post(`/frota/manutencoes/${id}/avancar`);
 
 export const resumoFrota = (dias = 7) => apiJson(`/frota/resumo?dias=${dias}`);
 export const relatorio = async (dias) => (await apiJson(`/frota/relatorio?dias=${dias || 'tudo'}`)).relatorio;
 
-// Cadastros --------------------------------------------------------------------
 export const listarCategorias = async () => (await apiJson('/categorias')).categorias;
 export const criarCategoria = async (nome, tipo) => (await post('/categorias', { nome, tipo })).categoria;
 export const removerCategoria = (id) => apiJson(`/categorias/${id}`, { method: 'DELETE' });
@@ -37,13 +40,11 @@ export const reenviarConfirmacao = (email) => post('/auth/reenviar-confirmacao',
 export const atualizarUsuario = async (id, dados) => (await apiJson(`/usuarios/${id}`, { method: 'PUT', body: dados })).usuario;
 export const desativarUsuario = (id) => apiJson(`/usuarios/${id}`, { method: 'DELETE' });
 
-// Financeiro -------------------------------------------------------------------
 export const registrarTransacao = (dados) => post('/financeiro/transacoes', dados);
+export const listarLancamentos = (filtros) => apiJson(`/financeiro/lancamentos${query(filtros)}`);
+export const listarDividas = () => apiJson('/financeiro/dividas');
+export const detalharDivida = (id) => apiJson(`/financeiro/dividas/${encodeURIComponent(id)}`);
 
-/**
- * Envia um arquivo (foto ou PDF) para o Storage e devolve o caminho salvo.
- * arquivo: { uri, name?, mimeType? } (como vem do ImagePicker / DocumentPicker).
- */
 export async function enviarComprovante(arquivo, idLancamento) {
   const nome = arquivo.name || arquivo.fileName || arquivo.uri.split('/').pop() || 'comprovante.jpg';
   const extensao = (/\.(\w+)$/.exec(nome)?.[1] || 'jpg').toLowerCase();

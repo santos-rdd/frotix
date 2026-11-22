@@ -1,16 +1,30 @@
-import * as SecureStore from 'expo-secure-store';
 import { API_URL } from '../config/api.js';
 
-// Token de sessão devolvido pelo login. Fica na memória e no SecureStore do aparelho.
 const CHAVE_TOKEN = 'frotix_token';
 let tokenAtual = null;
 let aoExpirarSessao = null;
+let instanciaSecureStore = null;
+
+export function definirSecureStore(instancia) {
+  instanciaSecureStore = instancia;
+}
+
+async function obterSecureStore() {
+  if (instanciaSecureStore) return instanciaSecureStore;
+  try {
+    const mod = await import('expo-secure-store');
+    return mod.default || mod;
+  } catch {
+    return null;
+  }
+}
 
 export async function salvarToken(token) {
   tokenAtual = token || null;
   try {
-    if (token) await SecureStore.setItemAsync(CHAVE_TOKEN, token);
-    else await SecureStore.deleteItemAsync(CHAVE_TOKEN);
+    const ss = await obterSecureStore();
+    if (token) await ss?.setItemAsync?.(CHAVE_TOKEN, token);
+    else await ss?.deleteItemAsync?.(CHAVE_TOKEN);
   } catch (e) {
     console.warn('Não foi possível guardar o token:', e?.message || e);
   }
@@ -19,7 +33,8 @@ export async function salvarToken(token) {
 export async function carregarToken() {
   if (tokenAtual) return tokenAtual;
   try {
-    tokenAtual = await SecureStore.getItemAsync(CHAVE_TOKEN);
+    const ss = await obterSecureStore();
+    tokenAtual = await ss?.getItemAsync?.(CHAVE_TOKEN);
   } catch {
     tokenAtual = null;
   }

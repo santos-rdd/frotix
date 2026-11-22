@@ -26,17 +26,42 @@ import UserControlPanel from '../../components/userControlPanel/userControlPanel
 import ViagemAtualCard from '../../components/viagemAtualCard/viagemAtualCard.js';
 import RegistrarHodometroButton from '../../components/registrarHodometroButton/registrarHodometroButton.js';
 import GestorHome from '../gestorHome/gestorHome.js';
+import MotoristaHomeScreen from '../motoristaHome/motoristaHomeScreen.js';
 import FormaPagamentoModal from '../../components/formaPagamentoModal/formaPagamentoModal.js';
-import MetricCard from '../../components/metricCard/metricCard.js';
 import { descreverForma } from '../../constants/formasPagamento.js';
-import { listarFormas, criarForma, removerForma, listarRotas } from '../../services/frotix.js';
+import { listarFormas, criarForma, removerForma } from '../../services/frotix.js';
 
 const { height } = Dimensions.get('window');
 
 export default function HomePage({ navigation, route }) {
+  const params = route?.params || {};
+  const authenticatedUser = params.authenticatedUser || {};
+  const bankUser = params.bankUser || {};
+  const userRole = Number(authenticatedUser.role ?? bankUser.role ?? params.usuario?.role ?? params.auth?.user?.role);
+
+  if (userRole === 4) {
+    const usuario = {
+      ...params.usuario,
+      id: authenticatedUser.id || params.usuario?.id || bankUser.id,
+      nome: authenticatedUser.nome || params.usuario?.nome || bankUser.nome || bankUser.name || params.auth?.user?.givenName,
+      foto: params.usuario?.foto || bankUser.imagem || params.auth?.user?.photo || null,
+      role: userRole,
+    };
+
+    return (
+      <MotoristaHomeScreen
+        navigation={navigation}
+        route={{ ...route, params: { ...params, usuario } }}
+      />
+    );
+  }
+
+  return <HomePageOutrosPerfis navigation={navigation} route={route} />;
+}
+
+function HomePageOutrosPerfis({ navigation, route }) {
   const [selectedQuickAction, setSelectedQuickAction] = useState(null);
   const [viagemSelecionada, setViagemSelecionada] = useState(null);
-  const [rotasMotorista, setRotasMotorista] = useState([]);
 
   const [isSliderVisible, setIsSliderVisible] = useState(false);
   const [actionType, setActionType] = useState('entrada');
@@ -122,11 +147,12 @@ export default function HomePage({ navigation, route }) {
   const handleNextStep = () => handleCloseSlider();
 
   const authGoogle = route?.params?.auth || null;
+  const authenticatedUser = route?.params?.authenticatedUser || {};
   const bankUser = route?.params?.bankUser || null;
 
-  const userName = authGoogle?.user?.givenName || bankUser?.name || 'Usuário';
+  const userName = authenticatedUser.nome || authGoogle?.user?.givenName || bankUser?.name || 'Usuário';
   const userPhoto = authGoogle?.user?.photo || null; 
-  const userRole = bankUser?.role || authGoogle?.user?.role || 'Membro';
+  const userRole = Number(authenticatedUser.role ?? bankUser?.role ?? authGoogle?.user?.role);
 
   const reference = {
     1 : 'Admin',
@@ -137,31 +163,8 @@ export default function HomePage({ navigation, route }) {
 
   const usuario = { nome: userName, foto: userPhoto, role: userRole };
 
-  const carregarRotasMotorista = useCallback(async () => {
-    if (userRole === 4) {
-      try {
-        const lista = await listarRotas();
-        setRotasMotorista(lista || []);
-      } catch (e) {
-        console.warn('Erro ao carregar rotas do motorista:', e.message);
-      }
-    }
-  }, [userRole]);
-
-  useFocusEffect(useCallback(() => {
-    carregarRotasMotorista();
-  }, [carregarRotasMotorista]));
-
-  const viagensConcluidasMotorista = rotasMotorista.filter((r) => r.status === 'concluida');
-  const kmRodadosMotorista = viagensConcluidasMotorista.reduce((acc, r) => acc + (r.kmRodados || 0), 0);
-  const viagensAgendadasMotorista = rotasMotorista.filter((r) => r.status === 'agendada');
-
   const abrirRelatorios = () => {
-    if (userRole === 4) {
-      navigation.navigate('Viagens', { usuario, modo: 'motorista' });
-    } else {
-      navigation.navigate('Relatorios', { usuario });
-    }
+    navigation.navigate('Relatorios', { usuario });
   };
 
   const acaoInicial = userRole === 1 || userRole === 3 ? 'finance' : 'rotes';
@@ -196,27 +199,6 @@ export default function HomePage({ navigation, route }) {
          {(userRole === 1 || userRole === 3) &&(
             <GeneralSummaryCard onMenuPress={abrirRelatorios} />
          )}
-
-        {userRole === 4 && (
-          <View style={styles.metricasMotorista}>
-            <MetricCard
-              value={`${Math.round(kmRodadosMotorista).toLocaleString('pt-BR')}\nkm`}
-              title="km rodados"
-              subtitle="viagens concluídas"
-              onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
-            />
-            <MetricCard
-              value={String(viagensConcluidasMotorista.length)}
-              title={'Viagens\nconcluídas'}
-              onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
-            />
-            <MetricCard
-              value={String(viagensAgendadasMotorista.length)}
-              title={'Viagens\nagendadas'}
-              onPress={() => navigation.navigate('Rotas', { usuario })}
-            />
-          </View>
-        )}
 
         <QuickActions 
           selectedAction={acaoAtiva} 
@@ -277,39 +259,31 @@ export default function HomePage({ navigation, route }) {
               onSelectViagem={setViagemSelecionada}
               onOpenTripDetails={(viagem) => {
                 if (viagem) {
-                  const rotaCorrespondente = rotasMotorista.find((r) => r.id === viagem.id);
                   navigation.navigate('DetalhesRota', {
                     usuario,
-                    rota: rotaCorrespondente || {
+                    rota: {
                       id: viagem.id,
                       origem: viagem.origem,
                       destino: viagem.destino,
                       status: 'em_transito',
-                      hodometroInicial: viagem.km_inicial,
+                      hodometroInicial: viagem.hodometroInicial,
+                      veiculoId: viagem.veiculoId,
+                      veiculoModelo: viagem.veiculoModelo,
                       motorista: viagem.motorista,
                       placa: viagem.placa,
                       despesas: [],
                     }
                   });
                 } else {
-                  navigation.navigate('Viagens', { usuario, modo: userRole === 4 ? 'motorista' : undefined });
+                  navigation.navigate('Viagens', { usuario });
                 }
               }}
             />
             <RegistrarHodometroButton
               viagem={viagemSelecionada}
-              onButtonPress={() => navigation.navigate('Viagens', { usuario, modo: userRole === 4 ? 'motorista' : undefined })}
+              onButtonPress={() => navigation.navigate('Viagens', { usuario })}
             />
           </View>
-        )}
-
-        {userRole === 4 && (
-          <TouchableOpacity
-            style={styles.minhasViagens}
-            onPress={() => navigation.navigate('Viagens', { usuario, modo: 'motorista' })}
-          >
-            <Text style={styles.minhasViagensTexto}>Minhas Viagens</Text>
-          </TouchableOpacity>
         )}
 
       </ScrollView>

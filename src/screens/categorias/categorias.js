@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, KeyboardAvoidingView, Platform,
 } from 'react-native';
@@ -12,6 +12,12 @@ import { colors } from '../../constants/theme.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 import useDados from '../../hooks/useDados.js';
 import { listarCategorias, criarCategoria, removerCategoria } from '../../services/frotix.js';
+import {
+  salvarCategoriaLocal,
+  listarCategoriasLocais,
+  removerCadastroLocal,
+} from '../../services/localDataService.js';
+import { sincronizarOperacoes } from '../../services/syncService.js';
 
 const TIPOS = [
   { id: 'entrada', label: 'Entrada' },
@@ -20,20 +26,50 @@ const TIPOS = [
 
 const normalizar = (texto) => String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
-/**
- * Categorias Financeiras (Admin e Financeiro): cadastro e remoção das categorias usadas
- * nos formulários de entrada e saída. Aberta pelo botão "Gerenciar categorias"
- * da ação rápida "Categorias Financeiras" da Home.
- */
 export default function Categorias({ navigation, route }) {
   const usuario = route?.params?.usuario;
-  // Erro P4: as categorias agora vêm do banco (antes eram de exemplo).
   const { dados, carregando, erro: erroLista, recarregar } = useDados(listarCategorias, []);
-  const lista = dados || [];
+  const listaRemota = dados || [];
+  const [locais, setLocais] = useState([]);
   const [aba, setAba] = useState('entrada');
   const [nome, setNome] = useState('');
   const [erro, setErro] = useState('');
   const [salvando, setSalvando] = useState(false);
+
+  const carregarLocais = useCallback(async () => {
+    if (usuario?.id) {
+      try {
+        const pendentes = await listarCategoriasLocais(usuario.id);
+        setLocais(pendentes || []);
+      } catch {}
+    }
+  }, [usuario?.id]);
+
+  useEffect(() => {
+    carregarLocais();
+    if (usuario?.id) {
+      sincronizarOperacoes(usuario.id).then((res) => {
+        if (res?.processadas > 0) {
+          recarregar();
+          carregarLocais();
+        }
+      }).catch(() => {});
+    }
+  }, [usuario?.id, carregarLocais, recarregar]);
+
+  const listaCompleta = (() => {
+    const mapa = new Map();
+    for (const c of listaRemota) {
+      mapa.set(`${c.tipo}_${normalizar(c.nome)}`, c);
+    }
+    for (const l of locais) {
+      const chave = `${l.tipo}_${normalizar(l.nome)}`;
+      if (!mapa.has(chave)) {
+        mapa.set(chave, l);
+      }
+    }
+    return Array.from(mapa.values());
+  })();
 
   const adicionar = async () => {
     const limpo = nome.trim();
@@ -45,19 +81,39 @@ export default function Categorias({ navigation, route }) {
       setErro('"Outros" já aparece sempre no fim da lista.');
       return;
     }
-    if (lista.some((c) => c.tipo === aba && normalizar(c.nome) === normalizar(limpo))) {
+    if (listaCompleta.some((c) => c.tipo === aba && normalizar(c.nome) === normalizar(limpo))) {
       setErro('Essa categoria já existe.');
       return;
     }
     if (salvando) return;
     setSalvando(true);
+
     try {
       await criarCategoria(limpo, aba);
       setNome('');
       setErro('');
       await recarregar();
+      await carregarLocais();
     } catch (e) {
-      setErro(e.message);
+      const msg = e?.message || '';
+      const ehErroConexao = /conexão|internet|network|failed|timeout/i.test(msg);
+
+      if (ehErroConexao && usuario?.id) {
+        try {
+          const salvaLocal = await salvarCategoriaLocal(usuario.id, { nome: limpo, tipo: aba });
+          setLocais((antigo) => [...antigo.filter((x) => x.id !== salvaLocal.id), salvaLocal]);
+          setNome('');
+          setErro('');
+          Alert.alert(
+            'Salvo no dispositivo',
+            'A categoria foi salva localmente e será sincronizada assim que a conexão retornar.'
+          );
+        } catch (erroLocal) {
+          setErro(erroLocal?.message || 'Falha ao salvar localmente.');
+        }
+      } else {
+        setErro(msg || 'Não foi possível cadastrar a categoria.');
+      }
     } finally {
       setSalvando(false);
     }
@@ -71,8 +127,28 @@ export default function Categorias({ navigation, route }) {
         style: 'destructive',
         onPress: async () => {
           try {
-            await removerCategoria(categoria.id);
-            await recarregar();
+            if (categoria.pendenteSincronizacao || String(categoria.id).startsWith('local_')) {
+              await removerCadastroLocal(usuario?.id, 'categorias', categoria.id);
+              setLocais((antigo) => antigo.filter((x) => x.id !== categoria.id));
+            } else {
+              try {
+                await removerCategoria(categoria.id);
+                await recarregar();
+              } catch (e) {
+                const msg = e?.message || '';
+                const ehErroConexao = /conexão|internet|network|failed|timeout/i.test(msg);
+                if (ehErroConexao && usuario?.id) {
+                  await removerCadastroLocal(usuario.id, 'categorias', categoria.id);
+                  await carregarLocais();
+                  Alert.alert(
+                    'Salvo no dispositivo',
+                    'A exclusão foi salva localmente e será sincronizada assim que a conexão retornar.'
+                  );
+                } else {
+                  throw e;
+                }
+              }
+            }
           } catch (e) {
             Alert.alert('Não foi possível remover', e.message);
           }
@@ -81,7 +157,7 @@ export default function Categorias({ navigation, route }) {
     ]);
   };
 
-  const daAba = lista.filter((c) => c.tipo === aba);
+  const daAba = listaCompleta.filter((c) => c.tipo === aba);
 
   return (
     <>
@@ -110,12 +186,19 @@ export default function Categorias({ navigation, route }) {
             Categorias de {aba === 'entrada' ? 'entrada' : 'saída'} ({daAba.length})
           </Text>
 
-          <EstadoDados carregando={carregando} erro={erroLista} onTentarDeNovo={recarregar} temDados={lista.length > 0} />
+          <EstadoDados
+            carregando={carregando && listaCompleta.length === 0}
+            erro={erroLista && listaCompleta.length === 0 ? erroLista : null}
+            onTentarDeNovo={() => { recarregar(); carregarLocais(); }}
+            temDados={listaCompleta.length > 0}
+          />
 
           {daAba.map((c) => (
             <View key={c.id} style={styles.item}>
               <View style={[styles.bolinha, { backgroundColor: aba === 'entrada' ? colors.greenSuccess : colors.redDanger }]} />
-              <Text style={styles.itemTexto}>{c.nome}</Text>
+              <Text style={styles.itemTexto}>
+                {c.nome} {c.pendenteSincronizacao ? <Text style={styles.textoPendente}>(Pendente)</Text> : null}
+              </Text>
               <TouchableOpacity onPress={() => remover(c)} hitSlop={10}>
                 <Feather name="trash-2" size={18} color="#FF8A80" />
               </TouchableOpacity>
@@ -163,6 +246,7 @@ const styles = StyleSheet.create({
   },
   bolinha: { width: 10, height: 10, borderRadius: 5 },
   itemTexto: { color: '#FFF', fontSize: 14, flex: 1 },
+  textoPendente: { color: '#FCD34D', fontSize: 12, fontStyle: 'italic' },
   vazio: { color: colors.textMuted, textAlign: 'center', marginVertical: 20 },
   nota: { color: colors.textMuted, fontSize: 12, paddingHorizontal: 18, marginTop: 6 },
 });

@@ -9,15 +9,21 @@ import BottomNavigation from '../../components/bottomNavigation/bottomNavigation
 import { colors } from '../../constants/theme.js';
 import { STATUS_VEICULO, formatarKm, formatarMoeda } from '../../constants/frota.js';
 import { listarVeiculos } from '../../services/frotix.js';
+import {
+  listarVeiculosLocais,
+  listarVeiculosPermitidosLocais,
+  atualizarCacheVeiculos,
+} from '../../services/localDataService.js';
+import { obterUsuarioLogado } from '../../services/api.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
-// Normaliza para a busca ignorar maiúsculas, acentos e o hífen da placa.
 const normalizar = (texto) =>
   String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/-/g, '').toLowerCase();
 
 export default function Veiculos({ navigation, route }) {
   const usuario = route?.params?.usuario;
+  const motorista = Number(usuario?.role) === 4;
   const [filtro, setFiltro] = useState(route?.params?.filtroInicial || 'todos');
   const [busca, setBusca] = useState('');
 
@@ -26,8 +32,31 @@ export default function Veiculos({ navigation, route }) {
       setFiltro(route.params.filtroInicial);
     }
   }, [route?.params?.filtroInicial]);
-  // Erro P6: a lista vem do banco e recarrega ao voltar do cadastro ou da manutenção.
-  const { dados, carregando, erro, recarregar } = useDados(listarVeiculos, []);
+
+  const carregarVeiculosComCache = React.useCallback(async () => {
+    const uLogado = await obterUsuarioLogado();
+    const uId = usuario?.id || usuario?.sub || uLogado?.id || uLogado?.sub;
+    const motorista = Number(usuario?.role ?? uLogado?.perfil) === 4;
+    try {
+      const servidor = await listarVeiculos();
+      if (uId && Array.isArray(servidor)) {
+        await atualizarCacheVeiculos(uId, servidor);
+      }
+      return servidor || [];
+    } catch (e) {
+      if (uId) {
+        const locais = motorista
+          ? await listarVeiculosPermitidosLocais(uId)
+          : await listarVeiculosLocais(uId);
+        if (Array.isArray(locais) && locais.length > 0) {
+          return locais;
+        }
+      }
+      throw e;
+    }
+  }, [usuario]);
+
+  const { dados, carregando, erro, recarregar } = useDados(carregarVeiculosComCache, []);
   const veiculos = dados || [];
 
   const contar = (status) => veiculos.filter((v) => v.status === status).length;
@@ -43,14 +72,24 @@ export default function Veiculos({ navigation, route }) {
       (!termo || normalizar(v.placa).includes(termo) || normalizar(v.modelo).includes(termo))
   );
 
-  // Atalho do rodapé de cada card, conforme o status do veículo.
   const atalho = (v) => {
     if (v.status === 'em_viagem') {
-      return { label: 'Ver viagem atual', onPress: () => navigation.navigate('Viagens', { usuario }) };
+      return {
+        label: 'Ver viagem atual',
+        onPress: () => navigation.navigate('Viagens', { usuario, modo: motorista ? 'motorista' : undefined }),
+      };
     }
     if (v.status === 'disponivel') {
-      return { label: 'Novo Despacho', onPress: () => navigation.navigate('Viagens', { usuario, veiculoId: v.id }) };
+      return {
+        label: motorista ? 'Iniciar viagem' : 'Novo Despacho',
+        onPress: () => navigation.navigate('Viagens', {
+          usuario,
+          veiculoId: v.id,
+          modo: motorista ? 'motorista' : undefined,
+        }),
+      };
     }
+    if (motorista) return null;
     return {
       label: 'Ordens de Serviço',
       onPress: () => navigation.navigate('Manutencao', { usuario, veiculoId: v.id }),
@@ -69,7 +108,7 @@ export default function Veiculos({ navigation, route }) {
           busca={busca}
           onBuscar={setBusca}
           placeholder="Placa ou modelo..."
-          botaoLabel="Cadastrar veículo"
+          botaoLabel={motorista ? undefined : 'Cadastrar veículo'}
           onBotao={() => navigation.navigate('CadastroVeiculo', { usuario })}
         />
 
@@ -103,17 +142,23 @@ export default function Veiculos({ navigation, route }) {
                   <Text style={styles.rotulo}>Hodômetro:</Text>
                   <View style={styles.alinhaDireita}>
                     <Text style={styles.km}>{formatarKm(v.hodometro)}</Text>
-                    <Text style={styles.custo}>
-                      <Text style={styles.custoRotulo}>Custo </Text>
-                      {formatarMoeda(v.custoKm)} / km
-                    </Text>
+                    {!motorista ? (
+                      <Text style={styles.custo}>
+                        <Text style={styles.custoRotulo}>Custo </Text>
+                        {formatarMoeda(v.custoKm)} / km
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
 
                 <View style={styles.divisor} />
-                <TouchableOpacity onPress={acao.onPress}>
-                  <Text style={styles.atalho}>{acao.label} {'>'}</Text>
-                </TouchableOpacity>
+                {acao ? (
+                  <TouchableOpacity onPress={acao.onPress}>
+                    <Text style={styles.atalho}>{acao.label} {'>'}</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <Text style={styles.atalhoIndisponivel}>Veículo indisponível</Text>
+                )}
               </View>
             </View>
           );
@@ -168,5 +213,6 @@ const styles = StyleSheet.create({
   custoRotulo: { color: colors.primaryBlue },
   divisor: { height: 2, backgroundColor: '#AAA', marginTop: 4, marginBottom: 6 },
   atalho: { color: '#FFF', fontSize: 12, textAlign: 'right' },
+  atalhoIndisponivel: { color: '#AAA', fontSize: 12, textAlign: 'right' },
   vazio: { color: colors.textMuted, textAlign: 'center', marginVertical: 20 },
 });

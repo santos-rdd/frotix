@@ -13,9 +13,9 @@ import BottomNavigation from '../../components/bottomNavigation/bottomNavigation
 
 
 export default function UserProfileScreen({ navigation, route }) {
-  // usuario vem da barra inferior: { nome, foto, role }.
   const { auth, bankUser, usuario } = route?.params || {};
   const userPhoto = auth?.user?.photo || bankUser?.fotoUrl || usuario?.foto;
+  const isMotorista = Number(usuario?.role) === 4;
   const PERFIS = { 1: 'Admin', 2: 'Gestor de Frota', 3: 'Financeiro', 4: 'Motorista' };
 
   const handleLogout = async () => {
@@ -40,7 +40,8 @@ export default function UserProfileScreen({ navigation, route }) {
 
         <View style={styles.headerContainer}>
           <Text style={styles.title}>
-            Gerenciar <Text style={styles.titleX}>Usuário</Text>
+            {isMotorista ? 'Meu ' : 'Gerenciar '}
+            <Text style={styles.titleX}>{isMotorista ? 'Perfil' : 'Usuário'}</Text>
           </Text>
         </View>
 

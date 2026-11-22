@@ -9,6 +9,8 @@ import BottomNavigation from '../../components/bottomNavigation/bottomNavigation
 import { colors } from '../../constants/theme.js';
 import { STATUS_ROTA, formatarKm } from '../../constants/frota.js';
 import { listarRotas } from '../../services/frotix.js';
+import { listarRotasLocais, atualizarCacheRotas } from '../../services/localDataService.js';
+import { obterUsuarioLogado } from '../../services/api.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
@@ -23,8 +25,28 @@ const normalizar = (texto) =>
 
 export default function Rotas({ navigation, route }) {
   const usuario = route?.params?.usuario;
-  // Erro P6: as rotas vêm do banco e recarregam ao voltar do cadastro ou dos detalhes.
-  const { dados, carregando, erro, recarregar } = useDados(listarRotas, []);
+  const motorista = Number(usuario?.role) === 4;
+  const carregarRotasComCache = React.useCallback(async () => {
+    const uLogado = await obterUsuarioLogado();
+    const uId = usuario?.id || usuario?.sub || uLogado?.id || uLogado?.sub;
+    try {
+      const servidor = await listarRotas();
+      if (uId && Array.isArray(servidor)) {
+        await atualizarCacheRotas(uId, servidor);
+      }
+      return servidor || [];
+    } catch (e) {
+      if (uId) {
+        const locais = await listarRotasLocais(uId);
+        if (Array.isArray(locais) && locais.length > 0) {
+          return locais;
+        }
+      }
+      throw e;
+    }
+  }, [usuario]);
+
+  const { dados, carregando, erro, recarregar } = useDados(carregarRotasComCache, []);
   const rotas = dados || [];
   const [filtro, setFiltro] = useState('todos');
   const [busca, setBusca] = useState('');
@@ -62,7 +84,7 @@ export default function Rotas({ navigation, route }) {
           busca={busca}
           onBuscar={setBusca}
           placeholder="Placa ou cidade..."
-          botaoLabel="Cadastrar rota"
+          botaoLabel={motorista ? undefined : 'Cadastrar rota'}
           onBotao={() => navigation.navigate('CadastroRota', { usuario })}
         />
 

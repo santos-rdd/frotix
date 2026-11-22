@@ -9,15 +9,12 @@ import {
 } from 'react-native';
 
 export default function VerifyCodeScreen({ navigation }) {
-  // Estado para armazenar os 6 dígitos do código
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const inputRefs = useRef([]);
 
-  // Estados para o temporizador de reenvio (30 segundos)
   const [timer, setTimer] = useState(30);
   const [canResend, setCanResend] = useState(false);
 
-  // Lógica do contador regressivo
   useEffect(() => {
     let interval = null;
     if (timer > 0) {
@@ -31,33 +28,27 @@ export default function VerifyCodeScreen({ navigation }) {
     return () => clearInterval(interval);
   }, [timer]);
 
-  // Função para lidar com o reenvio do código
   const handleResendCode = () => {
     if (canResend) {
-      // Aqui você coloca a lógica de reenviar o código (API)
       console.log('Código reenviado!');
-      setTimer(30); // Reinicia o cronômetro para 30s
+      setTimer(30); 
       setCanResend(false);
     }
   };
 
-  // Função para lidar com a digitação e transição automática entre os inputs
   const handleCodeChange = (text, index) => {
     const newCode = [...code];
     newCode[index] = text;
     setCode(newCode);
 
-    // Se digitou o dígito, foca no próximo campo automaticamente
     if (text && index < 5) {
       inputRefs.current[index + 1].focus();
     }
   };
 
-  // Função para lidar com o botão "Verificar"
   const handleVerify = () => {
     const fullCode = code.join('');
     console.log('Código inserido:', fullCode);
-    // Aqui vai a lógica para validar o código na sua API
   };
 
   return (

@@ -8,6 +8,8 @@ import BottomNavigation from '../../components/bottomNavigation/bottomNavigation
 import { colors } from '../../constants/theme.js';
 import { STATUS_ROTA, formatarMoeda } from '../../constants/frota.js';
 import { concluirViagem } from '../../services/frotix.js';
+import { concluirViagemOffline } from '../../services/localDataService.js';
+import { obterUsuarioLogado } from '../../services/api.js';
 
 /**
  * Detalhes de uma rota (params.rota).
@@ -16,8 +18,9 @@ import { concluirViagem } from '../../services/frotix.js';
  */
 export default function DetalhesRota({ navigation, route }) {
   const usuario = route?.params?.usuario;
+  const motorista = Number(usuario?.role) === 4;
   const rota = route?.params?.rota;
-  const editavel = rota?.status === 'agendada';
+  const editavel = !motorista && rota?.status === 'agendada';
   const [hodometroFinal, setHodometroFinal] = useState(rota?.hodometroFinal ? String(rota.hodometroFinal) : '');
   const [salvando, setSalvando] = useState(false);
 
@@ -54,6 +57,23 @@ export default function DetalhesRota({ navigation, route }) {
       Alert.alert('Rota concluída', `Total percorrido: ${total.toLocaleString('pt-BR')} km.`);
       navigation.goBack();
     } catch (e) {
+      const msg = e?.message || '';
+      const ehErroConexao = /conexão|internet|network|failed|timeout|servidor|econnrefused/i.test(msg);
+      if (ehErroConexao) {
+        try {
+          const uLogado = await obterUsuarioLogado();
+          const uId = usuario?.id || uLogado?.id || uLogado?.sub;
+          if (uId) {
+            await concluirViagemOffline(uId, rota.id, { hodometroFinal: final });
+            Alert.alert(
+              'Conclusão salva no dispositivo',
+              `Total percorrido: ${total.toLocaleString('pt-BR')} km.\nA conclusão foi salva localmente e será sincronizada assim que a internet voltar.`,
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+            return;
+          }
+        } catch {}
+      }
       Alert.alert('Não foi possível salvar', e.message);
     } finally {
       setSalvando(false);
@@ -135,24 +155,28 @@ export default function DetalhesRota({ navigation, route }) {
             </TouchableOpacity>
           ) : null}
 
-          <Text style={styles.secao}>Despesas Associadas</Text>
-          <View style={styles.despesas}>
-            {rota.despesas.length === 0 ? (
-              <Text style={styles.vazio}>Nenhuma despesa registrada.</Text>
-            ) : (
-              rota.despesas.map((d) => (
-                <View key={d.id} style={styles.despesa}>
-                  <Feather name="file-text" size={18} color="#FFF" />
-                  <View>
-                    <Text style={styles.despesaTitulo}>{d.descricao} - {formatarMoeda(d.valor)}</Text>
-                    <Text style={styles.despesaSub}>{d.comprovante}</Text>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
+          {!motorista ? (
+            <>
+              <Text style={styles.secao}>Despesas Associadas</Text>
+              <View style={styles.despesas}>
+                {rota.despesas.length === 0 ? (
+                  <Text style={styles.vazio}>Nenhuma despesa registrada.</Text>
+                ) : (
+                  rota.despesas.map((d) => (
+                    <View key={d.id} style={styles.despesa}>
+                      <Feather name="file-text" size={18} color="#FFF" />
+                      <View>
+                        <Text style={styles.despesaTitulo}>{d.descricao} - {formatarMoeda(d.valor)}</Text>
+                        <Text style={styles.despesaSub}>{d.comprovante}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+            </>
+          ) : null}
 
-          {!editavel ? (
+          {!editavel && !motorista ? (
             <>
               <Text style={[styles.secao, styles.secaoRentabilidade]}>Rentabilidade</Text>
               <View style={styles.rentabilidade}>

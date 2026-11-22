@@ -10,6 +10,8 @@ import { colors } from '../../constants/theme.js';
 import { dataValida, formatarData, formatarKm } from '../../constants/frota.js';
 import { listarVeiculos, listarMotoristas, cadastrarRota } from '../../services/frotix.js';
 import { calcularDistanciaRodoviaria } from '../../services/roteamentoService.js';
+import { salvarRotaOffline } from '../../services/localDataService.js';
+import { obterUsuarioLogado } from '../../services/api.js';
 import useDados from '../../hooks/useDados.js';
 
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
@@ -184,6 +186,33 @@ export default function CadastroRota({ navigation, route }) {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e) {
+      const msg = e?.message || '';
+      const ehErroConexao = /conexão|internet|network|failed|timeout|servidor|econnrefused/i.test(msg);
+      if (ehErroConexao) {
+        try {
+          const uLogado = await obterUsuarioLogado();
+          const uId = usuario?.id || uLogado?.id || uLogado?.sub;
+          if (uId) {
+            const distNum = distancia ? Number(distancia) : null;
+            await salvarRotaOffline(uId, {
+              origem: origem.trim(),
+              destino: destino.trim(),
+              veiculoId,
+              motoristaId,
+              dataSaida: data,
+              hodometroInicial: Number(hodometroInicial),
+              receita: Number(receita.replace(/\./g, '').replace(',', '.')),
+              distanciaPrevistaKm: distNum,
+            });
+            Alert.alert(
+              'Rota salva no dispositivo',
+              'Sem conexão com o servidor no momento. A rota foi salva localmente e será sincronizada assim que a internet voltar.',
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+            return;
+          }
+        } catch {}
+      }
       Alert.alert('Não foi possível cadastrar', e.message);
     } finally {
       setSalvando(false);

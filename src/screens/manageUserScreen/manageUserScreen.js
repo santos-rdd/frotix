@@ -19,6 +19,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 
 import { listarUsuarios } from '../../services/frotix.js';
 import { obterUsuarioLogado } from '../../services/api.js';
+import { salvarUsuariosLocais, listarUsuariosLocais } from '../../services/localDataService.js';
 
 export default function ManageUserScreen() {
     const navigation = useNavigation();
@@ -64,26 +65,39 @@ export default function ManageUserScreen() {
     const carregarUsuarios = async () => {
         try {
             setCarregando(true);
+            const user = await obterUsuarioLogado();
+            const uId = route?.params?.usuario?.id || user?.id || user?.sub;
+            if (uId) {
+                const locais = await listarUsuariosLocais(uId);
+                if (Array.isArray(locais) && locais.length > 0) {
+                    setUsuarios(locais);
+                }
+            }
 
             const lista = await listarUsuarios();
 
             setUsuarios(
                 Array.isArray(lista) ? lista : []
             );
+            if (uId && Array.isArray(lista)) {
+                await salvarUsuariosLocais(uId, lista);
+            }
 
             setPaginaAtual(0);
 
         } catch (error) {
             console.error('Erro ao listar usuários:', error);
-
-            Alert.alert(
-                'Acesso Restrito',
-                error.message || 'Não foi possível carregar a lista de usuários.'
-            );
-            if (error.message?.includes('perfil') || error.message?.includes('acesso')) {
-                navigation.goBack();
+            const msg = error?.message || '';
+            const ehErroConexao = /conexão|internet|network|failed|timeout|servidor|offline|econnrefused/i.test(msg);
+            if (!ehErroConexao) {
+                Alert.alert(
+                    'Acesso Restrito',
+                    error.message || 'Não foi possível carregar a lista de usuários.'
+                );
+                if (error.message?.includes('perfil') || error.message?.includes('acesso')) {
+                    navigation.goBack();
+                }
             }
-
         } finally {
             setCarregando(false);
         }

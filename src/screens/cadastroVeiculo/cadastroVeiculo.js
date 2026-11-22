@@ -8,6 +8,8 @@ import BottomNavigation from '../../components/bottomNavigation/bottomNavigation
 import { colors } from '../../constants/theme.js';
 import { STATUS_VEICULO, placaValida, formatarPlaca, formatarKm } from '../../constants/frota.js';
 import { cadastrarVeiculo } from '../../services/frotix.js';
+import { salvarVeiculoOffline } from '../../services/localDataService.js';
+import { obterUsuarioLogado } from '../../services/api.js';
 
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
 const anoAtual = new Date().getFullYear();
@@ -72,6 +74,30 @@ export default function CadastroVeiculo({ navigation, route }) {
         [{ text: 'OK', onPress: () => navigation.goBack() }]
       );
     } catch (e) {
+      const msg = e?.message || '';
+      const ehErroConexao = /conexão|internet|network|failed|timeout|servidor|econnrefused/i.test(msg);
+      if (ehErroConexao) {
+        try {
+          const uLogado = await obterUsuarioLogado();
+          const uId = usuario?.id || uLogado?.id || uLogado?.sub;
+          if (uId) {
+            await salvarVeiculoOffline(uId, {
+              modelo: modelo.trim(),
+              placa: formatarPlaca(placa),
+              ano: ano ? Number(ano) : null,
+              hodometro: Number(hodometro),
+              consumoMedio: consumo ? Number(consumo.replace(',', '.')) : null,
+              status,
+            });
+            Alert.alert(
+              'Veículo salvo no dispositivo',
+              'Sem conexão com o servidor no momento. O veículo foi salvo localmente e será sincronizado assim que a internet voltar.',
+              [{ text: 'OK', onPress: () => navigation.goBack() }]
+            );
+            return;
+          }
+        } catch {}
+      }
       if (/placa/i.test(e.message)) setErros((atual) => ({ ...atual, placa: e.message }));
       else Alert.alert('Não foi possível cadastrar', e.message);
     } finally {

@@ -85,15 +85,12 @@ const KNOWN_COORDS = {
 const ATRIBUICAO = 'Dados cartográficos © OpenStreetMap contributors | Roteamento por OSRM';
 const AVISO_GERAL = 'Estimativa rodoviária geral para automóveis/veículos leves; não considera restrições específicas para veículos pesados, pontes ou bloqueios temporários.';
 
-// Caches em memória
 const cacheCoordenadas = new Map();
 const cacheRotas = new Map();
 
-// Deduplicação de requisições em voo (in-flight)
 const pendentesGeocoding = new Map();
 const pendentesRotas = new Map();
 
-// Controle de taxa (rate limiting) para o Nominatim
 let ultimaRequisicaoNominatim = 0;
 const INTERVALO_MIN_NOMINATIM_MS = 1000;
 
@@ -118,14 +115,10 @@ async function aguardarTaxaNominatim() {
   ultimaRequisicaoNominatim = Date.now();
 }
 
-/**
- * Obtém as coordenadas [latitude, longitude] de uma cidade ou endereço.
- */
 export async function obterCoordenadas(localizacao) {
   const norm = normalizarTexto(localizacao);
   if (!norm) return null;
 
-  // 1. Dicionário local instantâneo
   if (KNOWN_COORDS[norm]) return KNOWN_COORDS[norm];
   for (const [chave, coords] of Object.entries(KNOWN_COORDS)) {
     if (norm === chave || norm.startsWith(`${chave} `) || norm.includes(` - ${chave}`)) {
@@ -133,12 +126,10 @@ export async function obterCoordenadas(localizacao) {
     }
   }
 
-  // 2. Cache em memória
   if (cacheCoordenadas.has(norm)) {
     return cacheCoordenadas.get(norm);
   }
 
-  // 3. Deduplicação de requisição em andamento
   if (pendentesGeocoding.has(norm)) {
     return pendentesGeocoding.get(norm);
   }
@@ -200,7 +191,6 @@ async function calcularRotaOsrm(coordsOrigem, coordsDestino) {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timeoutId = setTimeout(() => controller?.abort(), 6000);
 
-      // OSRM espera lon,lat;lon,lat
       const url = `https://router.project-osrm.org/route/v1/driving/${coordsOrigem[1]},${coordsOrigem[0]};${coordsDestino[1]},${coordsDestino[0]}?overview=false`;
 
       const res = await fetch(url, {
@@ -214,7 +204,6 @@ async function calcularRotaOsrm(coordsOrigem, coordsDestino) {
 
       if (data && data.routes && data.routes.length > 0 && typeof data.routes[0].distance === 'number') {
         const metros = data.routes[0].distance;
-        // Converte para km arredondado em 1 casa decimal se necessário
         const kmExato = metros / 1000;
         const km = kmExato >= 10 ? Math.round(kmExato) : Math.round(kmExato * 10) / 10;
         const info = { distanciaMetros: metros, distanciaKm: km };
@@ -274,7 +263,6 @@ export async function calcularDistanciaRodoviaria(origem, destino) {
     };
   }
 
-  // Verifica cache de texto direto antes de geocodificar
   const chaveTexto = `${normOrigem}|${normDestino}`;
   if (cacheRotas.has(chaveTexto)) {
     const info = cacheRotas.get(chaveTexto);
@@ -328,7 +316,6 @@ export async function calcularDistanciaRodoviaria(origem, destino) {
     };
   }
 
-  // Grava também a chave de texto no cache
   cacheRotas.set(chaveTexto, resultadoRota);
 
   return {

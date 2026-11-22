@@ -49,6 +49,13 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+# test manifests
+backend/tests/.manifestos/
+*.manifesto.json
+
 # generated native folders
 /ios
 /android
+
+# Logs locais de depuração
+logcat_*.txt

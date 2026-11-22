@@ -147,7 +147,8 @@ const cadastrarTransacao = async (req, res) => {
       quantidadeParcelas,
       vencimentoPrimeira,
       valorQuitacaoAntecipada,
-      anexos
+      anexos,
+      idLocal
     } = req.body || {};
 
     const tipoTransacao = String(tipo || actionType || '').toUpperCase().trim();
@@ -167,17 +168,27 @@ const cadastrarTransacao = async (req, res) => {
       return res.status(400).json({ sucesso: false, mensagem: 'Informe um valor maior que zero.' });
     }
 
-    // Erro I5: antes todo lançamento ia para um id_usuario fixo.
     const usuarioId = req.usuario.id;
 
-    // Erro I3: o app agora manda o id; o nome fica só como alternativa.
+    if (idViagem) {
+      const { data: viagem, error: erroViagem } = await supabase
+        .from('viagens')
+        .select('id, id_motorista')
+        .eq('id', idViagem)
+        .maybeSingle();
+      if (erroViagem) throw erroViagem;
+      if (!viagem) return res.status(400).json({ sucesso: false, mensagem: 'Viagem não encontrada.' });
+      if (req.usuario.perfil === PERFIS.MOTORISTA && viagem.id_motorista !== usuarioId) {
+        return res.status(403).json({ sucesso: false, mensagem: 'Essa viagem é de outro motorista.' });
+      }
+    }
+
     const categoriaId = idCategoria || (await idPorNome('categorias_financeiras', categoria));
     const formaPagamentoId = idFormaPagamento || (await idPorNome('formas_pagamento', formaPagamento));
     const dataAtual = new Date().toISOString().split('T')[0];
 
     if (tipoTransacao === 'DIVIDA') {
       const qtd = parseInt(quantidadeParcelas, 10);
-      // A tabela financiamentos exige pelo menos 2 parcelas.
       if (!(qtd >= 2)) {
         return res.status(400).json({
           sucesso: false,
@@ -185,26 +196,117 @@ const cadastrarTransacao = async (req, res) => {
         });
       }
 
+      if (idLocal) {
+        try {
+          const { data: existente } = await supabase
+            .from('financiamentos')
+            .select('id')
+            .eq('id_usuario', usuarioId)
+            .eq('id_local', String(idLocal))
+            .maybeSingle();
+
+          if (existente) {
+            return res.status(200).json({
+              sucesso: true,
+              mensagem: 'Dívida e parcelas já cadastradas anteriormente.',
+              financiamentoId: existente.id,
+              jaExistente: true
+            });
+          }
+        } catch {}
+      }
+
       const valorQuitacaoNum = parseValor(valorQuitacaoAntecipada);
       const primeiraDataValida = vencimentoPrimeira || data || dataAtual;
 
-      const { data: financiamentoCriado, error: erroFinanciamento } = await supabase
+      // 1. Tentativa de criação atômica via RPC PostgreSQL (se a função existir no Supabase)
+      if (typeof supabase.rpc === 'function') {
+        try {
+          const { data: rpcResp, error: erroRpc } = await supabase.rpc('cadastrar_financiamento_com_parcelas', {
+            p_id_usuario: usuarioId,
+            p_descricao: descricao,
+            p_valor_total: Number((valorParcelaNum * qtd).toFixed(2)),
+            p_valor_parcela: valorParcelaNum,
+            p_quantidade_parcelas: qtd,
+            p_data_primeiro_vencimento: primeiraDataValida,
+            p_valor_quitacao_antecipada: valorQuitacaoAntecipada ? valorQuitacaoNum : null,
+            p_credor: credor || null,
+            p_id_categoria: categoriaId || null,
+            p_id_forma_pagamento: formaPagamentoId || null,
+            p_id_viagem: idViagem || null,
+            p_id_local: idLocal ? String(idLocal) : null,
+            p_data_lancamento: dataAtual
+          });
+
+          if (!erroRpc && rpcResp) {
+            const statusHttp = rpcResp.jaExistente ? 200 : 201;
+            return res.status(statusHttp).json({
+              sucesso: true,
+              mensagem: rpcResp.mensagem || (rpcResp.jaExistente ? 'Dívida e parcelas já cadastradas anteriormente.' : 'Dívida e parcelas cadastradas com sucesso!'),
+              financiamentoId: rpcResp.financiamentoId,
+              jaExistente: Boolean(rpcResp.jaExistente)
+            });
+          }
+
+          const codigoErro = erroRpc?.code;
+          const msgErro = erroRpc?.message || '';
+          const funcaoNaoExiste = codigoErro === '42883' || codigoErro === 'PGRST202' || /function.*does not exist/i.test(msgErro);
+          if (!funcaoNaoExiste && erroRpc) {
+            throw erroRpc;
+          }
+        } catch (eRpc) {
+          const codigoErro = eRpc?.code;
+          const msgErro = eRpc?.message || '';
+          const funcaoNaoExiste = codigoErro === '42883' || codigoErro === 'PGRST202' || /function.*does not exist/i.test(msgErro);
+          if (!funcaoNaoExiste) throw eRpc;
+        }
+      }
+
+      // 2. Fallback de compatibilidade (inserção sequencial com compensação de erro)
+      const payloadFinanciamento = {
+        descricao,
+        valor_total: Number((valorParcelaNum * qtd).toFixed(2)),
+        valor_parcela: valorParcelaNum,
+        quantidade_parcelas: qtd,
+        data_primeiro_vencimento: primeiraDataValida,
+        valor_quitacao_antecipada: valorQuitacaoAntecipada ? valorQuitacaoNum : null,
+        credor: credor || null,
+        id_usuario: usuarioId,
+        id_categoria: categoriaId,
+        id_forma_pagamento: formaPagamentoId,
+        ...(idLocal ? { id_local: String(idLocal) } : {})
+      };
+
+      let { data: financiamentoCriado, error: erroFinanciamento } = await supabase
         .from('financiamentos')
-        .insert([{
-          descricao,
-          valor_total: Number((valorParcelaNum * qtd).toFixed(2)),
-          valor_parcela: valorParcelaNum,
-          quantidade_parcelas: qtd,
-          data_primeiro_vencimento: primeiraDataValida,
-          valor_quitacao_antecipada: valorQuitacaoAntecipada ? valorQuitacaoNum : null,
-          credor: credor || null,
-          // Erro I6: o financiamento ficava sem dono, categoria e forma de pagamento.
-          id_usuario: usuarioId,
-          id_categoria: categoriaId,
-          id_forma_pagamento: formaPagamentoId
-        }])
+        .insert([payloadFinanciamento])
         .select()
         .single();
+
+      if (erroFinanciamento && idLocal && erroFinanciamento.code === '23505') {
+        const { data: existente } = await supabase
+          .from('financiamentos')
+          .select('id')
+          .eq('id_usuario', usuarioId)
+          .eq('id_local', String(idLocal))
+          .maybeSingle();
+
+        if (existente) {
+          return res.status(200).json({
+            sucesso: true,
+            mensagem: 'Dívida e parcelas já cadastradas anteriormente.',
+            financiamentoId: existente.id,
+            jaExistente: true
+          });
+        }
+      }
+
+      if (erroFinanciamento && erroFinanciamento.code === '42703' && idLocal) {
+        delete payloadFinanciamento.id_local;
+        const retry = await supabase.from('financiamentos').insert([payloadFinanciamento]).select().single();
+        financiamentoCriado = retry.data;
+        erroFinanciamento = retry.error;
+      }
 
       if (erroFinanciamento) throw erroFinanciamento;
 
@@ -237,7 +339,6 @@ const cadastrarTransacao = async (req, res) => {
         .insert(parcelasArray);
 
       if (erroParcelas) {
-        // Desfaz o financiamento para não ficar uma dívida sem parcelas.
         await supabase.from('financiamentos').delete().eq('id', financiamentoId);
         throw erroParcelas;
       }
@@ -251,26 +352,74 @@ const cadastrarTransacao = async (req, res) => {
 
     const status = estadoOuStatus ? String(estadoOuStatus).toUpperCase() : 'PAGO';
 
-    const { data: lancamentoCriado, error: erroLancamento } = await supabase
+    if (idLocal) {
+      try {
+        const { data: existente } = await supabase
+          .from('lancamentos_financeiros')
+          .select('*')
+          .eq('id_usuario', usuarioId)
+          .eq('id_local', String(idLocal))
+          .maybeSingle();
+
+        if (existente) {
+          return res.status(200).json({
+            sucesso: true,
+            mensagem: `${tipoTransacao === 'ENTRADA' ? 'Entrada' : 'Saída'} já cadastrada anteriormente.`,
+            lancamento: existente,
+            jaExistente: true
+          });
+        }
+      } catch {}
+    }
+
+    const payloadLancamento = {
+      descricao,
+      valor: valorParcelaNum,
+      tipo: tipoTransacao,
+      id_categoria: categoriaId,
+      id_forma_pagamento: formaPagamentoId,
+      id_usuario: usuarioId,
+      id_viagem: idViagem || null,
+      data_lancamento: data || dataAtual,
+      data_vencimento: data || dataAtual,
+      data_pagamento: status === 'PAGO' ? (data || dataAtual) : null,
+      status,
+      comprovante_url: primeiroAnexo(anexos?.comprovantes),
+      foto_url: primeiroAnexo(anexos?.fotos),
+      documento_url: primeiroAnexo(anexos?.documentos),
+      ...(idLocal ? { id_local: String(idLocal) } : {})
+    };
+
+    let { data: lancamentoCriado, error: erroLancamento } = await supabase
       .from('lancamentos_financeiros')
-      .insert([{
-        descricao,
-        valor: valorParcelaNum,
-        tipo: tipoTransacao,
-        id_categoria: categoriaId,
-        id_forma_pagamento: formaPagamentoId,
-        id_usuario: usuarioId,
-        id_viagem: idViagem || null,
-        data_lancamento: data || dataAtual,
-        data_vencimento: data || dataAtual,
-        data_pagamento: status === 'PAGO' ? (data || dataAtual) : null,
-        status,
-        comprovante_url: primeiroAnexo(anexos?.comprovantes),
-        foto_url: primeiroAnexo(anexos?.fotos),
-        documento_url: primeiroAnexo(anexos?.documentos)
-      }])
+      .insert([payloadLancamento])
       .select()
       .single();
+
+    if (erroLancamento && idLocal && erroLancamento.code === '23505') {
+      const { data: existente } = await supabase
+        .from('lancamentos_financeiros')
+        .select('*')
+        .eq('id_usuario', usuarioId)
+        .eq('id_local', String(idLocal))
+        .maybeSingle();
+
+      if (existente) {
+        return res.status(200).json({
+          sucesso: true,
+          mensagem: `${tipoTransacao === 'ENTRADA' ? 'Entrada' : 'Saída'} já cadastrada anteriormente.`,
+          lancamento: existente,
+          jaExistente: true
+        });
+      }
+    }
+
+    if (erroLancamento && erroLancamento.code === '42703' && idLocal) {
+      delete payloadLancamento.id_local;
+      const retry = await supabase.from('lancamentos_financeiros').insert([payloadLancamento]).select().single();
+      lancamentoCriado = retry.data;
+      erroLancamento = retry.error;
+    }
 
     if (erroLancamento) throw erroLancamento;
 

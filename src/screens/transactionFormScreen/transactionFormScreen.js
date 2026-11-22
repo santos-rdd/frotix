@@ -17,18 +17,45 @@ import {
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { listarCategorias, listarFormas, registrarTransacao, enviarComprovante } from '../../services/frotix.js';
+import { listarCategorias, listarFormas, listarRotas, registrarTransacao, enviarComprovante } from '../../services/frotix.js';
 import { descreverForma } from '../../constants/formasPagamento.js';
+import {
+  salvarTransacaoOffline,
+  listarCategoriasLocais,
+  atualizarCacheCategorias,
+  listarFormasPagamentoLocais,
+  salvarFormasPagamentoLocais,
+  listarRotasLocais,
+  atualizarCacheRotas,
+} from '../../services/localDataService.js';
+import { obterUsuarioLogado } from '../../services/api.js';
+
+function prepararViagensPermitidas(rotas, usuarioId, perfil) {
+  const unicas = new Map();
+  for (const rota of rotas || []) {
+    const motoristaId = rota.motoristaId || rota.id_motorista || rota.motorista_id;
+    if (Number(perfil) === 4 && motoristaId && String(motoristaId) !== String(usuarioId)) continue;
+    const id = rota.id || rota.idLocal;
+    if (!id) continue;
+    const status = typeof rota.status === 'object' ? rota.status?.label : rota.status;
+    const partes = [`${rota.origem || 'Origem'} → ${rota.destino || 'Destino'}`];
+    if (rota.dataInicial || rota.data_saida) partes.push(rota.dataInicial || rota.data_saida);
+    if (status) partes.push(String(status));
+    unicas.set(String(id), { ...rota, id, label: partes.join(' · ') });
+  }
+  return Array.from(unicas.values());
+}
 
 export default function TransactionFormScreen({ route, navigation }) {
   const { actionType, amountValue, formaPagamento, idFormaPagamento } = route.params || { actionType: 'entrada', amountValue: '0' };
 
   const [step, setStep] = useState('form');
+  const [salvoLocalmente, setSalvoLocalmente] = useState(false);
 
   const [formData, setFormData] = useState({
     descricao: '',
     categoria: '',
-    formaPagamento: formaPagamento || '', // vem do passo de seleção do slider
+    formaPagamento: formaPagamento || '',
     data: '',
     clienteOuVeiculo: '',
     estadoOuStatus: '',
@@ -49,22 +76,100 @@ export default function TransactionFormScreen({ route, navigation }) {
 
   const scaleAnim = useState(new Animated.Value(0.5))[0];
 
-  // Erro I3: categorias e formas vêm do banco, com id. O formulário mostra o nome,
-  // mas envia o id (antes mandava nomes de exemplo que não existiam no banco).
   const [categorias, setCategorias] = useState([]);
   const [formas, setFormas] = useState([]);
+  const [viagens, setViagens] = useState([]);
+  const [idViagem, setIdViagem] = useState(null);
+  const [carregandoViagens, setCarregandoViagens] = useState(false);
+  const [erroViagens, setErroViagens] = useState(null);
   const [idCategoria, setIdCategoria] = useState(null);
   const [idForma, setIdForma] = useState(idFormaPagamento || null);
   const [enviando, setEnviando] = useState(false);
 
   useEffect(() => {
-    listarCategorias().then(setCategorias).catch((e) => console.warn('Categorias:', e.message));
-    listarFormas().then(setFormas).catch((e) => console.warn('Formas:', e.message));
-  }, []);
+    (async () => {
+      const usuarioLogado = await obterUsuarioLogado();
+      const uId = usuarioLogado?.id || usuarioLogado?.sub || route.params?.usuario?.id;
+      if (uId) {
+        try {
+          const catsLocais = await listarCategoriasLocais(uId);
+          if (catsLocais && catsLocais.length > 0) setCategorias(catsLocais);
+          const formasLocais = await listarFormasPagamentoLocais(uId);
+          if (formasLocais && formasLocais.length > 0) setFormas(formasLocais);
+        } catch {}
+      }
 
-  // Função para validar e atualizar campos numéricos (bloqueia letras e caracteres inválidos)
+      listarCategorias()
+        .then((res) => {
+          setCategorias(res || []);
+          if (uId) atualizarCacheCategorias(uId, res || []).catch(() => {});
+        })
+        .catch(() => {});
+
+      listarFormas()
+        .then((res) => {
+          setFormas(res || []);
+          if (uId) salvarFormasPagamentoLocais(uId, res || []).catch(() => {});
+        })
+        .catch(() => {});
+    })();
+  }, [route?.params?.usuario?.id]);
+
+  useEffect(() => {
+    let ativo = true;
+    const carregarViagens = async () => {
+      setCarregandoViagens(true);
+      setErroViagens(null);
+      let usuarioId = null;
+      let perfil = route.params?.usuario?.role || route.params?.usuario?.id_perfil;
+      let rotasLocais = [];
+
+      try {
+        const usuarioLogado = await obterUsuarioLogado();
+        usuarioId = usuarioLogado?.id || usuarioLogado?.sub || route.params?.usuario?.id;
+        perfil = usuarioLogado?.perfil || perfil;
+
+        if (usuarioId) {
+          try {
+            rotasLocais = await listarRotasLocais(usuarioId);
+            if (ativo && rotasLocais.length) {
+              setViagens(prepararViagensPermitidas(rotasLocais, usuarioId, perfil));
+            }
+          } catch (erroCache) {
+            console.warn('Não foi possível ler o cache das viagens:', erroCache?.message || erroCache);
+          }
+        }
+
+        const rotasRemotas = await listarRotas();
+        if (!ativo) return;
+        let rotasDisponiveis = rotasRemotas || [];
+        if (usuarioId) {
+          try {
+            await atualizarCacheRotas(usuarioId, rotasRemotas || []);
+            const cacheAtualizado = await listarRotasLocais(usuarioId);
+            if (cacheAtualizado.length) rotasDisponiveis = cacheAtualizado;
+          } catch (erroCache) {
+            console.warn('Não foi possível atualizar o cache das viagens:', erroCache?.message || erroCache);
+          }
+        }
+        setViagens(prepararViagensPermitidas(rotasDisponiveis, usuarioId, perfil));
+      } catch (erro) {
+        if (ativo) {
+          setViagens(prepararViagensPermitidas(rotasLocais, usuarioId, perfil));
+          if (!rotasLocais.length) setErroViagens(erro.message || 'Não foi possível carregar as viagens.');
+        }
+      } finally {
+        if (ativo) setCarregandoViagens(false);
+      }
+    };
+
+    carregarViagens();
+    return () => {
+      ativo = false;
+    };
+  }, [route?.params?.usuario?.id, route?.params?.usuario?.role]);
+
   const updateNumericField = (field, value) => {
-    // Permite apenas números, ponto e vírgula
     const cleanedValue = value.replace(/[^0-9.,]/g, '');
     updateField(field, cleanedValue);
   };
@@ -76,7 +181,6 @@ export default function TransactionFormScreen({ route, navigation }) {
   const openSelectionModal = (type) => {
     let options = [];
     if (type === 'categoria') {
-      // Vem da tela Categorias Financeiras (dívida usa as categorias de saída).
       const tipo = actionType === 'entrada' ? 'entrada' : 'saida';
       options = [...categorias.filter((c) => c.tipo === tipo).map((c) => c.nome), 'Outros'];
     } else if (type === 'formaPagamento') {
@@ -87,6 +191,11 @@ export default function TransactionFormScreen({ route, navigation }) {
       const hoje = new Date().toISOString().split('T')[0];
       const ontem = new Date(Date.now() - 86400000).toISOString().split('T')[0];
       options = [hoje, ontem];
+    } else if (type === 'viagem') {
+      options = [
+        { id: null, label: 'Sem vínculo' },
+        ...viagens.map((viagem) => ({ id: viagem.id, label: viagem.label })),
+      ];
     }
 
     setModalType(type);
@@ -95,7 +204,11 @@ export default function TransactionFormScreen({ route, navigation }) {
   };
 
   const selectOption = (value) => {
-    updateField(modalType, value);
+    if (modalType === 'viagem') {
+      setIdViagem(value.id || null);
+    } else {
+      updateField(modalType, value);
+    }
     if (modalType === 'categoria') {
       setIdCategoria(categorias.find((c) => c.nome === value)?.id || null);
     } else if (modalType === 'formaPagamento') {
@@ -193,8 +306,6 @@ export default function TransactionFormScreen({ route, navigation }) {
     );
   };
 
-  // Envia os anexos para o Storage e devolve os caminhos salvos (erro I4: antes ia
-  // para o backend o caminho do arquivo no celular, que ninguém mais consegue abrir).
   const enviarAnexos = async (lista) => {
     const caminhos = [];
     for (const arquivo of lista) {
@@ -220,8 +331,34 @@ export default function TransactionFormScreen({ route, navigation }) {
     }
 
     setEnviando(true);
+    const idLocal = `tx_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+
     try {
       const dataAtual = new Date().toISOString().split('T')[0];
+      if (idViagem && String(idViagem).startsWith('local_')) {
+        const usuarioLogado = await obterUsuarioLogado();
+        const usuarioId = usuarioLogado?.id || usuarioLogado?.sub || route.params?.usuario?.id;
+        if (!usuarioId) throw new Error('Faça login novamente para vincular a viagem.');
+
+        await salvarTransacaoOffline(
+          usuarioId,
+          {
+            idLocal,
+            tipo: actionType,
+            ...formData,
+            idCategoria,
+            idFormaPagamento: idForma,
+            idViagem,
+            data: formData.data || dataAtual,
+          },
+          { fotos, documentos, comprovantes }
+        );
+        setSalvoLocalmente(true);
+        setStep('success');
+        Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }).start();
+        setTimeout(() => navigation.goBack(), 2500);
+        return;
+      }
 
       const anexos = {
         fotos: await enviarAnexos(fotos),
@@ -229,16 +366,18 @@ export default function TransactionFormScreen({ route, navigation }) {
         comprovantes: await enviarAnexos(comprovantes),
       };
 
-      // Erro I2: antes a URL era "http://localhost:3000" fixa; agora usa o API_URL e o token.
       await registrarTransacao({
+        idLocal,
         tipo: actionType,
         ...formData,
         idCategoria,
         idFormaPagamento: idForma,
+        idViagem,
         data: formData.data || dataAtual,
         anexos,
       });
 
+      setSalvoLocalmente(false);
       setStep('success');
 
       Animated.spring(scaleAnim, {
@@ -252,6 +391,52 @@ export default function TransactionFormScreen({ route, navigation }) {
       }, 2500);
 
     } catch (error) {
+      const msg = error?.message || '';
+      const ehErroConexao = /conexão|internet|network|failed|timeout|servidor|offline|econnrefused|aborted|fetch/i.test(msg);
+
+      const usuarioLogado = await obterUsuarioLogado();
+      const uId = usuarioLogado?.id || usuarioLogado?.sub || route.params?.usuario?.id;
+
+      if (ehErroConexao && uId) {
+        try {
+          const dataAtual = new Date().toISOString().split('T')[0];
+          await salvarTransacaoOffline(
+            uId,
+            {
+              idLocal,
+              tipo: actionType,
+              ...formData,
+              idCategoria,
+              idFormaPagamento: idForma,
+              idViagem,
+              data: formData.data || dataAtual,
+            },
+            {
+              fotos,
+              documentos,
+              comprovantes,
+            }
+          );
+
+          setSalvoLocalmente(true);
+          setStep('success');
+
+          Animated.spring(scaleAnim, {
+            toValue: 1,
+            friction: 4,
+            useNativeDriver: true,
+          }).start();
+
+          setTimeout(() => {
+            navigation.goBack();
+          }, 2500);
+          return;
+        } catch (erroLocal) {
+          Alert.alert('Erro ao salvar no dispositivo', erroLocal.message || 'Falha ao gravar transação local.');
+          return;
+        }
+      }
+
       console.error('Erro ao enviar transação:', error);
       Alert.alert('Erro', error.message || 'Não foi possível conectar ao servidor.');
     } finally {
@@ -297,6 +482,7 @@ export default function TransactionFormScreen({ route, navigation }) {
   };
 
   const currentConfig = config[actionType] || config.entrada;
+  const viagemSelecionada = viagens.find((viagem) => String(viagem.id) === String(idViagem));
 
   return (
     <KeyboardAvoidingView
@@ -329,7 +515,14 @@ export default function TransactionFormScreen({ route, navigation }) {
             <Animated.View style={[styles.successCircle, { backgroundColor: currentConfig.btnColor, transform: [{ scale: scaleAnim }] }]}>
               <Feather name="check" size={60} color="#FFF" />
             </Animated.View>
-            <Text style={styles.successText}>Sucesso</Text>
+            <Text style={styles.successText}>
+              {salvoLocalmente ? 'Salvo no dispositivo' : 'Sucesso'}
+            </Text>
+            {salvoLocalmente && (
+              <Text style={styles.successSubtitle}>
+                O lançamento foi salvo localmente e será sincronizado assim que a conexão retornar.
+              </Text>
+            )}
           </View>
         ) : (
           <>
@@ -347,6 +540,17 @@ export default function TransactionFormScreen({ route, navigation }) {
             {step === 'form' ? (
               <>
                 <Text style={styles.sectionHeader}>{currentConfig.sectionTitle}</Text>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Viagem vinculada (opcional):</Text>
+                  <TouchableOpacity style={styles.inputContainer} onPress={() => openSelectionModal('viagem')}>
+                    <Text style={[styles.inputText, !viagemSelecionada && styles.placeholderText]}>
+                      {viagemSelecionada?.label || (carregandoViagens ? 'Carregando viagens...' : 'Selecionar viagem')}
+                    </Text>
+                    <Feather name="chevron-down" size={20} color="#888" style={styles.iconRight} />
+                  </TouchableOpacity>
+                  {erroViagens ? <Text style={styles.tripError}>{erroViagens}</Text> : null}
+                </View>
 
                 {actionType === 'entrada' && (
                   <>
@@ -648,7 +852,6 @@ export default function TransactionFormScreen({ route, navigation }) {
           </>
         )}
 
-        {/* Modal de Seleção */}
         <Modal
           visible={modalVisible}
           transparent={true}
@@ -660,13 +863,13 @@ export default function TransactionFormScreen({ route, navigation }) {
               <Text style={styles.modalTitle}>Selecione uma opção</Text>
               <FlatList
                 data={modalOptions}
-                keyExtractor={(item, index) => index.toString()}
+                keyExtractor={(item, index) => (typeof item === 'string' ? `opcao-${index}` : `viagem-${item.id || 'nenhuma'}`)}
                 renderItem={({ item }) => (
                   <TouchableOpacity 
                     style={styles.modalItem} 
                     onPress={() => selectOption(item)}
                   >
-                    <Text style={styles.modalItemText}>{item}</Text>
+                    <Text style={styles.modalItemText}>{typeof item === 'string' ? item : item.label}</Text>
                   </TouchableOpacity>
                 )}
               />
@@ -838,6 +1041,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
   },
+  successSubtitle: {
+    color: '#BFDBFE',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 24,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.7)',
@@ -865,6 +1075,11 @@ const styles = StyleSheet.create({
   modalItemText: {
     color: '#FFF',
     fontSize: 16,
+  },
+  tripError: {
+    color: '#FF8A80',
+    fontSize: 12,
+    marginTop: 6,
   },
   modalCloseButton: {
     marginTop: 15,

@@ -56,37 +56,58 @@ function erroInterno(res, contexto, erro) {
 // Leitura em lote (poucas consultas, junta tudo em memória)
 // -----------------------------------------------------------------------------
 
-async function carregarBase({ apenasMotorista } = {}) {
+async function carregarBase({ apenasMotorista, incluirDisponiveis = false } = {}) {
   let consultaViagens = supabase.from('viagens').select('*');
-  if (apenasMotorista) consultaViagens = consultaViagens.eq('id_motorista', apenasMotorista);
+  if (apenasMotorista && !incluirDisponiveis) {
+    consultaViagens = consultaViagens.eq('id_motorista', apenasMotorista);
+  }
 
-  const [veiculos, viagens, lancamentos, usuarios] = await Promise.all([
+  const [veiculos, viagens, lancamentos, usuarios, manutencoes] = await Promise.all([
     supabase.from('veiculos').select('*').eq('ativo', true).order('modelo'),
     consultaViagens,
     supabase
       .from('lancamentos_financeiros')
       .select('id, descricao, valor, tipo, status, id_viagem, comprovante_url, data_lancamento, data_pagamento, data_vencimento'),
     supabase.from('usuarios').select('id, nome'),
+    supabase.from('manutencoes').select('*'),
   ]);
 
-  for (const r of [veiculos, viagens, lancamentos, usuarios]) {
+  for (const r of [veiculos, viagens, lancamentos, usuarios, manutencoes]) {
     if (r.error) throw r.error;
+  }
+
+  let viagensFiltradas = viagens.data || [];
+  if (apenasMotorista && incluirDisponiveis) {
+    viagensFiltradas = viagensFiltradas.filter(
+      (t) => t.id_motorista === apenasMotorista || (!t.id_motorista && String(t.status).toUpperCase() === 'PLANEJADA')
+    );
   }
 
   return {
     veiculos: veiculos.data || [],
-    viagens: viagens.data || [],
+    viagens: viagensFiltradas,
     lancamentos: lancamentos.data || [],
     nomes: Object.fromEntries((usuarios.data || []).map((u) => [u.id, u.nome])),
+    manutencoes: manutencoes.data || [],
   };
 }
 
-function montarVeiculos({ veiculos, viagens, lancamentos }) {
+function montarVeiculos({ veiculos, viagens, lancamentos, manutencoes = [] }) {
   return veiculos.map((v) => {
     const daFrota = viagens.filter((t) => t.id_veiculo === v.id);
     const ids = new Set(daFrota.map((t) => t.id));
-    const gastos = somarValores(lancamentos.filter((l) => ids.has(l.id_viagem) && ehDespesa(l)));
-    const km = somarKm(daFrota.filter((t) => String(t.status).toUpperCase() === 'CONCLUIDA'));
+    const gastosViagem = somarValores(lancamentos.filter((l) => ids.has(l.id_viagem) && ehDespesa(l)));
+    const gastosManutencao = somarValores(
+      manutencoes
+        .filter((m) => m.id_veiculo === v.id && String(m.status).toUpperCase() === 'CONCLUIDA')
+        .map((m) => ({ valor: m.custo }))
+    );
+    const gastosTotais = gastosViagem + gastosManutencao;
+    const kmConcluidos = somarKm(daFrota.filter((t) => String(t.status).toUpperCase() === 'CONCLUIDA'));
+
+    const temHistoricoViagem = kmConcluidos > 0;
+    const custoKmCalculado = temHistoricoViagem ? arredondar(custoPorKm(gastosTotais, kmConcluidos)) : 0;
+
     return {
       id: v.id,
       modelo: v.modelo,
@@ -95,7 +116,10 @@ function montarVeiculos({ veiculos, viagens, lancamentos }) {
       hodometro: numero(v.hodometro) ?? 0,
       consumoMedio: numero(v.consumo_medio),
       status: STATUS_VEICULO[v.status] || 'disponivel',
-      custoKm: arredondar(custoPorKm(gastos, km)),
+      custoKm: custoKmCalculado,
+      gastosTotais: arredondar(gastosTotais),
+      kmConcluidos,
+      semDadosViagem: !temHistoricoViagem,
     };
   });
 }
@@ -320,18 +344,40 @@ export async function abrirViagem(req, res) {
   try {
     const viagem = await buscarViagemPermitida(req, res);
     if (!viagem) return null;
-    if (viagem.status !== 'PLANEJADA') return res.status(400).json({ sucesso: false, erro: 'Só é possível abrir uma rota agendada.' });
 
     const veiculoId = req.body?.veiculoId || viagem.id_veiculo;
     if (!veiculoId) return res.status(400).json({ sucesso: false, erro: 'Selecione o veículo.' });
+    const inicial = Number(req.body?.hodometroInicial);
+
+    if (viagem.status === 'EM_ANDAMENTO') {
+      if (veiculoId === viagem.id_veiculo && inicial === Number(viagem.km_inicial)) {
+        return res.json({ sucesso: true, jaExistente: true });
+      }
+      return res.status(409).json({ sucesso: false, erro: 'A viagem já foi iniciada com outros dados.' });
+    }
+    if (viagem.status !== 'PLANEJADA') {
+      return res.status(400).json({ sucesso: false, erro: 'Só é possível iniciar uma rota agendada.' });
+    }
+
+    if (ehMotorista(req)) {
+      const { data: veiculosPermitidos, error: erroPermissoes } = await supabase
+        .from('viagens')
+        .select('id_veiculo')
+        .eq('id_motorista', req.usuario.id);
+      if (erroPermissoes) throw erroPermissoes;
+      if (!(veiculosPermitidos || []).some((rota) => rota.id_veiculo === veiculoId)) {
+        return res.status(403).json({ sucesso: false, erro: 'Este veículo não está associado às suas rotas.' });
+      }
+    }
 
     const { data: veiculo, error: eV } = await supabase.from('veiculos').select('*').eq('id', veiculoId).maybeSingle();
     if (eV) throw eV;
     if (!veiculo) return res.status(400).json({ sucesso: false, erro: 'Veículo não encontrado.' });
     if (veiculo.status !== 'DISPONIVEL') return res.status(400).json({ sucesso: false, erro: 'O veículo não está disponível.' });
 
-    const inicial = Number(req.body?.hodometroInicial);
-    if (!(inicial >= 0)) return res.status(400).json({ sucesso: false, erro: 'Informe o hodômetro inicial.' });
+    if (!Number.isFinite(inicial) || inicial < 0) {
+      return res.status(400).json({ sucesso: false, erro: 'Informe um hodômetro inicial válido.' });
+    }
     if (inicial < Number(veiculo.hodometro)) {
       return res.status(400).json({ sucesso: false, erro: `O hodômetro do veículo já marca ${Number(veiculo.hodometro).toLocaleString('pt-BR')} km.` });
     }
@@ -361,20 +407,34 @@ export async function concluirViagem(req, res) {
   try {
     const viagem = await buscarViagemPermitida(req, res);
     if (!viagem) return null;
-    if (viagem.status === 'CONCLUIDA') return res.status(400).json({ sucesso: false, erro: 'Essa rota já foi concluída.' });
 
     const final = Number(req.body?.hodometroFinal);
     const inicial = Number(viagem.km_inicial) || 0;
+    if (viagem.status === 'CONCLUIDA') {
+      if (final === Number(viagem.km_final)) {
+        return res.json({ sucesso: true, jaExistente: true, kmRodados: final - inicial });
+      }
+      return res.status(409).json({ sucesso: false, erro: 'A viagem já foi concluída com outro hodômetro final.' });
+    }
+    if (viagem.status !== 'EM_ANDAMENTO') {
+      return res.status(400).json({ sucesso: false, erro: 'Só é possível concluir uma viagem em andamento.' });
+    }
     if (!(final > inicial)) {
       return res.status(400).json({ sucesso: false, erro: `Informe um valor maior que ${inicial.toLocaleString('pt-BR')} km.` });
     }
 
     const agora = new Date().toISOString();
-    const { error } = await supabase
+    const { data: concluida, error } = await supabase
       .from('viagens')
       .update({ status: 'CONCLUIDA', km_final: final, concluida_em: agora, iniciada_em: viagem.iniciada_em || agora })
-      .eq('id', viagem.id);
+      .eq('id', viagem.id)
+      .eq('status', 'EM_ANDAMENTO')
+      .select()
+      .maybeSingle();
     if (error) throw error;
+    if (!concluida) {
+      return res.status(409).json({ sucesso: false, erro: 'A viagem foi alterada por outra operação.' });
+    }
 
     if (viagem.id_veiculo) {
       const { error: eV } = await supabase
@@ -406,16 +466,7 @@ export async function listarViagensEmAndamento(req, res) {
     res.set('Cache-Control', 'no-store');
     return res.json({
       sucesso: true,
-      viagens: emAndamento.map((r) => ({
-        id: r.id,
-        origem: r.origem,
-        destino: r.destino,
-        status: 'EM_ANDAMENTO',
-        km_inicial: r.hodometroInicial,
-        id_motorista: r.motoristaId,
-        motorista: r.motorista,
-        placa: r.placa || 'Sem veículo',
-      })),
+      viagens: emAndamento,
     });
   } catch (e) {
     return erroInterno(res, 'consultar as viagens em andamento', e);

@@ -6,11 +6,13 @@ import {
   TouchableOpacity,
   Image,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { enviarComprovante } from '../../services/frotix.js';
-import BottomNavigation from '../../components/bottomNavigation/bottomNavigation';
+import { salvarComprovanteOffline } from '../../services/localDataService.js';
+import { obterUsuarioLogado } from '../../services/api.js';
+import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 
 export default function UploadProofScreen({ navigation, route }) {
   const [imageUri, setImageUri] = useState(null);
@@ -18,12 +20,11 @@ export default function UploadProofScreen({ navigation, route }) {
 
   const { usuario } = route?.params || {};
 
-  // Função para tirar foto usando a Câmera
   const takePhotoWithCamera = async () => {
     const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-    
+
     if (cameraPermission.granted === false) {
-      Alert.alert("Permissão negada", "Precisamos de permissão para acessar a câmera.");
+      Alert.alert('Permissão negada', 'Precisamos de permissão para acessar a câmera.');
       return;
     }
 
@@ -38,12 +39,11 @@ export default function UploadProofScreen({ navigation, route }) {
     }
   };
 
-  // Função para escolher da Galeria
   const pickImageFromGallery = async () => {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
+
     if (permissionResult.granted === false) {
-      Alert.alert("Permissão negada", "Precisamos de permissão para acessar suas fotos.");
+      Alert.alert('Permissão negada', 'Precisamos de permissão para acessar suas fotos.');
       return;
     }
 
@@ -58,36 +58,54 @@ export default function UploadProofScreen({ navigation, route }) {
     }
   };
 
-  // Menu de escolha (Câmera ou Galeria)
   const showImagePickerOptions = () => {
     Alert.alert(
-      "Selecionar Comprovante",
-      "Escolha como deseja enviar o comprovante:",
+      'Selecionar Comprovante',
+      'Escolha como deseja enviar o comprovante:',
       [
-        { text: "Tirar Foto (Câmera)", onPress: takePhotoWithCamera },
-        { text: "Escolher da Galeria", onPress: pickImageFromGallery },
-        { text: "Cancelar", style: "cancel" }
+        { text: 'Tirar Foto (Câmera)', onPress: takePhotoWithCamera },
+        { text: 'Escolher da Galeria', onPress: pickImageFromGallery },
+        { text: 'Cancelar', style: 'cancel' },
       ]
     );
   };
 
   const uploadImage = async () => {
     if (!imageUri) {
-      Alert.alert("Atenção", "Selecione ou tire uma foto do comprovante primeiro.");
+      Alert.alert('Atenção', 'Selecione ou tire uma foto do comprovante primeiro.');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Erro I1/P12: a rota /comprovantes/upload agora existe e guarda o arquivo no Storage.
       await enviarComprovante({ uri: imageUri });
-      Alert.alert("Sucesso", "Comprovante enviado com sucesso!");
+      Alert.alert('Sucesso', 'Comprovante enviado com sucesso!');
       setImageUri(null);
       navigation.goBack();
     } catch (error) {
-      console.error("Erro no upload:", error);
-      Alert.alert("Erro", error.message || "Não foi possível enviar a imagem ao servidor.");
+      const msg = error?.message || '';
+      const ehErroConexao = /conexão|internet|network|failed|timeout|servidor|offline|econnrefused/i.test(msg);
+
+      const uLogado = await obterUsuarioLogado();
+      const uId = usuario?.id || usuario?.sub || uLogado?.id || uLogado?.sub;
+
+      if (ehErroConexao && uId) {
+        try {
+          await salvarComprovanteOffline(uId, imageUri);
+          Alert.alert(
+            'Salvo no dispositivo',
+            'Comprovante salvo com sucesso no dispositivo. O upload será concluído automaticamente quando a conexão retornar.',
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+          setImageUri(null);
+          return;
+        } catch (erroLocal) {
+          Alert.alert('Erro ao salvar localmente', erroLocal?.message || 'Falha ao gravar arquivo.');
+        }
+      } else {
+        Alert.alert('Erro', error.message || 'Não foi possível enviar a imagem ao servidor.');
+      }
     } finally {
       setLoading(false);
     }
@@ -96,8 +114,7 @@ export default function UploadProofScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
         >
@@ -113,7 +130,6 @@ export default function UploadProofScreen({ navigation, route }) {
           </Text>
         </View>
 
-        {/* Agora ao tocar na caixa, abre as opções de Câmera ou Galeria */}
         <TouchableOpacity style={styles.imagePickerBox} onPress={showImagePickerOptions} activeOpacity={0.8}>
           {imageUri ? (
             <Image source={{ uri: imageUri }} style={styles.previewImage} />
@@ -126,8 +142,8 @@ export default function UploadProofScreen({ navigation, route }) {
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <TouchableOpacity 
-            style={[styles.uploadButton, loading && styles.buttonDisabled]} 
+          <TouchableOpacity
+            style={[styles.uploadButton, loading && styles.buttonDisabled]}
             activeOpacity={0.8}
             onPress={uploadImage}
             disabled={loading}
@@ -139,7 +155,6 @@ export default function UploadProofScreen({ navigation, route }) {
             )}
           </TouchableOpacity>
         </View>
-
       </View>
 
       <BottomNavigation navigation={navigation} userRole={usuario?.role} usuario={usuario} />

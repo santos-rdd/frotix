@@ -143,7 +143,15 @@ const handleSave = async () => {
             ? error.message
             : 'Não foi possível cadastrar o usuário.';
 
-        Alert.alert('Erro no cadastro', mensagem);
+        const ehErroConexao = /conexão|internet|network|failed|timeout|servidor|offline|econnrefused/i.test(mensagem);
+        if (ehErroConexao) {
+            Alert.alert(
+                'Sem conexão com a internet',
+                'Não foi possível conectar ao servidor. O cadastro de novos usuários requer conexão ativa para provisionar as credenciais de acesso com segurança.'
+            );
+        } else {
+            Alert.alert('Erro no cadastro', mensagem);
+        }
 
     } finally {
         setLoading(false);
