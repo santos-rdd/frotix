@@ -13,9 +13,15 @@ import { listarViagensEmAndamento } from '../../services/frotix.js';
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
 
-export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem, onOpenTripDetails }) {
-  const [viagens, setViagens] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function ViagemAtualCard({
+  viagemSelecionada,
+  onSelectViagem,
+  onOpenTripDetails,
+  viagensIniciais,
+}) {
+  const viagensFornecidas = Array.isArray(viagensIniciais);
+  const [viagens, setViagens] = useState(viagensFornecidas ? viagensIniciais : []);
+  const [loading, setLoading] = useState(!viagensFornecidas);
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollRef = useRef(null);
 
@@ -25,6 +31,18 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem, onO
   // outros perfis). Antes havia uma lista fixa de "reserva" com viagens de exemplo.
   useEffect(() => {
     let isMounted = true;
+
+    if (viagensFornecidas) {
+      setViagens(viagensIniciais);
+      setErro(null);
+      setLoading(false);
+      if (!viagemSelecionada && viagensIniciais.length > 0) {
+        onSelectViagem?.(viagensIniciais[0]);
+      }
+      return () => {
+        isMounted = false;
+      };
+    }
 
     const carregarViagens = async () => {
       try {
@@ -48,7 +66,7 @@ export default function ViagemAtualCard({ viagemSelecionada, onSelectViagem, onO
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [viagensFornecidas, viagensIniciais]);
 
   const handleSelectTrip = (item, index) => {
     if (viagemSelecionada?.id === item.id && onOpenTripDetails) {

@@ -7,7 +7,22 @@ import {
 
 import authController from '../controllers/authController.js';
 import emailController from '../controllers/emailController.js';
-import { autenticar, exigirPerfil, PERFIS } from '../middleware/auth.js';
+import {
+    encerrarSessao,
+    consultarSessao,
+    renovarSessao
+} from '../controllers/sessionController.js';
+import {
+    solicitarRecuperacaoSenha,
+    redefinirSenha
+} from '../controllers/passwordRecoveryController.js';
+import { limitarSolicitacoesRecuperacao } from '../middleware/passwordRecoveryLimiter.js';
+import {
+    autenticar,
+    autenticarParaLogout,
+    exigirPerfil,
+    PERFIS
+} from '../middleware/auth.js';
 
 const router = Router();
 
@@ -16,6 +31,11 @@ router.post('/reenviar-confirmacao', reenviarConfirmacao);
 
 router.post('/login-email', emailController);
 router.post('/login-google', authController);
+router.post('/refresh', renovarSessao);
+router.post('/logout', autenticarParaLogout, encerrarSessao);
+router.get('/session', autenticar, consultarSessao);
+router.post('/password/recovery', limitarSolicitacoesRecuperacao, solicitarRecuperacaoSenha);
+router.post('/password/recovery/complete', redefinirSenha);
 
 router.get('/confirmado', (req, res) => {
     res.status(200).send(`

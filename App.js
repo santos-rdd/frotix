@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { NavigationContainer, createNavigationContainerRef, CommonActions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as ExpoLinking from 'expo-linking';
 
 import HomeScreen from './src/screens/homeScreen/homeScreen.js';
 import LoginScreen from './src/screens/login/loginScreen.js'; 
 import HomePage from './src/screens/home/homePage.js';
 import ForgotPasswordScreen from './src/screens/loginEmailScreen/loginEmailScreen.js';
 import VerifyCodeScreen from './src/screens/verifyCodeScreen/verifyCodeScreen.js';
+import ResetPasswordScreen from './src/screens/resetPasswordScreen/resetPasswordScreen.js';
 import UserProfileScreen from './src/screens/user/userOptions.js';
 import UploadProofScreen from './src/screens/upload/uploadProof.js';
 import TransactionFormScreen from './src/screens/transactionFormScreen/transactionFormScreen.js';
@@ -34,6 +36,25 @@ import { podeAcessarTela } from './src/navigation/permissions.js';
 
 const Stack = createNativeStackNavigator();
 const navigationRef = createNavigationContainerRef();
+
+function parametrosDaUrl(url) {
+  const [principal, fragmento = ''] = url.split('#');
+  const consulta = principal.includes('?') ? principal.slice(principal.indexOf('?') + 1) : '';
+  const parsear = (texto) => Object.fromEntries(
+    texto.split('&').filter(Boolean).map((parte) => {
+      const [chave, ...valor] = parte.split('=');
+      try {
+        return [
+          decodeURIComponent(chave.replace(/\+/g, ' ')),
+          decodeURIComponent(valor.join('=').replace(/\+/g, ' ')),
+        ];
+      } catch {
+        return ['', ''];
+      }
+    }).filter(([chave]) => chave)
+  );
+  return { ...parsear(consulta), ...parsear(fragmento) };
+}
 
 function RotaComPermissao({ Component, ...props }) {
   const [sessao, setSessao] = useState(null);
@@ -144,6 +165,27 @@ const RelatoriosProtegida = protegerTela(Relatorios);
 const CategoriasProtegida = protegerTela(Categorias);
 
 export default function App() {
+  const recoveryUrlPendente = useRef(null);
+  const recoveryUrlProcessada = useRef(null);
+
+  const abrirRecuperacaoPorUrl = (url) => {
+    if (!url || !/^frotix:\/\/auth\/recovery(?:[?#]|$)/i.test(url)) return;
+    if (recoveryUrlProcessada.current === url) return;
+    const params = parametrosDaUrl(url);
+    if (params.type !== 'recovery') return;
+
+    if (!navigationRef.isReady()) {
+      recoveryUrlPendente.current = url;
+      return;
+    }
+
+    recoveryUrlProcessada.current = url;
+    navigationRef.dispatch(CommonActions.reset({
+      index: 0,
+      routes: [{ name: 'ResetPassword', params }],
+    }));
+  };
+
   useEffect(() => {
     let cancelarMonitor = null;
 
@@ -165,8 +207,37 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    let ativa = true;
+    ExpoLinking.getInitialURL()
+      .then((url) => {
+        if (ativa) abrirRecuperacaoPorUrl(url);
+      })
+      .catch((error) => {
+        console.warn('Não foi possível ler o link inicial:', error?.message);
+      });
+
+    const subscription = ExpoLinking.addEventListener('url', ({ url }) => {
+      abrirRecuperacaoPorUrl(url);
+    });
+
+    return () => {
+      ativa = false;
+      subscription.remove();
+    };
+  }, []);
+
   return (
-    <NavigationContainer ref={navigationRef}>
+    <NavigationContainer
+      ref={navigationRef}
+      onReady={() => {
+        if (recoveryUrlPendente.current) {
+          const url = recoveryUrlPendente.current;
+          recoveryUrlPendente.current = null;
+          abrirRecuperacaoPorUrl(url);
+        }
+      }}
+    >
       <Stack.Navigator 
         initialRouteName="Home" 
         screenOptions={{ headerShown: false }} 
@@ -176,6 +247,7 @@ export default function App() {
         <Stack.Screen name="HomePage" component={HomePageProtegida} />
         <Stack.Screen name="LoginEmail" component={ForgotPasswordScreen} />
         <Stack.Screen name="VerifyCodeScreen" component={VerifyCodeScreen} />
+        <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="userProfile" component={UserProfileProtegida} />
         <Stack.Screen name="uploadProof" component={UploadProofProtegida} />
         <Stack.Screen name="TransactionForm" component={TransactionFormProtegida} />

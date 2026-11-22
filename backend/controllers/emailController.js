@@ -1,5 +1,10 @@
 import supabase, { createSupabaseAuthClient } from '../database/db.js';
-import { gerarToken } from '../middleware/auth.js';
+import {
+    criarSessaoFrotix,
+    SessionStoreError,
+    SessionUserInactiveError
+} from '../services/sessionService.js';
+import { criarRespostaAutenticada } from '../utils/authResponse.js';
 
 export default async function emailController(req, res) {
     try {
@@ -57,36 +62,30 @@ export default async function emailController(req, res) {
             });
         }
 
-        if (!usuario.ativo) {
+        if (usuario.ativo !== true) {
             return res.status(403).json({
                 erro: 'Esta conta está desativada.'
             });
         }
 
-        // 3. Retorna os dados para o aplicativo.
+        // 3. Emite a sessão Frotix; os tokens Supabase permanecem somente no servidor.
+        const sessao = await criarSessaoFrotix(usuario.id);
+
         return res.status(200).json({
             mensagem: 'Login realizado com sucesso!',
-
-            // Token do Frotix: o app manda em "Authorization: Bearer" nas outras rotas.
-            token: gerarToken(usuario),
-
-            usuario: {
-                id: usuario.id,
-                email: usuario.email,
-                nome: usuario.nome,
-                name: usuario.nome,
-                role: usuario.id_perfil
-            },
-
-            // Tokens da sessão para utilização pelo aplicativo.
-            sessao: {
-                access_token: authData.session.access_token,
-                refresh_token: authData.session.refresh_token,
-                expires_at: authData.session.expires_at
-            }
+            ...criarRespostaAutenticada(usuario, sessao),
         });
 
     } catch (err) {
+        if (err instanceof SessionUserInactiveError) {
+            return res.status(403).json({ erro: err.message });
+        }
+        if (err instanceof SessionStoreError) {
+            return res.status(503).json({
+                erro: 'Não foi possível criar a sessão. Tente novamente.'
+            });
+        }
+
         console.error('ERRO AO REALIZAR LOGIN:', err);
 
         return res.status(500).json({

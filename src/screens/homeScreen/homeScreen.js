@@ -1,4 +1,6 @@
-import react from 'react';
+import React, { useEffect } from 'react';
+import { CommonActions } from '@react-navigation/native';
+import { recuperarSessaoBiometrica } from '../../services/api.js';
 
 import {
   StyleSheet,
@@ -9,6 +11,27 @@ import {
 } from 'react-native';
 
 export default function HomeScreen({ navigation }) {
+  useEffect(() => {
+    let ativa = true;
+    recuperarSessaoBiometrica()
+      .then((resultado) => {
+        if (!ativa || resultado.status !== 'success') return;
+        navigation.dispatch(CommonActions.reset({
+          index: 0,
+          routes: [{
+            name: 'HomePage',
+            params: { bankUser: resultado.data.usuario },
+          }],
+        }));
+      })
+      .catch((error) => {
+        console.warn('Não foi possível iniciar o acesso biométrico:', error?.message);
+      });
+
+    return () => {
+      ativa = false;
+    };
+  }, [navigation]);
 
   return (
     <View style={styles.container}>

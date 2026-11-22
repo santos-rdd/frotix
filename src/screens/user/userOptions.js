@@ -1,14 +1,19 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   TouchableOpacity,
   Image,
+  Alert,
 } from 'react-native';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { CommonActions } from '@react-navigation/native';
-import { limparSessao } from '../../services/api.js';
+import {
+  apiFetch,
+  definirLogoutEmAndamento,
+  limparSessao,
+} from '../../services/api.js';
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation';
 
 
@@ -17,21 +22,55 @@ export default function UserProfileScreen({ navigation, route }) {
   const userPhoto = auth?.user?.photo || bankUser?.fotoUrl || usuario?.foto;
   const isMotorista = Number(usuario?.role) === 4;
   const PERFIS = { 1: 'Admin', 2: 'Gestor de Frota', 3: 'Financeiro', 4: 'Motorista' };
+  const saindo = useRef(false);
 
   const handleLogout = async () => {
+    if (saindo.current) return;
+    saindo.current = true;
+    definirLogoutEmAndamento(true);
+    let servidorConfirmou = false;
     try {
-      await GoogleSignin.signOut();
-    } catch (error) {
-      console.log('Erro ao deslogar do Google:', error);
-    }
-    await limparSessao();
+      const resposta = await apiFetch('/auth/logout', {
+        method: 'POST',
+        naoRenovarSessao: true,
+      });
+      if (!resposta.ok) {
+        throw new Error('O servidor não confirmou o encerramento da sessão.');
+      }
+      servidorConfirmou = true;
 
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'Home' }],
-      })
-    );
+      await limparSessao();
+      try {
+        await GoogleSignin.signOut();
+      } catch {
+        console.warn('Não foi possível encerrar a sessão local do Google.');
+      }
+
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+    } catch {
+      if (servidorConfirmou) {
+        navigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Login' }],
+          })
+        );
+      }
+      Alert.alert(
+        'Não foi possível sair',
+        servidorConfirmou
+          ? 'O servidor encerrou a sessão, mas o aplicativo não conseguiu limpar todas as credenciais locais.'
+          : 'O servidor não confirmou o encerramento. Verifique a conexão e tente novamente.'
+      );
+    } finally {
+      saindo.current = false;
+      definirLogoutEmAndamento(false);
+    }
   };
 
   return (

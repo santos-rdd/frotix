@@ -1,6 +1,11 @@
 import supabase, { createSupabaseAuthClient } from '../database/db.js';
 import { OAuth2Client } from 'google-auth-library';
-import { gerarToken } from '../middleware/auth.js';
+import {
+    criarSessaoFrotix,
+    SessionStoreError,
+    SessionUserInactiveError
+} from '../services/sessionService.js';
+import { criarRespostaAutenticada } from '../utils/authResponse.js';
 
 // Client ID "Web" do Google usado pelo app (src/config/google.js). O idToken que o
 // app recebe do Google é emitido para esse público; qualquer outro é recusado.
@@ -31,7 +36,7 @@ export default async function authController(req, res) {
         return res.status(401).json({ erro: 'Não foi possível confirmar seu login com o Google.' });
     }
 
-    if (!payload?.email || payload.email_verified === false) {
+    if (!payload?.email || payload.email_verified !== true) {
         return res.status(401).json({ erro: 'A conta Google não tem e-mail verificado.' });
     }
 
@@ -50,22 +55,23 @@ export default async function authController(req, res) {
             });
         }
 
-        if (usuario.ativo === false) {
+        if (usuario.ativo !== true) {
             return res.status(403).json({ erro: 'Esta conta está desativada.' });
         }
 
+        const sessao = await criarSessaoFrotix(usuario.id);
+
         return res.status(200).json({
             mensagem: 'Login autorizado com sucesso!',
-            token: gerarToken(usuario),
-            usuario: {
-                id: usuario.id,
-                email: usuario.email,
-                nome: usuario.nome,
-                name: usuario.nome,
-                role: usuario.id_perfil
-            }
+            ...criarRespostaAutenticada(usuario, sessao),
         });
     } catch (err) {
+        if (err instanceof SessionUserInactiveError) {
+            return res.status(403).json({ erro: err.message });
+        }
+        if (err instanceof SessionStoreError) {
+            return res.status(503).json({ erro: 'Não foi possível criar a sessão. Tente novamente.' });
+        }
         console.error('Erro ao verificar usuário:', err);
         return res.status(500).json({ erro: 'Erro interno no servidor.' });
     }

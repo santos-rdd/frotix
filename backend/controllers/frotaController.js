@@ -61,13 +61,17 @@ async function carregarBase({ apenasMotorista, incluirDisponiveis = false } = {}
   if (apenasMotorista && !incluirDisponiveis) {
     consultaViagens = consultaViagens.eq('id_motorista', apenasMotorista);
   }
+  let consultaLancamentos = supabase
+    .from('lancamentos_financeiros')
+    .select('id, descricao, valor, tipo, status, id_viagem, comprovante_url, data_lancamento, data_pagamento, data_vencimento');
+  if (apenasMotorista) {
+    consultaLancamentos = consultaLancamentos.eq('id_usuario', apenasMotorista);
+  }
 
   const [veiculos, viagens, lancamentos, usuarios, manutencoes] = await Promise.all([
     supabase.from('veiculos').select('*').eq('ativo', true).order('modelo'),
     consultaViagens,
-    supabase
-      .from('lancamentos_financeiros')
-      .select('id, descricao, valor, tipo, status, id_viagem, comprovante_url, data_lancamento, data_pagamento, data_vencimento'),
+    consultaLancamentos,
     supabase.from('usuarios').select('id, nome'),
     supabase.from('manutencoes').select('*'),
   ]);
@@ -175,7 +179,14 @@ export async function listarVeiculos(req, res) {
       const veiculosIds = new Set(base.viagens.map((t) => t.id_veiculo).filter(Boolean));
       base.veiculos = base.veiculos.filter((v) => veiculosIds.has(v.id));
     }
-    return res.json({ sucesso: true, veiculos: montarVeiculos(base) });
+    const veiculos = montarVeiculos(base);
+    if (apenasMotorista) {
+      return res.json({
+        sucesso: true,
+        veiculos: veiculos.map(({ gastosTotais, custoKm, ...veiculo }) => veiculo),
+      });
+    }
+    return res.json({ sucesso: true, veiculos });
   } catch (e) {
     return erroInterno(res, 'listar os veículos', e);
   }

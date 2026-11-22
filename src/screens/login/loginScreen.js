@@ -12,7 +12,15 @@ import {
 import { GoogleSignin, isSuccessResponse } from '@react-native-google-signin/google-signin';
 import GOOGLE_CONFIG from '../../config/google.js';
 import { API_URL } from '../../config/api.js';
-import { salvarToken } from '../../services/api.js';
+import {
+  biometriaConfigurada,
+  habilitarBiometria,
+  carregarCredenciaisLembradas,
+  recuperarSessaoBiometrica,
+  removerCredenciaisLembradas,
+  salvarCredenciaisLembradas,
+  salvarSessao,
+} from '../../services/api.js';
 import { CommonActions } from '@react-navigation/native';
 
 // Depois do login a Home vira a única tela da pilha: assim o "voltar" do Android
@@ -36,6 +44,89 @@ export default function LoginScreen({ navigation }) {
       scopes: ['profile', 'email'],
     });
   }, []); 
+
+  useEffect(() => {
+    let ativa = true;
+    carregarCredenciaisLembradas()
+      .then((credenciais) => {
+        if (!ativa || !credenciais) return;
+        setEmailInput(credenciais.email);
+        setPassword(credenciais.senha);
+        setRememberMe(true);
+      })
+      .catch((error) => {
+        console.warn('Não foi possível carregar as credenciais salvas:', error?.message);
+      });
+
+    recuperarSessaoBiometrica()
+      .then((resultado) => {
+        if (!ativa || resultado.status !== 'success') return;
+        irParaHome(navigation, { bankUser: resultado.data.usuario });
+      })
+      .catch((error) => {
+        console.warn('Não foi possível iniciar o acesso biométrico:', error?.message);
+      });
+
+    return () => {
+      ativa = false;
+    };
+  }, [navigation]);
+
+  const oferecerBiometria = async (refreshToken) => {
+    if (!refreshToken) return;
+    try {
+      if (await biometriaConfigurada()) return;
+      const localAuth = await import('expo-local-authentication');
+      const [hardware, cadastrada] = await Promise.all([
+        localAuth.hasHardwareAsync(),
+        localAuth.isEnrolledAsync(),
+      ]);
+      if (!hardware || !cadastrada) return;
+    } catch (error) {
+      console.warn('Não foi possível verificar a disponibilidade biométrica:', error?.message);
+      return;
+    }
+
+    Alert.alert(
+      'Ativar acesso biométrico?',
+      'Use sua biometria para renovar sua sessão Frotix nas próximas entradas.',
+      [
+        { text: 'Agora não', style: 'cancel' },
+        {
+          text: 'Ativar',
+          onPress: async () => {
+            try {
+              const resultado = await habilitarBiometria(refreshToken);
+              if (resultado.status === 'unavailable') {
+                Alert.alert('Biometria indisponível', 'Configure uma biometria no dispositivo para ativar este acesso.');
+              }
+            } catch {
+              Alert.alert('Não foi possível ativar', 'Tente novamente ou continue usando e-mail e senha.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const finalizarLogin = async (data, opcoes = {}) => {
+    if (data.sessao?.access_token) {
+      await salvarSessao(data.sessao);
+    } else if (data.token) {
+      await salvarSessao({ access_token: data.token });
+    } else {
+      throw new Error('O servidor não retornou um token de acesso.');
+    }
+
+    if (opcoes.salvarSenha) {
+      await salvarCredenciaisLembradas(emailInput.trim(), password);
+    } else if (opcoes.limparSenhaSalva) {
+      await removerCredenciaisLembradas();
+    }
+
+    irParaHome(navigation, opcoes.params || { bankUser: data.usuario });
+    await oferecerBiometria(data.sessao?.refresh_token);
+  };
   
   
 const logIn = async (idToken, googleData) => {
@@ -58,15 +149,13 @@ const logIn = async (idToken, googleData) => {
 
         if (response.ok) {
             console.log('Login Google autorizado!', data.usuario);
-            if (data.token) {
-                await salvarToken(data.token);
-            }
-
-            irParaHome(navigation, {
-                auth: {
-                    user: googleData?.user || {}
-                },
-                bankUser: data.usuario
+            await finalizarLogin(data, {
+                params: {
+                    auth: {
+                        user: googleData?.user || {}
+                    },
+                    bankUser: data.usuario
+                }
             });
 
         } else {
@@ -162,12 +251,10 @@ async function singIn() {
 
       if (response.ok) {
           console.log('Login por email autorizado!', data.usuario);
-          if (data.token) {
-              await salvarToken(data.token);
-          }
-
-          irParaHome(navigation, {
-              bankUser: data.usuario
+          await finalizarLogin(data, {
+              salvarSenha: rememberMe,
+              limparSenhaSalva: !rememberMe,
+              params: { bankUser: data.usuario }
           });
       } else {
         Alert.alert("Acesso Negado", data.erro || "Credenciais inválidas.");
@@ -262,7 +349,16 @@ async function singIn() {
           <TouchableOpacity 
             style={styles.checkboxContainer} 
             activeOpacity={0.8}
-            onPress={() => setRememberMe(!rememberMe)}
+            onPress={() => {
+              if (rememberMe) {
+                setRememberMe(false);
+                removerCredenciaisLembradas().catch(() => {
+                  Alert.alert('Não foi possível remover', 'Tente novamente para excluir a senha salva.');
+                });
+              } else {
+                setRememberMe(true);
+              }
+            }}
           >
             <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
               {rememberMe && <Text style={styles.checkmark}>✓</Text>}

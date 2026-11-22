@@ -1,4 +1,5 @@
 import supabase from '../database/db.js';
+import { PERFIS } from '../middleware/auth.js';
 
 export class AppError extends Error {
   constructor(status, message) {
@@ -117,13 +118,28 @@ const removeReceipt = async (path) => {
 };
 
 
-async function createTransaction(data, file) {
+const podeVerTodosLancamentos = (usuario) =>
+  [PERFIS.ADMIN, PERFIS.FINANCEIRO].includes(usuario?.perfil);
+
+async function createTransaction(data, file, usuario) {
   const dbType = TYPE_TO_DB[data.type];
   await assertCategory(data.categoryId, dbType);
   await assertPaymentMethod(data.paymentMethodId);
 
+  if (data.tripId) {
+    const { data: viagem, error } = await supabase
+      .from('viagens')
+      .select('id, id_motorista')
+      .eq('id', data.tripId)
+      .maybeSingle();
+    if (error) raiseDbError(error, 'Erro ao consultar a viagem.');
+    if (!viagem || (usuario.perfil === PERFIS.MOTORISTA && viagem.id_motorista !== usuario.id)) {
+      throw new AppError(404, 'Viagem não encontrada.');
+    }
+  }
+
   let receipt = null;
-  if (file) receipt = await uploadReceipt(file, data.userId);
+  if (file) receipt = await uploadReceipt(file, usuario.id);
 
   const row = {
     descricao: data.description,
@@ -135,7 +151,7 @@ async function createTransaction(data, file) {
     data_pagamento: data.paymentDate,
     id_categoria: data.categoryId,
     id_forma_pagamento: data.paymentMethodId,
-    id_usuario: data.userId,
+    id_usuario: usuario.id,
     id_viagem: data.tripId,
     id_financiamento: null,
     numero_parcela: null,
@@ -153,7 +169,7 @@ async function createTransaction(data, file) {
   return toTransaction(created);
 }
 
-async function listTransactions(filters) {
+async function listTransactions(filters, usuario) {
   let query = supabase.from(TABLE).select('*', { count: 'exact' });
 
   if (filters.type === 'INCOME') query = query.eq('tipo', 'ENTRADA');
@@ -162,7 +178,8 @@ async function listTransactions(filters) {
   if (filters.from) query = query.gte('data_vencimento', filters.from);
   if (filters.to) query = query.lte('data_vencimento', filters.to);
   if (filters.categoryId) query = query.eq('id_categoria', filters.categoryId);
-  if (filters.userId) query = query.eq('id_usuario', filters.userId);
+  const userId = podeVerTodosLancamentos(usuario) ? filters.userId : usuario.id;
+  if (userId) query = query.eq('id_usuario', userId);
 
   const { data, error, count } = await query
     .order('data_vencimento', { ascending: false })
@@ -178,19 +195,24 @@ async function listTransactions(filters) {
   };
 }
 
-async function markAsPaid(id, paymentDate) {
-  const { data, error } = await supabase
+async function markAsPaid(id, paymentDate, usuario) {
+  let atualizacao = supabase
     .from(TABLE)
     .update({ status: 'PAGO', data_pagamento: paymentDate, atualizado_em: new Date().toISOString() })
     .eq('id', id)
-    .eq('status', 'PENDENTE')
-    .select()
-    .maybeSingle();
+    .eq('status', 'PENDENTE');
+  if (!podeVerTodosLancamentos(usuario)) {
+    atualizacao = atualizacao.eq('id_usuario', usuario.id);
+  }
+  const { data, error } = await atualizacao.select().maybeSingle();
   if (error) raiseDbError(error, 'Erro ao registrar o pagamento.');
   if (data) return toTransaction(data);
 
-  const { data: current, error: lookupError } = await supabase
-    .from(TABLE).select('id, status').eq('id', id).maybeSingle();
+  let consultaAtual = supabase.from(TABLE).select('id, status').eq('id', id);
+  if (!podeVerTodosLancamentos(usuario)) {
+    consultaAtual = consultaAtual.eq('id_usuario', usuario.id);
+  }
+  const { data: current, error: lookupError } = await consultaAtual.maybeSingle();
   if (lookupError) raiseDbError(lookupError, 'Erro ao consultar o lançamento.');
   if (!current) throw new AppError(404, 'Lançamento não encontrado.');
   throw new AppError(409, `O lançamento já está com status ${STATUS_FROM_DB[current.status] ?? current.status}.`);
@@ -207,15 +229,18 @@ async function fetchInstallments(financingId) {
   return data ?? [];
 }
 
-async function fetchFinancing(financingId) {
-  const { data, error } = await supabase
-    .from('financiamentos').select('*').eq('id', financingId).maybeSingle();
+async function fetchFinancing(financingId, usuario = null) {
+  let consulta = supabase.from('financiamentos').select('*').eq('id', financingId);
+  if (usuario && !podeVerTodosLancamentos(usuario)) {
+    consulta = consulta.eq('id_usuario', usuario.id);
+  }
+  const { data, error } = await consulta.maybeSingle();
   if (error) raiseDbError(error, 'Erro ao consultar o financiamento.');
   if (!data) throw new AppError(404, 'Financiamento não encontrado.');
   return data;
 }
 
-async function createFinancing(data) {
+async function createFinancing(data, usuario) {
   await assertCategory(data.categoryId, 'SAIDA');
   await assertPaymentMethod(data.paymentMethodId);
 
@@ -227,7 +252,7 @@ async function createFinancing(data) {
     p_quitacao_antecipada: data.earlyPayoffAmount,
     p_id_categoria: data.categoryId,
     p_id_forma_pagamento: data.paymentMethodId,
-    p_id_usuario: data.userId
+    p_id_usuario: usuario.id
   });
   if (error) raiseDbError(error, 'Erro ao cadastrar o financiamento.');
 
@@ -240,8 +265,8 @@ async function createFinancing(data) {
   return toFinancing(await fetchFinancing(financingId), await fetchInstallments(financingId));
 }
 
-async function listInstallments(financingId) {
-  const financing = await fetchFinancing(financingId);
+async function listInstallments(financingId, usuario) {
+  const financing = await fetchFinancing(financingId, usuario);
   const installments = await fetchInstallments(financingId);
   return toFinancing(financing, installments);
 }

@@ -2,6 +2,7 @@
 // Rodar com:  npm run test:backend
 import { test, mock, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash, randomUUID } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { criarFakeSupabase } from './fakeSupabase.js';
 
@@ -60,7 +61,23 @@ mock.module('../database/db.js', {
 
 let base;
 let servidor;
-const token = (id, perfil) => jwt.sign({ sub: id, perfil, nome: 'Teste' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+const token = (id, perfil, opcoes = {}) => {
+  const sid = opcoes.sid || randomUUID();
+  const agora = new Date();
+  (fake.tabelas.auth_sessions ||= []).push({
+    id: sid,
+    user_id: id,
+    created_at: agora.toISOString(),
+    expires_at: new Date(agora.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    revoked_at: null,
+    revoke_reason: null,
+  });
+  return jwt.sign(
+    { sub: id, sid, perfil, nome: 'Teste' },
+    process.env.JWT_SECRET,
+    { expiresIn: opcoes.expiresIn || '1h' }
+  );
+};
 const T = {
   admin: token(ADMIN, 1),
   gestor: token(GESTOR, 2),
@@ -100,6 +117,8 @@ test('rotas protegidas recusam pedido sem token (C2)', async () => {
   for (const [m, c] of [
     ['GET', '/financeiro/resumo-geral'], ['GET', '/frota/veiculos'], ['GET', '/resumo/atividades-recentes'],
     ['GET', '/financeiro/lancamentos'], ['GET', '/financeiro/dividas'],
+    ['GET', '/financial/transactions'], ['GET', '/financial/projection'],
+    ['GET', '/financial/financings/00000000-0000-0000-0000-000000000001'],
     ['POST', '/financeiro/transacoes'], ['GET', '/usuarios'], ['GET', '/categorias'], ['POST', '/comprovantes/upload'],
   ]) {
     const r = await chamar(m, c);
@@ -130,7 +149,239 @@ test('login Google válido devolve token com o perfil do banco', async () => {
   const dados = jwt.verify(r.json.token, process.env.JWT_SECRET);
   assert.equal(dados.sub, ADMIN);
   assert.equal(dados.perfil, 1);
+  assert.ok(dados.sid);
   assert.equal(r.json.usuario.role, 1);
+  assert.equal(r.json.sessao.access_token, r.json.token);
+  assert.equal(r.json.sessao.refresh_token.length, 64);
+  assert.equal(
+    fake.tabelas.auth_refresh_tokens.some(
+      (item) =>
+        item.session_id === r.json.sessao.session_id &&
+        item.token_hash === createHash('sha256').update(r.json.sessao.refresh_token).digest('hex')
+    ),
+    true
+  );
+});
+
+test('login por e-mail emite somente uma sessão persistente Frotix', async () => {
+  const r = await chamar('POST', '/auth/login-email', {
+    corpo: { email: 'joao@logfin.com', password: 'senha-teste-valida' },
+  });
+  assert.equal(r.status, 200);
+  const dados = jwt.verify(r.json.token, process.env.JWT_SECRET);
+  assert.equal(dados.sub, MOTORISTA_1);
+  assert.equal(r.json.sessao.access_token, r.json.token);
+  assert.notEqual(r.json.sessao.refresh_token, 'supabase-refresh-test');
+  assert.equal(
+    Date.parse(r.json.sessao.session_expires_at) > r.json.sessao.expires_at * 1000,
+    true
+  );
+});
+
+test('resposta de autenticação usa o perfil atual retornado pela sessão', async () => {
+  const { criarRespostaAutenticada } = await import('../utils/authResponse.js');
+  const resposta = criarRespostaAutenticada(
+    { id: MOTORISTA_1, email: 'joao@logfin.com', nome: 'João', id_perfil: 1 },
+    {
+      sessionId: randomUUID(),
+      perfil: 4,
+      refreshToken: 'refresh-token-de-teste',
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    }
+  );
+
+  assert.equal(jwt.verify(resposta.token, process.env.JWT_SECRET).perfil, 4);
+  assert.equal(resposta.usuario.role, 4);
+});
+
+test('consulta da sessão usa o estado e perfil atuais do banco', async () => {
+  const resposta = await chamar('GET', '/auth/session', { token: T.admin });
+  assert.equal(resposta.status, 200);
+  assert.equal(resposta.json.usuario.role, 1);
+  assert.equal(resposta.json.sessao.session_id, jwt.decode(T.admin).sid);
+});
+
+test('migração bloqueia sempre a sessão antes dos tokens de refresh', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const sql = await readFile(
+    new URL('../database/migrations/2026-11-22_sessoes_frotix.sql', import.meta.url),
+    'utf8'
+  );
+  const corpoFuncao = (nome) => {
+    const inicio = sql.indexOf(`create or replace function public.${nome}`);
+    assert.notEqual(inicio, -1, `função ${nome} não encontrada`);
+    const fim = sql.indexOf('\n$function$;', inicio);
+    assert.notEqual(fim, -1, `fim da função ${nome} não encontrado`);
+    return sql.slice(inicio, fim);
+  };
+
+  const rotacao = corpoFuncao('frotix_rotacionar_refresh');
+  const lookupPorHash = rotacao.indexOf('select t.session_id');
+  const lockSessao = rotacao.indexOf('for update', rotacao.indexOf('select s.*'));
+  const lockToken = rotacao.indexOf('for update', rotacao.indexOf('select t.*'));
+  assert.ok(lookupPorHash >= 0 && lookupPorHash < lockSessao);
+  assert.ok(lockSessao < lockToken);
+  assert.match(rotacao, /insert into public\.auth_refresh_tokens[\s\S]*?v_session\.expires_at/);
+
+  for (const nome of [
+    'frotix_validar_sessao',
+    'frotix_revogar_sessao',
+    'frotix_revogar_sessoes_usuario',
+  ]) {
+    const funcao = corpoFuncao(nome);
+    const buscaSessao = funcao.indexOf(nome === 'frotix_revogar_sessoes_usuario' ? 'perform s.id' : 'select s.*');
+    const lockSessao = funcao.indexOf('for update', buscaSessao);
+    const alterarTokens = funcao.indexOf('update public.auth_refresh_tokens');
+    assert.ok(lockSessao >= 0 && lockSessao < alterarTokens, `${nome} deve bloquear a sessão antes dos tokens`);
+  }
+});
+
+test('sessão é revogada após desativação do usuário', async () => {
+  const accessToken = token(MOTORISTA_1, 4);
+  const sessionId = jwt.decode(accessToken).sid;
+  const usuario = fake.tabelas.usuarios.find((item) => item.id === MOTORISTA_1);
+  const ativoOriginal = usuario.ativo;
+  usuario.ativo = false;
+
+  try {
+    const resposta = await chamar('GET', '/auth/session', { token: accessToken });
+    assert.equal(resposta.status, 401);
+    assert.equal(
+      fake.tabelas.auth_sessions.find((item) => item.id === sessionId).revoke_reason,
+      'user_inactive'
+    );
+    usuario.ativo = true;
+    assert.equal((await chamar('GET', '/auth/session', { token: accessToken })).status, 401);
+  } finally {
+    usuario.ativo = ativoOriginal;
+  }
+});
+
+test('rebaixamento e elevação de perfil atualizam autorização sem novo JWT', async () => {
+  const usuarioAdmin = fake.tabelas.usuarios.find((item) => item.id === ADMIN);
+  const perfilAdminOriginal = usuarioAdmin.id_perfil;
+  const usuarioMotorista = fake.tabelas.usuarios.find((item) => item.id === MOTORISTA_1);
+  const perfilMotoristaOriginal = usuarioMotorista.id_perfil;
+
+  try {
+    usuarioAdmin.id_perfil = 4;
+    assert.equal((await chamar('GET', '/usuarios', { token: T.admin })).status, 403);
+
+    usuarioMotorista.id_perfil = 1;
+    const elevado = await chamar('GET', '/usuarios', { token: T.motorista1 });
+    assert.equal(elevado.status, 200);
+    assert.equal(
+      (await chamar('GET', '/auth/session', { token: T.motorista1 })).json.usuario.role,
+      1
+    );
+  } finally {
+    usuarioAdmin.id_perfil = perfilAdminOriginal;
+    usuarioMotorista.id_perfil = perfilMotoristaOriginal;
+  }
+});
+
+test('JWT expirado, legado ou com payload não-objeto não autoriza endpoints protegidos', async () => {
+  const claims = jwt.decode(T.motorista1);
+  const expirado = jwt.sign(
+    { sub: claims.sub, sid: claims.sid, perfil: 4 },
+    process.env.JWT_SECRET,
+    { expiresIn: -1 }
+  );
+  const legado = jwt.sign(
+    { sub: MOTORISTA_1, perfil: 4 },
+    process.env.JWT_SECRET,
+    { expiresIn: '1h' }
+  );
+  const payloadNaoObjeto = jwt.sign(
+    'payload-sem-claims',
+    process.env.JWT_SECRET
+  );
+
+  assert.equal((await chamar('GET', '/auth/session', { token: expirado })).status, 401);
+  assert.equal((await chamar('GET', '/auth/session', { token: legado })).status, 401);
+  assert.equal((await chamar('GET', '/auth/session', { token: payloadNaoObjeto })).status, 401);
+});
+
+test('falha ao validar sessão fecha o acesso sem degradar para JWT-only', async () => {
+  fake.setRpcError('frotix_validar_sessao', { message: 'database unavailable' });
+  try {
+    const resposta = await chamar('GET', '/auth/session', { token: T.motorista1 });
+    assert.equal(resposta.status, 503);
+  } finally {
+    fake.setRpcError('frotix_validar_sessao', null);
+  }
+});
+
+test('refresh rotaciona token sem estender a validade absoluta e detecta reutilização', async () => {
+  const login = await chamar('POST', '/auth/login-google', {
+    corpo: { idToken: 'google:joao@logfin.com' },
+  });
+  const refreshOriginal = login.json.sessao.refresh_token;
+  const expiracaoAbsoluta = login.json.sessao.session_expires_at;
+
+  const renovada = await chamar('POST', '/auth/refresh', {
+    corpo: { refresh_token: refreshOriginal },
+  });
+  assert.equal(renovada.status, 200);
+  assert.notEqual(renovada.json.sessao.refresh_token, refreshOriginal);
+  assert.equal(renovada.json.sessao.session_expires_at, expiracaoAbsoluta);
+
+  const reutilizada = await chamar('POST', '/auth/refresh', {
+    corpo: { refresh_token: refreshOriginal },
+  });
+  assert.equal(reutilizada.status, 401);
+  assert.equal(
+    (await chamar('GET', '/auth/session', { token: renovada.json.token })).status,
+    401
+  );
+  assert.equal(
+    (await chamar('POST', '/auth/refresh', {
+      corpo: { refresh_token: renovada.json.sessao.refresh_token },
+    })).status,
+    401
+  );
+});
+
+test('logout idempotente revoga somente uma sessão e aceita JWT expirado para revogação', async () => {
+  const primeira = await chamar('POST', '/auth/login-google', {
+    corpo: { idToken: 'google:joao@logfin.com' },
+  });
+  const segunda = await chamar('POST', '/auth/login-google', {
+    corpo: { idToken: 'google:joao@logfin.com' },
+  });
+  assert.notEqual(primeira.json.sessao.session_id, segunda.json.sessao.session_id);
+
+  const claims = jwt.decode(primeira.json.token);
+  const expirado = jwt.sign(
+    { sub: claims.sub, sid: claims.sid, perfil: claims.perfil },
+    process.env.JWT_SECRET,
+    { expiresIn: -1 }
+  );
+  assert.equal((await chamar('POST', '/auth/logout', { token: expirado })).status, 204);
+  assert.equal((await chamar('POST', '/auth/logout', { token: primeira.json.token })).status, 204);
+  assert.equal((await chamar('GET', '/auth/session', { token: primeira.json.token })).status, 401);
+  assert.equal((await chamar('GET', '/auth/session', { token: segunda.json.token })).status, 200);
+  assert.equal(
+    (await chamar('POST', '/auth/refresh', {
+      corpo: { refresh_token: primeira.json.sessao.refresh_token },
+    })).status,
+    401
+  );
+});
+
+test('duas renovações concorrentes não permitem reutilizar refresh token', async () => {
+  const login = await chamar('POST', '/auth/login-google', {
+    corpo: { idToken: 'google:marcos@logfin.com' },
+  });
+  const refreshToken = login.json.sessao.refresh_token;
+  const [a, b] = await Promise.all([
+    chamar('POST', '/auth/refresh', { corpo: { refresh_token: refreshToken } }),
+    chamar('POST', '/auth/refresh', { corpo: { refresh_token: refreshToken } }),
+  ]);
+
+  assert.deepEqual([a.status, b.status].sort(), [200, 401]);
+  const respostaValida = a.status === 200 ? a : b;
+  assert.equal((await chamar('GET', '/auth/session', { token: respostaValida.json.token })).status, 401);
 });
 
 test('login Google de e-mail sem cadastro ou conta desativada é recusado', async () => {
@@ -173,14 +424,33 @@ test('financeiro não acessa operações administrativas da frota mas acessa res
 });
 
 test('motorista só vê veículos das próprias viagens', async () => {
-  const r1 = await chamar('GET', '/frota/veiculos', { token: T.motorista1 });
+  const r1 = await chamar(
+    'GET',
+    `/frota/veiculos?motoristaId=${MOTORISTA_2}`,
+    { token: T.motorista1 }
+  );
   assert.equal(r1.status, 200);
   assert.equal(r1.json.veiculos.length, 1);
   assert.equal(r1.json.veiculos[0].placa, 'ABC-1234');
+  assert.equal(Object.hasOwn(r1.json.veiculos[0], 'gastosTotais'), false);
+  assert.equal(Object.hasOwn(r1.json.veiculos[0], 'custoKm'), false);
 
   const r2 = await chamar('GET', '/frota/veiculos', { token: T.motorista2 });
   assert.equal(r2.status, 200);
   assert.equal(r2.json.veiculos.length, 0);
+
+  const gestor = await chamar('GET', '/frota/veiculos', { token: T.gestor });
+  assert.equal(gestor.status, 200);
+  assert.equal(Object.hasOwn(gestor.json.veiculos[0], 'gastosTotais'), true);
+  assert.equal(Object.hasOwn(gestor.json.veiculos[0], 'custoKm'), true);
+
+  const semRotaIndividual = await chamar(
+    'GET',
+    `/frota/veiculos/${VEICULO}`,
+    { token: T.motorista1 }
+  );
+  assert.equal(semRotaIndividual.status, 404);
+  assert.equal(semRotaIndividual.json.veiculo, undefined);
 });
 
 // ---------------------------------------------------------------- I7
@@ -316,6 +586,166 @@ test('atividades recentes: motorista só vê os próprios lançamentos', async (
   assert.deepEqual(r.json.atividades.map((a) => a.id), ['l2']);
 });
 
+test('módulo financeiro legado restringe consultas e mutações ao usuário autenticado', async () => {
+  const lista = await chamar(
+    'GET',
+    `/financial/transactions?userId=${FINANCEIRO}`,
+    { token: T.motorista1 }
+  );
+  assert.equal(lista.status, 200);
+  assert.deepEqual(lista.json.dados.items.map((item) => item.id), ['l2']);
+  assert.equal(lista.json.dados.items[0].userId, MOTORISTA_1);
+
+  const listaFinanceiro = await chamar('GET', '/financial/transactions', {
+    token: T.financeiro,
+  });
+  assert.equal(listaFinanceiro.status, 200);
+  assert.ok(listaFinanceiro.json.dados.items.some((item) => item.id === 'l1'));
+  assert.ok(listaFinanceiro.json.dados.items.some((item) => item.id === 'l2'));
+
+  const criada = await chamar('POST', '/financial/transactions', {
+    token: T.motorista1,
+    corpo: {
+      userId: FINANCEIRO,
+      description: 'Despesa do motorista',
+      amount: 125,
+      type: 'EXPENSE',
+      categoryId: CAT_DIESEL,
+      date: hoje,
+    },
+  });
+  assert.equal(criada.status, 201);
+  assert.equal(criada.json.dados.userId, MOTORISTA_1);
+  const transacaoCriada = fake.tabelas.lancamentos_financeiros.find(
+    (item) => item.id === criada.json.dados.id
+  );
+  assert.equal(transacaoCriada.id_usuario, MOTORISTA_1);
+
+  const totalAntesViagemEstranha = fake.tabelas.lancamentos_financeiros.length;
+  const viagemDeOutroId = 'c0000000-0000-0000-0000-000000000099';
+  fake.tabelas.viagens.push({
+    id: viagemDeOutroId,
+    id_motorista: MOTORISTA_2,
+    status: 'EM_ANDAMENTO',
+  });
+  const viagemDeOutro = await chamar('POST', '/financial/transactions', {
+    token: T.motorista1,
+    corpo: {
+      userId: FINANCEIRO,
+      description: 'Despesa vinculada a terceiro',
+      amount: 80,
+      type: 'EXPENSE',
+      categoryId: CAT_DIESEL,
+      date: hoje,
+      tripId: viagemDeOutroId,
+    },
+  });
+  assert.equal(viagemDeOutro.status, 404);
+  assert.equal(viagemDeOutro.json.dados, undefined);
+  assert.equal(fake.tabelas.lancamentos_financeiros.length, totalAntesViagemEstranha);
+
+  const lancamentoDeOutroId = 'c0000000-0000-0000-0000-000000000098';
+  fake.tabelas.lancamentos_financeiros.push({
+    id: lancamentoDeOutroId,
+    descricao: 'Lançamento privado',
+    valor: 50,
+    tipo: 'SAIDA',
+    status: 'PENDENTE',
+    id_usuario: FINANCEIRO,
+  });
+  const pagoDeOutro = await chamar('PATCH', `/financial/transactions/${lancamentoDeOutroId}/pay`, {
+    token: T.motorista1,
+    corpo: { paymentDate: hoje },
+  });
+  assert.equal(pagoDeOutro.status, 404);
+  assert.equal(pagoDeOutro.json.dados, undefined);
+
+  const editarOutro = await chamar('PUT', `/financial/transactions/${lancamentoDeOutroId}`, {
+    token: T.motorista1,
+    corpo: { amount: 1 },
+  });
+  assert.equal(editarOutro.status, 404);
+  const excluirOutro = await chamar('DELETE', `/financial/transactions/${lancamentoDeOutroId}`, {
+    token: T.motorista1,
+  });
+  assert.equal(excluirOutro.status, 404);
+
+  const pagoProprio = await chamar(
+    'PATCH',
+    `/financial/transactions/${criada.json.dados.id}/pay`,
+    { token: T.motorista1, corpo: { paymentDate: hoje } }
+  );
+  assert.equal(pagoProprio.status, 200);
+  assert.equal(pagoProprio.json.dados.userId, MOTORISTA_1);
+
+  const userIdForjado = await chamar('POST', '/financial/financings', {
+    token: T.motorista1,
+    corpo: {
+      userId: FINANCEIRO,
+      description: 'Financiamento do motorista',
+      installmentAmount: 100,
+      installments: 2,
+      firstDueDate: hoje,
+      categoryId: CAT_DIESEL,
+    },
+  });
+  assert.equal(userIdForjado.status, 201);
+  assert.equal(userIdForjado.json.dados.userId, MOTORISTA_1);
+
+  const financiamentoDeOutroId = 'd0000000-0000-0000-0000-000000000099';
+  fake.tabelas.financiamentos.push({
+    id: financiamentoDeOutroId,
+    descricao: 'Financiamento privado',
+    valor_total: 200,
+    valor_parcela: 100,
+    quantidade_parcelas: 2,
+    data_primeiro_vencimento: hoje,
+    id_usuario: FINANCEIRO,
+  });
+  const financiamentoDeOutro = await chamar(
+    'GET',
+    `/financial/financings/${financiamentoDeOutroId}`,
+    { token: T.motorista1 }
+  );
+  assert.equal(financiamentoDeOutro.status, 404);
+  assert.equal(financiamentoDeOutro.json.dados, undefined);
+
+  fake.tabelas.viagens = fake.tabelas.viagens.filter((item) => item.id !== viagemDeOutroId);
+  fake.tabelas.lancamentos_financeiros = fake.tabelas.lancamentos_financeiros.filter(
+    (item) => item.id !== criada.json.dados.id && item.id !== lancamentoDeOutroId
+  );
+  fake.tabelas.financiamentos = fake.tabelas.financiamentos.filter(
+    (item) =>
+      item.id !== userIdForjado.json.dados.id &&
+      item.id !== financiamentoDeOutroId
+  );
+  fake.tabelas.lancamentos_financeiros = fake.tabelas.lancamentos_financeiros.filter(
+    (item) => item.id_financiamento !== userIdForjado.json.dados.id
+  );
+});
+
+test('projeção financeira global permite apenas Admin e Financeiro', async () => {
+  for (const tokenRestrito of [T.motorista1, T.gestor]) {
+    const negada = await chamar('GET', '/financial/projection', { token: tokenRestrito });
+    assert.equal(negada.status, 403);
+    assert.equal(negada.json.dados, undefined);
+  }
+
+  for (const tokenAutorizado of [T.admin, T.financeiro]) {
+    const permitida = await chamar('GET', '/financial/projection', { token: tokenAutorizado });
+    assert.equal(permitida.status, 200);
+  }
+});
+
+test('motorista não pode alterar o próprio perfil nem elevar privilégios', async () => {
+  const resposta = await chamar('PUT', `/usuarios/${MOTORISTA_1}`, {
+    token: T.motorista1,
+    corpo: { perfil: 1 },
+  });
+  assert.equal(resposta.status, 403);
+  assert.equal(resposta.json.usuario, undefined);
+});
+
 // ---------------------------------------------------------------- frota (P5, P6, P7, P10, P11)
 test('motorista só vê as próprias rotas (P10, P11)', async () => {
   const r = await chamar('GET', '/frota/rotas', { token: T.motorista1 });
@@ -345,6 +775,100 @@ test('motorista só vê as próprias rotas (P10, P11)', async () => {
   );
   const gestor = await chamar('GET', '/frota/viagens-andamento', { token: T.gestor });
   assert.equal(gestor.json.viagens.length, 2);
+});
+
+test('rotas e viagens filtram despesas pelo motorista autenticado', async () => {
+  const viagemSemDespesas = {
+    id: 'v4',
+    origem: 'Recife',
+    destino: 'Natal',
+    id_motorista: MOTORISTA_1,
+    id_veiculo: VEICULO,
+    status: 'EM_ANDAMENTO',
+    km_inicial: 45790,
+  };
+  const despesaPropria = {
+    id: 'l-rota-propria',
+    descricao: 'Combustível próprio',
+    valor: 125.5,
+    tipo: 'SAIDA',
+    id_usuario: MOTORISTA_1,
+    id_viagem: 'v3',
+  };
+  const despesaTerceiro = {
+    id: 'l-rota-terceiro',
+    descricao: 'Despesa confidencial de terceiro',
+    valor: 98765.43,
+    tipo: 'SAIDA',
+    id_usuario: FINANCEIRO,
+    id_viagem: 'v3',
+  };
+  fake.tabelas.viagens.push(viagemSemDespesas);
+  fake.tabelas.lancamentos_financeiros.push(despesaPropria, despesaTerceiro);
+
+  try {
+    for (const [endpoint, chave, idViagem] of [
+      ['/frota/rotas', 'rotas', 'v3'],
+      ['/frota/viagens-andamento', 'viagens', 'v3'],
+    ]) {
+      const motorista = await chamar('GET', `${endpoint}?motoristaId=${MOTORISTA_2}`, {
+        token: T.motorista1,
+      });
+      assert.equal(motorista.status, 200);
+      assert.deepEqual(
+        motorista.json[chave].find((item) => item.id === idViagem).despesas,
+        [{
+          id: despesaPropria.id,
+          descricao: despesaPropria.descricao,
+          valor: despesaPropria.valor,
+          comprovante: 'Sem comprovante',
+        }]
+      );
+      assert.ok(motorista.json[chave].some((item) => item.id === viagemSemDespesas.id && item.despesas.length === 0));
+
+      const conteudo = JSON.stringify(motorista.json);
+      assert.equal(conteudo.includes(despesaTerceiro.id), false);
+      assert.equal(conteudo.includes(despesaTerceiro.descricao), false);
+      assert.equal(conteudo.includes(String(despesaTerceiro.valor)), false);
+
+      const administrador = await chamar('GET', endpoint, { token: T.admin });
+      const viagemAdministrador = administrador.json[chave].find((item) => item.id === idViagem);
+      assert.deepEqual(
+        viagemAdministrador.despesas.map((item) => item.id).sort(),
+        [despesaPropria.id, despesaTerceiro.id].sort()
+      );
+
+      const gestor = await chamar('GET', endpoint, { token: T.gestor });
+      const viagemGestor = gestor.json[chave].find((item) => item.id === idViagem);
+      assert.deepEqual(
+        viagemGestor.despesas.map((item) => item.id).sort(),
+        [despesaPropria.id, despesaTerceiro.id].sort()
+      );
+
+      const financeiroSemPermissaoDeFrota = await chamar('GET', endpoint, {
+        token: T.financeiro,
+      });
+      assert.equal(financeiroSemPermissaoDeFrota.status, 403);
+    }
+
+    const veiculos = await chamar('GET', '/frota/veiculos', { token: T.motorista1 });
+    assert.equal(veiculos.status, 200);
+    assert.equal(Object.hasOwn(veiculos.json.veiculos[0], 'gastosTotais'), false);
+    assert.equal(Object.hasOwn(veiculos.json.veiculos[0], 'custoKm'), false);
+
+    const outraViagem = await chamar('POST', '/frota/rotas/v2/abrir', {
+      token: T.motorista1,
+      corpo: { veiculoId: VEICULO, hodometroInicial: 45790 },
+    });
+    assert.equal(outraViagem.status, 403);
+  } finally {
+    fake.tabelas.viagens = fake.tabelas.viagens.filter(
+      (item) => item.id !== viagemSemDespesas.id
+    );
+    fake.tabelas.lancamentos_financeiros = fake.tabelas.lancamentos_financeiros.filter(
+      (item) => ![despesaPropria.id, despesaTerceiro.id].includes(item.id)
+    );
+  }
 });
 
 test('veículo: cadastro, validação e placa repetida', async () => {
@@ -543,4 +1067,97 @@ test('motorista não vincula lançamento a viagem de outro motorista', async () 
   assert.equal(propria.status, 201);
   assert.equal(propria.json.lancamento.id_usuario, MOTORISTA_1);
   assert.equal(propria.json.lancamento.id_viagem, 'v1');
+});
+
+test('solicitação de recuperação usa resposta genérica e valida o formato do e-mail', async () => {
+  const existente = await chamar('POST', '/auth/password/recovery', {
+    corpo: { email: 'joao@logfin.com' },
+  });
+  const inexistente = await chamar('POST', '/auth/password/recovery', {
+    corpo: { email: 'naocadastrado@logfin.com' },
+  });
+  assert.equal(existente.status, 202);
+  assert.equal(inexistente.status, 202);
+  assert.deepEqual(inexistente.json, existente.json);
+  assert.equal(
+    fake.solicitacoesRecuperacao.at(-1).options.redirectTo,
+    process.env.PASSWORD_RECOVERY_REDIRECT_URL || 'frotix://auth/recovery'
+  );
+  assert.equal(
+    (await chamar('POST', '/auth/password/recovery', { corpo: { email: 'invalido' } })).status,
+    400
+  );
+});
+
+test('redefinição valida o recovery token, ignora user_id e revoga todas as sessões do usuário verificado', async () => {
+  const outraSessaoId = randomUUID();
+  fake.tabelas.auth_sessions.push({
+    id: outraSessaoId,
+    user_id: MOTORISTA_2,
+    created_at: agora,
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    revoked_at: null,
+    revoke_reason: null,
+  });
+  fake.tabelas.auth_refresh_tokens.push({
+    id: randomUUID(),
+    session_id: outraSessaoId,
+    token_hash: 'f'.repeat(64),
+    issued_at: agora,
+    expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    consumed_at: null,
+    revoked_at: null,
+  });
+  const resposta = await chamar('POST', '/auth/password/recovery/complete', {
+    corpo: {
+      token_hash: 'recovery-token-valido',
+      password: 'nova-senha-valida',
+      user_id: MOTORISTA_1,
+    },
+  });
+
+  assert.equal(resposta.status, 200);
+  assert.equal(resposta.json.token, undefined);
+  assert.equal(fake.alteracoesSenha.at(-1), 'nova-senha-valida');
+  assert.equal(
+    fake.tabelas.auth_sessions.find((sessao) => sessao.id === outraSessaoId).revoke_reason,
+    'password_reset'
+  );
+  assert.ok(fake.tabelas.auth_refresh_tokens.find((item) => item.session_id === outraSessaoId).revoked_at);
+  assert.equal(
+    fake.tabelas.auth_sessions.find((sessao) => sessao.id === jwt.decode(T.motorista1).sid).revoked_at,
+    null
+  );
+
+  const invalido = await chamar('POST', '/auth/password/recovery/complete', {
+    corpo: { token_hash: 'recovery-token-expirado', password: 'nova-senha-valida' },
+  });
+  assert.equal(invalido.status, 400);
+});
+
+test('sessão Supabase verificada pode redefinir senha sem aceitar identidade enviada pelo app', async () => {
+  const resposta = await chamar('POST', '/auth/password/recovery/complete', {
+    corpo: {
+      access_token: 'recovery-access-valido',
+      refresh_token: 'recovery-refresh-valido',
+      password: 'outra-senha-valida',
+      user_id: MOTORISTA_1,
+    },
+  });
+  assert.equal(resposta.status, 200);
+  assert.equal(fake.alteracoesSenha.at(-1), 'outra-senha-valida');
+  assert.equal(
+    fake.tabelas.auth_sessions.find((sessao) => sessao.id === jwt.decode(T.motorista1).sid).revoked_at,
+    null
+  );
+});
+
+test('solicitações repetidas de recuperação são limitadas por IP', async () => {
+  const respostas = [];
+  for (let i = 0; i < 3; i++) {
+    respostas.push(await chamar('POST', '/auth/password/recovery', {
+      corpo: { email: `usuario${i}@logfin.com` },
+    }));
+  }
+  assert.deepEqual(respostas.map((resposta) => resposta.status), [202, 202, 429]);
 });

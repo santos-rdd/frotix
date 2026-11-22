@@ -3,6 +3,7 @@
     "name": "frotix",
     "slug": "frotix",
     "version": "1.0.0",
+    "scheme": "frotix",
     "extra": {
       "googleClientId": "716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com",
       "apiUrl": "http://10.0.2.2:3000"
@@ -24,7 +25,18 @@
         }
       ],
       "@react-native-google-signin/google-signin",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Permita que o Frotix use o Face ID para proteger suas credenciais."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permita que o Frotix use o Face ID para confirmar sua identidade."
+        }
+      ],
       "expo-sqlite"
     ]
   }

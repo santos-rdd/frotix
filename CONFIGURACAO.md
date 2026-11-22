@@ -18,10 +18,12 @@ Copie o `.env.example` para `.env` e preencha. O `.env` nunca vai para o GitHub.
 
 | Variável | Para quê |
 | --- | --- |
-| `SUPABASE_URL`, `SUPABASE_KEY`, `SUPABASE_ANON_KEY` | Conexão do backend com o banco |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` | Conexão do backend com o banco; a chave `service_role` é exclusiva do backend |
 | `JWT_SECRET` | Assina o token de login. **Obrigatório**: o backend não sobe sem ele (mínimo 32 caracteres) |
 | `GOOGLE_WEB_CLIENT_ID` | Confere o login com Google (o mesmo de `src/config/google.js`) |
 | `EXPO_PUBLIC_API_URL` | Opcional. Endereço do backend usado pelo app. Vazio = Render |
+| `EMAIL_CONFIRM_REDIRECT_URL` | Destino já utilizado pela confirmação de cadastro no Supabase |
+| `PASSWORD_RECOVERY_REDIRECT_URL` | Deep link de recuperação; padrão local `frotix://auth/recovery` |
 
 Para gerar um `JWT_SECRET`:
 
@@ -36,6 +38,8 @@ No Render, as mesmas variáveis vão em **Environment**.
 As mudanças no banco ficam em `backend/database/migrations/`. Cada arquivo roda **uma vez** no SQL Editor do Supabase, antes de publicar o backend que depende dele.
 
 - `2026-11-19_correcoes_testes.sql`: tabelas `veiculos` e `manutencoes`, colunas novas em `viagens` e `formas_pagamento`, e remoção da coluna `password` de `usuarios`.
+
+Para recuperação de senha, autorize `frotix://auth/recovery` em **Supabase Auth > URL Configuration > Redirect URLs** e mantenha o template de recuperação usando o link oficial `{{ .ConfirmationURL }}`. A confirmação de cadastro continua usando `EMAIL_CONFIRM_REDIRECT_URL` e seu fluxo existente. Não foi configurada nem presumida uma URL de produção.
 
 ## 4. Rodar
 

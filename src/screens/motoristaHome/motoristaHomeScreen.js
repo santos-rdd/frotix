@@ -10,6 +10,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -35,6 +36,8 @@ import {
   listarViagensLocais,
   atualizarCacheVeiculos,
   atualizarCacheRotas,
+  listarFormasPagamentoLocais,
+  salvarFormasPagamentoLocais,
 } from '../../services/localDataService.js';
 
 import { obterUsuarioLogado } from '../../services/api.js';
@@ -91,6 +94,14 @@ export default function MotoristaHomeScreen(props) {
       4
   );
 
+  const usuarioAtual = {
+    ...usuarioParam,
+    id: usuarioId || usuarioParam?.id,
+    nome: usuarioNome,
+    role: usuarioRole,
+    foto: usuarioFoto,
+  };
+
   // Os dois cartões apenas alternam o conteúdo exibido abaixo.
   const [selectedAction, setSelectedAction] = useState('finance');
   const [formasPagamento, setFormasPagamento] = useState([]);
@@ -104,13 +115,28 @@ export default function MotoristaHomeScreen(props) {
 
   const slideAnim = useRef(new Animated.Value(height)).current;
 
-  const carregarDadosMotorista = useCallback(async () => {
+  const carregarDadosMotorista = useCallback(async (podeAtualizar = () => true) => {
     try {
       const uLogado = await obterUsuarioLogado();
+      if (!podeAtualizar()) return null;
 
       const id = uLogado?.id || uLogado?.sub || usuarioParam?.id;
-      const nome = uLogado?.nome || usuarioNome;
-      const perfil = uLogado?.perfil ?? usuarioRole;
+      const nome =
+        uLogado?.nome ||
+        authenticatedUser.nome ||
+        props.userName ||
+        usuarioParam?.nome ||
+        authGoogle?.user?.givenName ||
+        bankUser?.nome ||
+        bankUser?.name ||
+        'Motorista';
+      const perfil =
+        uLogado?.perfil ??
+        authenticatedUser.role ??
+        bankUser?.role ??
+        authGoogle?.user?.role ??
+        usuarioParam?.role ??
+        4;
 
       if (id) setUsuarioId(String(id));
 
@@ -121,7 +147,20 @@ export default function MotoristaHomeScreen(props) {
     } catch {
       return null;
     }
-  }, [usuarioNome, usuarioRole, usuarioParam?.id]);
+  }, [
+    authenticatedUser.nome,
+    authenticatedUser.role,
+    authGoogle?.user?.givenName,
+    authGoogle?.user?.role,
+    bankUser?.id,
+    bankUser?.nome,
+    bankUser?.name,
+    bankUser?.role,
+    props.userName,
+    usuarioParam?.id,
+    usuarioParam?.nome,
+    usuarioParam?.role,
+  ]);
 
   const carregarVeiculos = useCallback(async () => {
     if (!usuarioId) return [];
@@ -181,23 +220,39 @@ export default function MotoristaHomeScreen(props) {
   }, [usuarioId]);
 
   useEffect(() => {
-    carregarDadosMotorista();
+    let ativo = true;
+    carregarDadosMotorista(() => ativo);
+
+    return () => {
+      ativo = false;
+    };
   }, [carregarDadosMotorista]);
 
-  useEffect(() => {
+  useFocusEffect(
+    useCallback(() => {
     let ativo = true;
 
     const carregarFormasPagamento = async () => {
       try {
+        if (usuarioId) {
+          const locais = await listarFormasPagamentoLocais(usuarioId);
+          if (ativo && Array.isArray(locais) && locais.length > 0) {
+            setFormasPagamento(locais);
+          }
+        }
+
         const formas = await listarFormas();
 
         if (ativo) {
-          setFormasPagamento(
-            Array.isArray(formas) ? formas : []
-          );
+          if (Array.isArray(formas) && formas.length > 0) {
+            setFormasPagamento(formas);
+            if (usuarioId) {
+              salvarFormasPagamentoLocais(usuarioId, formas).catch(() => {});
+            }
+          }
         }
       } catch {
-        if (ativo) setFormasPagamento([]);
+        if (ativo && !usuarioId) setFormasPagamento([]);
       }
     };
 
@@ -206,7 +261,8 @@ export default function MotoristaHomeScreen(props) {
     return () => {
       ativo = false;
     };
-  }, []);
+    }, [usuarioId])
+  );
 
   const {
     dados: veiculos,
@@ -274,9 +330,29 @@ export default function MotoristaHomeScreen(props) {
     ]);
   };
 
+  const usuarioIdAnteriorRef = useRef(usuarioId);
+
+  useEffect(() => {
+    if (!usuarioId || usuarioId === usuarioIdAnteriorRef.current) return undefined;
+    usuarioIdAnteriorRef.current = usuarioId;
+
+    Promise.all([
+      recarregarVeiculos(),
+      recarregarRotas(),
+      recarregarViagens(),
+    ]);
+
+    return undefined;
+  }, [
+    usuarioId,
+    recarregarVeiculos,
+    recarregarRotas,
+    recarregarViagens,
+  ]);
+
   const abrirViagens = () => {
     navigation.navigate('Viagens', {
-      usuario: usuarioParam,
+      usuario: usuarioAtual,
       modo: 'motorista',
     });
   };
@@ -307,7 +383,7 @@ export default function MotoristaHomeScreen(props) {
 
   const abrirExtrato = () => {
     navigation.navigate('Extrato', {
-      usuario: usuarioParam,
+      usuario: usuarioAtual,
     });
   };
 
@@ -318,7 +394,7 @@ export default function MotoristaHomeScreen(props) {
     }
 
     navigation.navigate('DetalhesRota', {
-      usuario: usuarioParam,
+      usuario: usuarioAtual,
       rota: {
         id: viagem.id,
         origem: viagem.origem,
@@ -446,6 +522,7 @@ export default function MotoristaHomeScreen(props) {
                 viagemSelecionada={viagemSelecionada}
                 onSelectViagem={setViagemSelecionada}
                 onOpenTripDetails={abrirDetalhesViagem}
+                viagensIniciais={andamentoLista}
               />
             ) : (
               <View style={styles.tripCard}>
@@ -546,7 +623,7 @@ export default function MotoristaHomeScreen(props) {
       <BottomNavigation
         navigation={navigation}
         userRole={usuarioRole}
-        usuario={usuarioParam}
+        usuario={usuarioAtual}
       />
     </View>
   );

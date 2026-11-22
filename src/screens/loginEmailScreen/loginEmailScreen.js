@@ -5,15 +5,33 @@ import {
   View, 
   TextInput, 
   TouchableOpacity, 
-  SafeAreaView 
+  SafeAreaView,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { solicitarRecuperacaoSenha } from '../../services/authRecovery.js';
 
 export default function ForgotPasswordScreen({ navigation }) {
   const [emailInput, setEmailInput] = useState('');
+  const [enviando, setEnviando] = useState(false);
 
-  const handleSendRecoveryLink = () => {
-    // Lógica para enviar o link de recuperação para o e-mail
-    console.log('Link de recuperação enviado para:', emailInput);
+  const handleSendRecoveryLink = async () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+      Alert.alert('E-mail inválido', 'Informe um endereço de e-mail válido.');
+      return;
+    }
+    if (enviando) return;
+
+    setEnviando(true);
+    try {
+      const resposta = await solicitarRecuperacaoSenha(email);
+      Alert.alert('Verifique seu e-mail', resposta.mensagem);
+    } catch (error) {
+      Alert.alert('Não foi possível solicitar', error.message);
+    } finally {
+      setEnviando(false);
+    }
   };
 
   return (
@@ -34,7 +52,7 @@ export default function ForgotPasswordScreen({ navigation }) {
             Log in no Frot<Text style={styles.titleX}>X</Text>
           </Text>
           <Text style={styles.subtitle}>
-            Esqueceu sua senha? Digite seu e-mail abaixo e enviaremos um código de verificação para você redefinir sua senha com segurança.
+            Esqueceu sua senha? Digite seu e-mail abaixo e enviaremos um link para você redefinir sua senha com segurança.
           </Text>
         </View>
 
@@ -61,13 +79,12 @@ export default function ForgotPasswordScreen({ navigation }) {
           <TouchableOpacity 
             style={styles.loginButton} 
             activeOpacity={0.8}
-            onPress={()=>{
-                handleSendRecoveryLink
-                navigation.navigate('VerifyCodeScreen')
-
-            }}
+            onPress={handleSendRecoveryLink}
+            disabled={enviando}
           >
-            <Text style={styles.loginButtonText}>Log In</Text>
+            {enviando
+              ? <ActivityIndicator color="#FFF" />
+              : <Text style={styles.loginButtonText}>Enviar link de recuperação</Text>}
           </TouchableOpacity>
         </View>
 

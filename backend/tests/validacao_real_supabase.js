@@ -419,6 +419,7 @@ async function executarValidacaoReal() {
   const { default: supabase } = await import('../database/db.js');
   const { default: app } = await import('../app.js');
   const { gerarToken } = await import('../middleware/auth.js');
+  const { criarSessaoFrotix, revogarSessaoFrotix } = await import('../services/sessionService.js');
 
   // 1. Confirmar projeto Supabase de destino (mascarado)
   const supabaseUrl = process.env.SUPABASE_URL || '';
@@ -470,18 +471,25 @@ async function executarValidacaoReal() {
   console.log(`✔ Manifesto inicializado e persistido em disco com sucesso.`);
   console.log('----------------------------------------------------------------');
 
-  const servidor = await new Promise((resolve) => {
-    const s = app.listen(0, () => resolve(s));
-  });
-  const porta = servidor.address().port;
-  const urlBase = `http://127.0.0.1:${porta}`;
-  console.log(`[INFO] Servidor backend Express rodando localmente na porta ${porta}.`);
-
-  const token = gerarToken({ id: argUsuarioId, id_perfil: Number(usuarioDb.id_perfil) || 1, nome: usuarioDb.nome || 'Auditoria' });
-
+  let servidor;
+  let sessaoCriada;
   let falhaOcorrida = null;
 
   try {
+    sessaoCriada = await criarSessaoFrotix(argUsuarioId);
+    const token = gerarToken({
+      id: argUsuarioId,
+      id_perfil: Number(usuarioDb.id_perfil) || 1,
+      nome: usuarioDb.nome || 'Auditoria',
+    }, sessaoCriada.sessionId);
+
+    servidor = await new Promise((resolve) => {
+      const s = app.listen(0, () => resolve(s));
+    });
+    const porta = servidor.address().port;
+    const urlBase = `http://127.0.0.1:${porta}`;
+    console.log(`[INFO] Servidor backend Express rodando localmente na porta ${porta}.`);
+
     // -------------------------------------------------------------
     // CENÁRIO A: Lançamento Financeiro
     // -------------------------------------------------------------
@@ -678,7 +686,17 @@ async function executarValidacaoReal() {
     salvarManifestoEmDisco();
     console.error('\n✖ [FALHA NA VALIDAÇÃO REAL]:', erro.message);
   } finally {
-    await new Promise((resolve) => servidor.close(resolve));
+    if (servidor) {
+      await new Promise((resolve) => servidor.close(resolve));
+    }
+
+    if (sessaoCriada) {
+      try {
+        await revogarSessaoFrotix(sessaoCriada.sessionId, argUsuarioId);
+      } catch (erroRevogacao) {
+        console.error('[ERRO AO REVOGAR SESSÃO DE TESTE]:', erroRevogacao);
+      }
+    }
 
     // Teardown resiliente usando o manifesto persistido
     try {

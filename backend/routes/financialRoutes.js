@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import multer from 'multer';
 import financialController from '../controllers/financialController.js';
-import { autenticar } from '../middleware/auth.js';
+import { autenticar, exigirPerfil, PERFIS } from '../middleware/auth.js';
 
 const router = Router();
+const acessoProjecaoGlobal = exigirPerfil(PERFIS.ADMIN, PERFIS.FINANCEIRO);
 
 router.use(autenticar);
 
@@ -34,6 +35,6 @@ router.patch('/transactions/:id/pay', financialController.payTransaction);
 router.post('/financings', financialController.createFinancing);
 router.get('/financings/:id', financialController.getFinancing);
 
-router.get('/projection', financialController.getCashProjection);
+router.get('/projection', acessoProjecaoGlobal, financialController.getCashProjection);
 
 export default router;
