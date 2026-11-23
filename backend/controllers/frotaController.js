@@ -13,6 +13,7 @@ const STATUS_VEICULO = { DISPONIVEL: 'disponivel', EM_VIAGEM: 'em_viagem', MANUT
 const STATUS_ROTA = { PLANEJADA: 'agendada', EM_ANDAMENTO: 'em_transito', CONCLUIDA: 'concluida' };
 const STATUS_MANUTENCAO = { AGENDADA: 'agendada', EM_ANDAMENTO: 'em_andamento', CONCLUIDA: 'concluida' };
 const TIPOS_MANUTENCAO = ['preventiva', 'corretiva', 'troca_oleo', 'pneus', 'freios', 'revisao'];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** "DD/MM/AAAA" -> "AAAA-MM-DD" (null se a data não existir). */
 export function dataParaIso(texto) {
@@ -512,6 +513,199 @@ export async function listarViagensEmAndamento(req, res) {
     });
   } catch (e) {
     return erroInterno(res, 'consultar as viagens em andamento', e);
+  }
+}
+
+export async function registrarPosicoesViagem(req, res) {
+  try {
+    const viagemId = req.params.id;
+    const posicoes = req.body?.posicoes;
+    if (!UUID.test(viagemId || '') || !Array.isArray(posicoes) || posicoes.length === 0 || posicoes.length > 200) {
+      return res.status(400).json({ sucesso: false, erro: 'Informe uma viagem e até 200 posições válidas.' });
+    }
+
+    const ids = new Set();
+    const agora = Date.now();
+    for (const posicao of posicoes) {
+      const registradaEm = Date.parse(posicao?.registradaEm);
+      if (
+        !UUID.test(posicao?.id || '') ||
+        ids.has(posicao.id) ||
+        !Number.isFinite(posicao.latitude) ||
+        posicao.latitude < -90 ||
+        posicao.latitude > 90 ||
+        !Number.isFinite(posicao.longitude) ||
+        posicao.longitude < -180 ||
+        posicao.longitude > 180 ||
+        (posicao.precisao != null && (!Number.isFinite(posicao.precisao) || posicao.precisao < 0)) ||
+        (posicao.velocidade != null && (!Number.isFinite(posicao.velocidade) || posicao.velocidade < 0)) ||
+        !Number.isFinite(registradaEm) ||
+        registradaEm > agora + 5 * 60 * 1000
+      ) {
+        return res.status(400).json({ sucesso: false, erro: 'Uma ou mais posições têm dados inválidos.' });
+      }
+      ids.add(posicao.id);
+    }
+
+    const { data: viagem, error: erroViagem } = await supabase
+      .from('viagens')
+      .select('id, id_motorista, id_veiculo, status, iniciada_em, concluida_em')
+      .eq('id', viagemId)
+      .maybeSingle();
+    if (erroViagem) throw erroViagem;
+    if (!viagem) return res.status(404).json({ sucesso: false, erro: 'Viagem não encontrada.' });
+    if (viagem.id_motorista !== req.usuario.id) {
+      return res.status(403).json({ sucesso: false, erro: 'Esta viagem não pertence ao motorista autenticado.' });
+    }
+    const viagemAtiva = viagem.status === 'EM_ANDAMENTO';
+    const viagemConcluida = viagem.status === 'CONCLUIDA' && Number.isFinite(Date.parse(viagem.concluida_em));
+    if ((!viagemAtiva && !viagemConcluida) || !viagem.id_veiculo || !viagem.iniciada_em) {
+      return res.status(409).json({ sucesso: false, erro: 'A viagem não está ativa ou não possui veículo atribuído.' });
+    }
+
+    const inicioViagem = Date.parse(viagem.iniciada_em);
+    if (!Number.isFinite(inicioViagem) || posicoes.some(
+      (posicao) => Date.parse(posicao.registradaEm) < inicioViagem - 5 * 60 * 1000
+    )) {
+      return res.status(400).json({ sucesso: false, erro: 'A posição antecede o início da viagem.' });
+    }
+    if (viagemConcluida && posicoes.some(
+      (posicao) => Date.parse(posicao.registradaEm) > Date.parse(viagem.concluida_em)
+    )) {
+      return res.status(409).json({ sucesso: false, erro: 'A posição foi registrada depois da conclusão da viagem.' });
+    }
+
+    const persistidas = [];
+    const naoPersistidas = [];
+    for (const posicao of posicoes) {
+      const linha = {
+        id: posicao.id,
+        id_motorista: req.usuario.id,
+        id_viagem: viagem.id,
+        latitude: posicao.latitude,
+        longitude: posicao.longitude,
+        precisao_m: posicao.precisao ?? null,
+        velocidade_ms: posicao.velocidade ?? null,
+        registrada_em: new Date(posicao.registradaEm).toISOString(),
+      };
+
+      const { data: inserida, error } = await supabase
+        .from('posicoes_viagem')
+        .upsert(linha, {
+          onConflict: 'id_viagem,registrada_em',
+          ignoreDuplicates: true,
+        })
+        .select('id')
+        .maybeSingle();
+
+      if (!error && inserida?.id === posicao.id) {
+        persistidas.push(posicao.id);
+        continue;
+      }
+
+      if (error && error.code !== '23505') {
+        naoPersistidas.push(posicao.id);
+        continue;
+      }
+
+      const { data: existente, error: erroConsulta } = await supabase
+        .from('posicoes_viagem')
+        .select('id, id_motorista, latitude, longitude, precisao_m, velocidade_ms')
+        .eq('id_viagem', viagem.id)
+        .eq('registrada_em', linha.registrada_em)
+        .maybeSingle();
+
+      if (erroConsulta) throw erroConsulta;
+      const mesmaPosicao = existente &&
+        existente.id_motorista === req.usuario.id &&
+        Number(existente.latitude) === linha.latitude &&
+        Number(existente.longitude) === linha.longitude &&
+        (existente.precisao_m == null || linha.precisao_m == null ||
+          Number(existente.precisao_m) === linha.precisao_m) &&
+        (existente.velocidade_ms == null || linha.velocidade_ms == null ||
+          Number(existente.velocidade_ms) === linha.velocidade_ms);
+
+      if (mesmaPosicao) persistidas.push(posicao.id);
+      else naoPersistidas.push(posicao.id);
+    }
+
+    return res.status(naoPersistidas.length > 0 ? 207 : 200).json({
+      sucesso: naoPersistidas.length === 0,
+      persistidas,
+      naoPersistidas,
+    });
+  } catch (e) {
+    return erroInterno(res, 'registrar posições da viagem', e);
+  }
+}
+
+export async function listarPosicoesViagem(req, res) {
+  try {
+    let consultaViagens = supabase
+      .from('viagens')
+      .select('id, id_motorista, id_veiculo, origem, destino')
+      .eq('status', 'EM_ANDAMENTO');
+
+    if (req.query.viagemId) {
+      if (!UUID.test(req.query.viagemId)) {
+        return res.status(400).json({ sucesso: false, erro: 'Identificador de viagem inválido.' });
+      }
+      consultaViagens = consultaViagens.eq('id', req.query.viagemId);
+    }
+
+    const { data: viagensAtivas, error: erroViagens } = await consultaViagens;
+    if (erroViagens) throw erroViagens;
+    if (req.query.viagemId && !viagensAtivas?.length) {
+      return res.status(404).json({ sucesso: false, erro: 'Não há uma viagem ativa com esse identificador.' });
+    }
+    if (!viagensAtivas?.length) return res.json({ sucesso: true, posicoes: [] });
+
+    const motoristasIds = [...new Set(viagensAtivas.map((viagem) => viagem.id_motorista).filter(Boolean))];
+    const veiculosIds = [...new Set(viagensAtivas.map((viagem) => viagem.id_veiculo).filter(Boolean))];
+    const [motoristas, veiculos] = await Promise.all([
+      motoristasIds.length
+        ? supabase.from('usuarios').select('id, nome').in('id', motoristasIds)
+        : Promise.resolve({ data: [], error: null }),
+      veiculosIds.length
+        ? supabase.from('veiculos').select('id, modelo, placa').in('id', veiculosIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (motoristas.error) throw motoristas.error;
+    if (veiculos.error) throw veiculos.error;
+
+    const nomesMotoristas = Object.fromEntries((motoristas.data || []).map((item) => [item.id, item.nome]));
+    const dadosVeiculos = Object.fromEntries((veiculos.data || []).map((item) => [item.id, item]));
+    const resultados = await Promise.all(viagensAtivas.map(async (viagem) => {
+      const { data: posicao, error } = await supabase
+        .from('posicoes_viagem')
+        .select('id, id_motorista, id_viagem, latitude, longitude, precisao_m, velocidade_ms, registrada_em')
+        .eq('id_viagem', viagem.id)
+        .order('registrada_em', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      if (!posicao) return null;
+
+      const veiculo = dadosVeiculos[viagem.id_veiculo];
+      return {
+        ...posicao,
+        precisao_m: posicao.precisao_m ?? null,
+        velocidade_ms: posicao.velocidade_ms ?? null,
+        viagemId: viagem.id,
+        motoristaId: viagem.id_motorista,
+        motorista: nomesMotoristas[viagem.id_motorista] || 'Motorista',
+        veiculoId: viagem.id_veiculo,
+        veiculoModelo: veiculo?.modelo || null,
+        placa: veiculo?.placa || null,
+        origem: viagem.origem,
+        destino: viagem.destino,
+      };
+    }));
+
+    res.set('Cache-Control', 'no-store');
+    return res.json({ sucesso: true, posicoes: resultados.filter(Boolean) });
+  } catch (e) {
+    return erroInterno(res, 'consultar posições das viagens', e);
   }
 }
 

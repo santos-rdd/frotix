@@ -52,6 +52,7 @@ const fake = criarFakeSupabase({
   ],
   financiamentos: [],
   manutencoes: [],
+  posicoes_viagem: [],
 });
 
 mock.module('../database/db.js', {
@@ -877,6 +878,201 @@ test('motorista só vê as próprias rotas (P10, P11)', async () => {
   );
   const gestor = await chamar('GET', '/frota/viagens-andamento', { token: T.gestor });
   assert.equal(gestor.json.viagens.length, 2);
+});
+
+test('GPS: identidade JWT prevalece sobre IDs enviados e motorista não envia para viagem alheia', async () => {
+  const viagemId = 'd0000000-0000-0000-0000-000000000001';
+  const viagemAlheiaId = 'd0000000-0000-0000-0000-000000000002';
+  const iniciouEm = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const registradaEm = new Date(Date.now() - 60 * 1000).toISOString();
+  fake.tabelas.viagens.push(
+    {
+      id: viagemId,
+      id_motorista: MOTORISTA_1,
+      id_veiculo: VEICULO,
+      status: 'EM_ANDAMENTO',
+      iniciada_em: iniciouEm,
+      origem: 'Campinas',
+      destino: 'Santos',
+    },
+    {
+      id: viagemAlheiaId,
+      id_motorista: MOTORISTA_2,
+      id_veiculo: VEICULO,
+      status: 'EM_ANDAMENTO',
+      iniciada_em: iniciouEm,
+    }
+  );
+  const posicao = {
+    id: randomUUID(),
+    latitude: -23.55,
+    longitude: -46.63,
+    precisao: 8,
+    velocidade: 4,
+    registradaEm,
+  };
+  const tamanhoInicial = fake.tabelas.posicoes_viagem.length;
+
+  try {
+    const registrada = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { usuarioId: MOTORISTA_2, posicoes: [posicao] },
+    });
+    assert.equal(registrada.status, 200);
+    assert.deepEqual(registrada.json.persistidas, [posicao.id]);
+    const salva = fake.tabelas.posicoes_viagem.find((item) => item.id === posicao.id);
+    assert.equal(salva.id_motorista, MOTORISTA_1);
+    assert.equal(salva.id_viagem, viagemId);
+    assert.equal(salva.precisao_m, posicao.precisao);
+    assert.equal(salva.velocidade_ms, posicao.velocidade);
+    assert.equal(Object.hasOwn(salva, 'precisao'), false);
+    assert.equal(Object.hasOwn(salva, 'velocidade'), false);
+    assert.equal(Object.hasOwn(salva, 'usuarioId'), false);
+
+    const repetida = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [posicao] },
+    });
+    assert.equal(repetida.status, 200);
+    assert.deepEqual(repetida.json.persistidas, [posicao.id]);
+
+    const conflito = {
+      ...posicao,
+      id: randomUUID(),
+      latitude: -23.56,
+    };
+    const repeticaoConflitante = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [conflito] },
+    });
+    assert.equal(repeticaoConflitante.status, 207);
+    assert.deepEqual(repeticaoConflitante.json.persistidas, []);
+    assert.deepEqual(repeticaoConflitante.json.naoPersistidas, [conflito.id]);
+
+    const viagemDeOutro = await chamar('POST', `/frota/rotas/${viagemAlheiaId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [{ ...posicao, id: randomUUID() }] },
+    });
+    assert.equal(viagemDeOutro.status, 403);
+    assert.equal(fake.tabelas.posicoes_viagem.length, tamanhoInicial + 1);
+
+    assert.equal((await chamar('GET', '/frota/posicoes', { token: T.motorista1 })).status, 403);
+    assert.equal((await chamar('GET', '/frota/posicoes', { token: T.financeiro })).status, 403);
+    for (const tokenGestao of [T.admin, T.gestor]) {
+      const consulta = await chamar('GET', `/frota/posicoes?viagemId=${viagemId}`, { token: tokenGestao });
+      assert.equal(consulta.status, 200);
+      assert.equal(consulta.json.posicoes.length, 1);
+      assert.equal(consulta.json.posicoes[0].motoristaId, MOTORISTA_1);
+    }
+  } finally {
+    fake.tabelas.viagens = fake.tabelas.viagens.filter(
+      (item) => item.id !== viagemId && item.id !== viagemAlheiaId
+    );
+    fake.tabelas.posicoes_viagem = fake.tabelas.posicoes_viagem.filter(
+      (item) => item.id !== posicao.id
+    );
+  }
+});
+
+test('GPS aceita sincronização tardia apenas para posições capturadas antes da conclusão', async () => {
+  const viagemId = 'd0000000-0000-0000-0000-000000000003';
+  const iniciouEm = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const concluiuEm = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const posicoesExistentes = new Set(fake.tabelas.posicoes_viagem.map((item) => item.id));
+  fake.tabelas.viagens.push({
+    id: viagemId,
+    id_motorista: MOTORISTA_1,
+    id_veiculo: VEICULO,
+    status: 'CONCLUIDA',
+    iniciada_em: iniciouEm,
+    concluida_em: concluiuEm,
+  });
+
+  try {
+    const antesDeConcluir = {
+      id: randomUUID(),
+      latitude: -23.5,
+      longitude: -46.5,
+      registradaEm: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+    const aceita = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [antesDeConcluir] },
+    });
+    assert.equal(aceita.status, 200);
+
+    const depoisDeConcluir = {
+      ...antesDeConcluir,
+      id: randomUUID(),
+      registradaEm: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    };
+    const rejeitada = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [depoisDeConcluir] },
+    });
+    assert.equal(rejeitada.status, 409);
+    assert.equal(fake.tabelas.posicoes_viagem.some((item) => item.id === depoisDeConcluir.id), false);
+  } finally {
+    fake.tabelas.viagens = fake.tabelas.viagens.filter((item) => item.id !== viagemId);
+    fake.tabelas.posicoes_viagem = fake.tabelas.posicoes_viagem.filter(
+      (item) => posicoesExistentes.has(item.id)
+    );
+  }
+});
+
+test('GPS aceita duplicata legada sem metadados opcionais e retorna NULL na consulta', async () => {
+  const viagemId = 'd0000000-0000-0000-0000-000000000004';
+  const iniciouEm = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const registradaEm = new Date(Date.now() - 60 * 1000).toISOString();
+  const posicaoLegada = {
+    id: randomUUID(),
+    id_motorista: MOTORISTA_1,
+    id_viagem: viagemId,
+    latitude: -23.55,
+    longitude: -46.63,
+    registrada_em: registradaEm,
+  };
+  fake.tabelas.viagens.push({
+    id: viagemId,
+    id_motorista: MOTORISTA_1,
+    id_veiculo: VEICULO,
+    status: 'EM_ANDAMENTO',
+    iniciada_em: iniciouEm,
+    origem: 'Campinas',
+    destino: 'Santos',
+  });
+  fake.tabelas.posicoes_viagem.push(posicaoLegada);
+
+  try {
+    const repetida = {
+      id: randomUUID(),
+      latitude: posicaoLegada.latitude,
+      longitude: posicaoLegada.longitude,
+      precisao: 8,
+      velocidade: 4,
+      registradaEm,
+    };
+    const sincronizada = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [repetida] },
+    });
+    assert.equal(sincronizada.status, 200);
+    assert.deepEqual(sincronizada.json.persistidas, [repetida.id]);
+
+    const consultada = await chamar('GET', `/frota/posicoes?viagemId=${viagemId}`, {
+      token: T.gestor,
+    });
+    assert.equal(consultada.status, 200);
+    assert.equal(consultada.json.posicoes.length, 1);
+    assert.equal(consultada.json.posicoes[0].precisao_m, null);
+    assert.equal(consultada.json.posicoes[0].velocidade_ms, null);
+    assert.equal(consultada.json.posicoes[0].latitude, posicaoLegada.latitude);
+  } finally {
+    fake.tabelas.viagens = fake.tabelas.viagens.filter((item) => item.id !== viagemId);
+    fake.tabelas.posicoes_viagem = fake.tabelas.posicoes_viagem.filter(
+      (item) => item.id !== posicaoLegada.id
+    );
+  }
 });
 
 test('motorista não pode trocar o veículo previamente associado à rota', async () => {
