@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
@@ -19,12 +20,17 @@ export default function ResetPasswordScreen({ navigation, route }) {
 
   const redefinir = async () => {
     if (senha.length < 6 || senha !== confirmacao) {
-      Alert.alert('Confira a senha', 'Use ao menos 6 caracteres e confirme a mesma senha.');
+      Alert.alert(
+        'Confira a senha',
+        'Use ao menos 6 caracteres e confirme a mesma senha.'
+      );
       return;
     }
+
     if (salvando) return;
 
     setSalvando(true);
+
     try {
       const resposta = await concluirRecuperacaoSenha({
         token_hash: route.params?.token_hash,
@@ -34,13 +40,20 @@ export default function ResetPasswordScreen({ navigation, route }) {
       });
 
       let erroLimpeza = false;
+
       try {
         await removerCredenciaisDeAutenticacao();
       } catch {
         erroLimpeza = true;
       }
 
-      navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'Login' }] }));
+      navigation.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'Login' }],
+        })
+      );
+
       Alert.alert(
         'Senha redefinida',
         erroLimpeza
@@ -57,40 +70,62 @@ export default function ResetPasswordScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        {/* Botão voltar */}
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
 
+        {/* Cabeçalho */}
         <View style={styles.headerContainer}>
           <Text style={styles.title}>
-            Redefinir senha do Frot<Text style={styles.titleX}>X</Text>
+            Redefinir senha do Frot
+            <Text style={styles.titleX}>X</Text>
           </Text>
-          <Text style={styles.subtitle}>Informe e confirme sua nova senha.</Text>
+
+          <Text style={styles.subtitle}>
+            Informe e confirme sua nova senha.
+          </Text>
         </View>
 
+        {/* Campos de senha */}
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Nova senha</Text>
-            <TextInput
-              style={styles.input}
-              value={senha}
-              onChangeText={setSenha}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Digite sua nova senha"
+                placeholderTextColor="#666"
+                value={senha}
+                onChangeText={setSenha}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
           </View>
+
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Confirmar nova senha</Text>
-            <TextInput
-              style={styles.input}
-              value={confirmacao}
-              onChangeText={setConfirmacao}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Confirme sua nova senha"
+                placeholderTextColor="#666"
+                value={confirmacao}
+                onChangeText={setConfirmacao}
+                secureTextEntry
+                autoCapitalize="none"
+              />
+            </View>
           </View>
         </View>
 
+        {/* Botão salvar */}
         <View style={styles.footer}>
           <TouchableOpacity
             style={styles.loginButton}
@@ -98,9 +133,13 @@ export default function ResetPasswordScreen({ navigation, route }) {
             onPress={redefinir}
             disabled={salvando}
           >
-            {salvando
-              ? <ActivityIndicator color="#FFF" />
-              : <Text style={styles.loginButtonText}>Salvar nova senha</Text>}
+            {salvando ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Text style={styles.loginButtonText}>
+                Salvar nova senha
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -161,12 +200,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '500',
   },
+  inputWrapper: {
+    borderWidth: 1,
+    borderColor: '#3045FF',
+    borderRadius: 12,
+    backgroundColor: '#1A1A1A',
+    height: 56,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
   input: {
     color: '#FFFFFF',
     fontSize: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    paddingBottom: 8,
+    padding: 0,
   },
   footer: {
     marginTop: 'auto',
