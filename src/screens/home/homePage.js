@@ -65,7 +65,7 @@ function HomePageOutrosPerfis({ navigation, route }) {
 
   const [isSliderVisible, setIsSliderVisible] = useState(false);
   const [actionType, setActionType] = useState('entrada');
-  const [amountValue, setAmountValue] = useState('423');
+  const [amountValue, setAmountValue] = useState('0');
   const [isEditingAmount, setIsEditingAmount] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(height)).current;
@@ -125,6 +125,7 @@ function HomePageOutrosPerfis({ navigation, route }) {
 
   const handleOpenSlider = (type) => {
     setActionType(type);
+    setAmountValue('0');
     setIsSliderVisible(true);
     Animated.timing(slideAnim, {
       toValue: 0,
@@ -151,7 +152,7 @@ function HomePageOutrosPerfis({ navigation, route }) {
   const bankUser = route?.params?.bankUser || null;
 
   const userName = authenticatedUser.nome || authGoogle?.user?.givenName || bankUser?.name || 'Usuário';
-  const userPhoto = authGoogle?.user?.photo || null; 
+  const userPhoto = bankUser?.imagem || authGoogle?.user?.photo || route?.params?.usuario?.foto || null;
   const userRole = Number(authenticatedUser.role ?? bankUser?.role ?? authGoogle?.user?.role);
 
   const reference = {

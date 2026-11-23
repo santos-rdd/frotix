@@ -1,6 +1,6 @@
 import supabase from '../database/db.js';
 import { PERFIS } from '../middleware/auth.js';
-import { viagensConcluidasNoPeriodo, somarKm, custoPorKm, arredondar } from '../utils/calculos.js';
+import { viagensConcluidasNoPeriodo, somarKm, custoPorKm, arredondar, dataDoLancamento } from '../utils/calculos.js';
 
 const parseValor = (val) => {
   if (typeof val === 'string') {
@@ -601,7 +601,9 @@ const obterVisaoGeralFrota = async (req, res) => {
     const viagensEmAndamento = (viagens || []).filter(
       (v) => (v.status || '').toUpperCase().trim() === 'EM_ANDAMENTO'
     );
-    const veiculosEmRota = viagensEmAndamento.length;
+    const veiculosEmRota = new Set(
+      viagensEmAndamento.map((viagem) => viagem.id_veiculo).filter(Boolean)
+    ).size;
 
     const agora = new Date();
     const diasParam = Math.max(1, parseInt(req.query.dias || req.query.periodo, 10) || 7);
@@ -616,16 +618,12 @@ const obterVisaoGeralFrota = async (req, res) => {
     });
 
     const despesas7Dias = todasDespesas.filter((item) => {
-      const dataRef =
-        item.data_lancamento ||
-        item.data_pagamento ||
-        item.created_at ||
-        item.atualizado_em;
+      const dataRef = dataDoLancamento(item);
       if (!dataRef) return false;
       return String(dataRef).split('T')[0] >= seteDiasAtrasStr;
     });
 
-    const despesasBase = despesas7Dias.length > 0 ? despesas7Dias : todasDespesas;
+    const despesasBase = despesas7Dias;
 
     const grupos = {};
     for (const item of despesasBase) {
@@ -652,9 +650,8 @@ const obterVisaoGeralFrota = async (req, res) => {
       .sort((a, b) => b.valor - a.valor)
       .slice(0, 5);
 
-    const somaTop5 = categoriasOrdenadas.reduce((acc, c) => acc + c.valor, 0);
     const totalDespesas = despesasBase.reduce((acc, i) => acc + (Number(i.valor) || 0), 0);
-    const baseCalculo = somaTop5 > 0 ? somaTop5 : (totalDespesas > 0 ? totalDespesas : 1);
+    const baseCalculo = totalDespesas > 0 ? totalDespesas : 1;
 
     const top5 = categoriasOrdenadas.map((cat, idx) => {
       const pctExata = (cat.valor / baseCalculo) * 100;
@@ -667,14 +664,10 @@ const obterVisaoGeralFrota = async (req, res) => {
       };
     });
 
-    // Erro I7: km rodados = soma de (km_final − km_inicial) das viagens concluídas no
-    // período. Se não houver nenhuma no período, usa todas as concluídas (mesma regra
-    // das despesas acima). Custo por km = despesas do período ÷ km rodados.
+    // Km rodados e despesas usam o mesmo período para que o custo por km não
+    // misture valores recentes com viagens históricas.
     const concluidasPeriodo = viagensConcluidasNoPeriodo(viagens, seteDiasAtrasStr);
-    const concluidasBase = concluidasPeriodo.length > 0
-      ? concluidasPeriodo
-      : viagensConcluidasNoPeriodo(viagens, null);
-    const kmRodados = somarKm(concluidasBase);
+    const kmRodados = somarKm(concluidasPeriodo);
     const custoKm = custoPorKm(totalDespesas, kmRodados);
 
     const kmFormatado = Math.round(kmRodados).toLocaleString('pt-BR');

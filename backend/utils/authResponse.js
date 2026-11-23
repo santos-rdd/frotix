@@ -9,15 +9,20 @@ export function criarRespostaAutenticada(usuario, sessao) {
     perfil: perfilAtual,
   };
   const token = gerarToken(usuarioAutenticado, sessao.sessionId);
+  const usuarioResposta = {
+    id: usuario.id,
+    email: usuario.email,
+    nome: usuario.nome,
+    name: usuario.nome,
+    role: perfilAtual,
+  };
+  if (typeof usuario.imagem === 'string' && usuario.imagem.trim()) {
+    usuarioResposta.imagem = usuario.imagem;
+  }
+
   return {
     token,
-    usuario: {
-      id: usuario.id,
-      email: usuario.email,
-      nome: usuario.nome,
-      name: usuario.nome,
-      role: perfilAtual,
-    },
+    usuario: usuarioResposta,
     sessao: criarObjetoSessaoApi(sessao, token),
   };
 }

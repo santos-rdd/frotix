@@ -22,6 +22,7 @@ export async function renovarSessao(req, res) {
       email: sessao.email,
       nome: sessao.nome,
       id_perfil: sessao.perfil,
+      imagem: sessao.imagem,
     };
 
     return res.json({

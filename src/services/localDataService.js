@@ -483,6 +483,9 @@ export async function abrirViagemOffline(usuarioId, rotaId, { veiculoId, hodomet
   if (!associadoAsRotasPermitidas) {
     throw new Error('Este veículo não está associado às suas rotas disponíveis.');
   }
+  if (rota.veiculoId && String(rota.veiculoId) !== String(idVeiculoFinal)) {
+    throw new Error('Esta rota está associada a outro veículo.');
+  }
   if (veiculo.status !== 'disponivel') throw new Error('O veículo não está disponível.');
 
   const kmInicial = Number(hodometroInicial);

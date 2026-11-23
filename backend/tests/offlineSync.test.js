@@ -900,16 +900,39 @@ test('viagens offline: abertura e conclusão com atualização local de status e
     hodometroInicial: 50000,
   });
 
-  await atualizarCacheVeiculos(usuarioId, [{
-    id: 'veiculo_sem_vinculo',
-    modelo: 'Veículo externo',
-    placa: 'EXT-0000',
-    hodometro: 100,
-    status: 'disponivel',
+  await atualizarCacheVeiculos(usuarioId, [
+    {
+      id: 'veiculo_sem_vinculo',
+      modelo: 'Veículo externo',
+      placa: 'EXT-0000',
+      hodometro: 100,
+      status: 'disponivel',
+    },
+    {
+      id: 'veiculo_de_outra_rota',
+      modelo: 'Veículo associado a outra rota',
+      placa: 'EXT-0001',
+      hodometro: 200,
+      status: 'disponivel',
+    },
+  ]);
+  await atualizarCacheRotas(usuarioId, [{
+    id: 'rota_com_outro_veiculo',
+    origem: 'Porto Alegre',
+    destino: 'Florianópolis',
+    veiculoId: 'veiculo_de_outra_rota',
+    status: 'agendada',
   }]);
   await assert.rejects(
     concluirViagemOffline(usuarioId, r.id, { hodometroFinal: 50520 }),
     /Só é possível concluir uma viagem em andamento/
+  );
+  await assert.rejects(
+    abrirViagemOffline(usuarioId, r.id, {
+      veiculoId: 'veiculo_de_outra_rota',
+      hodometroInicial: 50000,
+    }),
+    /Esta rota está associada a outro veículo/
   );
   await assert.rejects(
     abrirViagemOffline(usuarioId, r.id, { veiculoId: 'veiculo_sem_vinculo', hodometroInicial: 50000 }),

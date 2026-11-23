@@ -103,6 +103,13 @@ before(async () => {
   const auth = await import('../controllers/authController.js');
   auth.definirVerificadorGoogle(async (idToken) => {
     if (idToken === 'token-falso') throw new Error('Invalid token signature');
+    if (idToken.startsWith('google:photo:')) {
+      return {
+        email: idToken.slice('google:photo:'.length),
+        email_verified: true,
+        picture: 'https://google.test/profile-photo.jpg',
+      };
+    }
     return { email: idToken.replace('google:', ''), email_verified: true };
   });
   const { default: app } = await import('../app.js');
@@ -161,6 +168,36 @@ test('login Google válido devolve token com o perfil do banco', async () => {
     ),
     true
   );
+});
+
+test('foto Google persiste no perfil e permanece disponível após refresh', async () => {
+  const usuario = fake.tabelas.usuarios.find((item) => item.id === MOTORISTA_1);
+  const imagemOriginal = usuario.imagem;
+  usuario.imagem = null;
+
+  try {
+    const login = await chamar('POST', '/auth/login-google', {
+      corpo: { idToken: 'google:photo:joao@logfin.com' },
+    });
+    assert.equal(login.status, 200);
+    assert.equal(login.json.usuario.imagem, 'https://google.test/profile-photo.jpg');
+    assert.equal(usuario.imagem, 'https://google.test/profile-photo.jpg');
+
+    const refresh = await chamar('POST', '/auth/refresh', {
+      corpo: { refresh_token: login.json.sessao.refresh_token },
+    });
+    assert.equal(refresh.status, 200);
+    assert.equal(refresh.json.usuario.imagem, usuario.imagem);
+
+    usuario.imagem = 'https://frotix.test/foto-atual.jpg';
+    const loginComImagemExistente = await chamar('POST', '/auth/login-google', {
+      corpo: { idToken: 'google:photo:joao@logfin.com' },
+    });
+    assert.equal(loginComImagemExistente.json.usuario.imagem, usuario.imagem);
+  } finally {
+    if (imagemOriginal === undefined) delete usuario.imagem;
+    else usuario.imagem = imagemOriginal;
+  }
 });
 
 test('login por e-mail emite somente uma sessão persistente Frotix', async () => {
@@ -459,8 +496,73 @@ test('km rodados usa km_final − km_inicial (I7)', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.json.kmRodados, 588.7);
   assert.notEqual(r.json.kmRodados, 134910);
-  assert.equal(r.json.veiculosEmRota, 2);
+  assert.equal(r.json.veiculosEmRota, 1);
   assert.equal(r.json.custoPorKm, 2); // 1.177,40 / 588,7 km
+});
+
+test('visão da frota mantém despesas e percentuais dentro do período solicitado', async () => {
+  const lancamentosOriginais = fake.tabelas.lancamentos_financeiros;
+  const categoriasOriginais = fake.tabelas.categorias_financeiras;
+  const viagensOriginais = fake.tabelas.viagens;
+  const dataRecente = new Date().toISOString().slice(0, 10);
+  const dataAntiga = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+  const categorias = Array.from({ length: 6 }, (_, index) => ({
+    id: `categoria-${index}`,
+    nome: `Categoria ${index}`,
+  }));
+  const despesas = categorias.map((categoria, index) => ({
+    id: `despesa-${index}`,
+    tipo: 'SAIDA',
+    status: 'PAGO',
+    valor: (index + 1) * 10,
+    id_categoria: categoria.id,
+    data_lancamento: dataRecente,
+  }));
+
+  fake.tabelas.categorias_financeiras = categorias;
+  fake.tabelas.lancamentos_financeiros = despesas;
+  fake.tabelas.viagens = [{
+    id: 'viagem-historica',
+    status: 'CONCLUIDA',
+    km_inicial: 100,
+    km_final: 200,
+    concluida_em: dataRecente,
+  }];
+
+  try {
+    const recente = await chamar('GET', '/financeiro/visao-geral-frota?dias=7', { token: T.admin });
+    assert.equal(recente.json.totalDespesas, 210);
+    assert.equal(recente.json.kmRodados, 100);
+    assert.equal(recente.json.despesas[0].porcentagemExata, 28.57);
+    assert.ok(recente.json.despesas.reduce((soma, item) => soma + item.porcentagemExata, 0) < 100);
+
+    fake.tabelas.lancamentos_financeiros = despesas.map((item, index) => ({
+      ...item,
+      data_lancamento: dataAntiga,
+      data_pagamento: index === 0 ? dataRecente : dataAntiga,
+    }));
+    fake.tabelas.viagens = [{
+      ...fake.tabelas.viagens[0],
+      concluida_em: dataAntiga,
+    }];
+    const pagamentoRecente = await chamar('GET', '/financeiro/visao-geral-frota?dias=7', { token: T.admin });
+    assert.equal(pagamentoRecente.json.totalDespesas, 10);
+    assert.equal(pagamentoRecente.json.despesas[0].porcentagemExata, 100);
+    assert.equal(pagamentoRecente.json.kmRodados, 0);
+
+    fake.tabelas.lancamentos_financeiros = fake.tabelas.lancamentos_financeiros.map((item) => ({
+      ...item,
+      data_pagamento: dataAntiga,
+    }));
+    const semDadosRecentes = await chamar('GET', '/financeiro/visao-geral-frota?dias=7', { token: T.admin });
+    assert.equal(semDadosRecentes.json.totalDespesas, 0);
+    assert.equal(semDadosRecentes.json.kmRodados, 0);
+    assert.deepEqual(semDadosRecentes.json.despesas, []);
+  } finally {
+    fake.tabelas.lancamentos_financeiros = lancamentosOriginais;
+    fake.tabelas.categorias_financeiras = categoriasOriginais;
+    fake.tabelas.viagens = viagensOriginais;
+  }
 });
 
 // ---------------------------------------------------------------- I3 / I5 / I6 / I4 / C5
@@ -777,6 +879,38 @@ test('motorista só vê as próprias rotas (P10, P11)', async () => {
   assert.equal(gestor.json.viagens.length, 2);
 });
 
+test('motorista não pode trocar o veículo previamente associado à rota', async () => {
+  const outroVeiculoId = 'b0000000-0000-0000-0000-000000000002';
+  const rotaId = 'rota-associada-veiculo-a';
+  const outraRotaId = 'rota-associada-veiculo-b';
+  fake.tabelas.veiculos.push({
+    id: outroVeiculoId,
+    modelo: 'Volvo FH',
+    placa: 'XYZ-9Y99',
+    hodometro: 12000,
+    status: 'DISPONIVEL',
+    ativo: true,
+  });
+  fake.tabelas.viagens.push(
+    { id: rotaId, id_motorista: MOTORISTA_1, id_veiculo: VEICULO, status: 'PLANEJADA' },
+    { id: outraRotaId, id_motorista: MOTORISTA_1, id_veiculo: outroVeiculoId, status: 'PLANEJADA' }
+  );
+
+  try {
+    const resposta = await chamar('POST', `/frota/rotas/${rotaId}/abrir`, {
+      token: T.motorista1,
+      corpo: { veiculoId: outroVeiculoId, hodometroInicial: 12000 },
+    });
+    assert.equal(resposta.status, 403);
+    assert.equal(fake.tabelas.viagens.find((item) => item.id === rotaId).status, 'PLANEJADA');
+  } finally {
+    fake.tabelas.veiculos = fake.tabelas.veiculos.filter((item) => item.id !== outroVeiculoId);
+    fake.tabelas.viagens = fake.tabelas.viagens.filter(
+      (item) => item.id !== rotaId && item.id !== outraRotaId
+    );
+  }
+});
+
 test('rotas e viagens filtram despesas pelo motorista autenticado', async () => {
   const viagemSemDespesas = {
     id: 'v4',
@@ -928,15 +1062,25 @@ test('rota: motorista precisa ter perfil Motorista (P7) e o ciclo agendada → e
   assert.equal(aberturaRepetida.json.jaExistente, true);
   assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 45801 } })).status, 409);
 
+  assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: '' } })).status, 400);
   assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 45000 } })).status, 400);
+  const hodometroAnterior = fake.tabelas.veiculos.find((v) => v.id === VEICULO).hodometro;
+  fake.tabelas.veiculos.find((v) => v.id === VEICULO).hodometro = 46301;
+  assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46300 } })).status, 400);
+  fake.tabelas.veiculos.find((v) => v.id === VEICULO).hodometro = hodometroAnterior;
+
   const fim = await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46300 } });
   assert.equal(fim.status, 200);
   assert.equal(fim.json.kmRodados, 500);
+  const veiculo = fake.tabelas.veiculos.find((v) => v.id === VEICULO);
+  veiculo.status = 'EM_VIAGEM';
+  veiculo.hodometro = 45800;
   const conclusaoRepetida = await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46300 } });
   assert.equal(conclusaoRepetida.status, 200);
   assert.equal(conclusaoRepetida.json.jaExistente, true);
+  assert.equal(veiculo.status, 'DISPONIVEL');
+  assert.equal(veiculo.hodometro, 46300);
   assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46301 } })).status, 409);
-  const veiculo = fake.tabelas.veiculos.find((v) => v.id === VEICULO);
   assert.equal(veiculo.status, 'DISPONIVEL');
   assert.equal(veiculo.hodometro, 46300);
 });

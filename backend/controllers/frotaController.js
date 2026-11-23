@@ -52,6 +52,25 @@ function erroInterno(res, contexto, erro) {
   return res.status(500).json({ sucesso: false, erro: `Erro interno ao ${contexto}.` });
 }
 
+async function atualizarVeiculoAposConclusao(veiculoId, hodometroFinal) {
+  if (!veiculoId) return;
+
+  const { error: erroStatus } = await supabase
+    .from('veiculos')
+    .update({ status: 'DISPONIVEL', hodometro: hodometroFinal })
+    .eq('id', veiculoId)
+    .eq('status', 'EM_VIAGEM')
+    .lte('hodometro', hodometroFinal);
+  if (erroStatus) throw erroStatus;
+
+  const { error: erroHodometro } = await supabase
+    .from('veiculos')
+    .update({ hodometro: hodometroFinal })
+    .eq('id', veiculoId)
+    .lt('hodometro', hodometroFinal);
+  if (erroHodometro) throw erroHodometro;
+}
+
 // -----------------------------------------------------------------------------
 // Leitura em lote (poucas consultas, junta tudo em memória)
 // -----------------------------------------------------------------------------
@@ -379,6 +398,9 @@ export async function abrirViagem(req, res) {
       if (!(veiculosPermitidos || []).some((rota) => rota.id_veiculo === veiculoId)) {
         return res.status(403).json({ sucesso: false, erro: 'Este veículo não está associado às suas rotas.' });
       }
+      if (viagem.id_veiculo && veiculoId !== viagem.id_veiculo) {
+        return res.status(403).json({ sucesso: false, erro: 'Esta rota está associada a outro veículo.' });
+      }
     }
 
     const { data: veiculo, error: eV } = await supabase.from('veiculos').select('*').eq('id', veiculoId).maybeSingle();
@@ -419,10 +441,18 @@ export async function concluirViagem(req, res) {
     const viagem = await buscarViagemPermitida(req, res);
     if (!viagem) return null;
 
-    const final = Number(req.body?.hodometroFinal);
+    const valorFinal = req.body?.hodometroFinal;
+    const final = valorFinal === null || valorFinal === undefined || String(valorFinal).trim() === ''
+      ? NaN
+      : Number(valorFinal);
     const inicial = Number(viagem.km_inicial) || 0;
+    if (!Number.isFinite(final) || final < 0) {
+      return res.status(400).json({ sucesso: false, erro: 'Informe um hodômetro final válido.' });
+    }
+
     if (viagem.status === 'CONCLUIDA') {
       if (final === Number(viagem.km_final)) {
+        await atualizarVeiculoAposConclusao(viagem.id_veiculo, final);
         return res.json({ sucesso: true, jaExistente: true, kmRodados: final - inicial });
       }
       return res.status(409).json({ sucesso: false, erro: 'A viagem já foi concluída com outro hodômetro final.' });
@@ -432,6 +462,21 @@ export async function concluirViagem(req, res) {
     }
     if (!(final > inicial)) {
       return res.status(400).json({ sucesso: false, erro: `Informe um valor maior que ${inicial.toLocaleString('pt-BR')} km.` });
+    }
+
+    if (viagem.id_veiculo) {
+      const { data: veiculo, error: erroVeiculo } = await supabase
+        .from('veiculos')
+        .select('hodometro')
+        .eq('id', viagem.id_veiculo)
+        .maybeSingle();
+      if (erroVeiculo) throw erroVeiculo;
+      if (veiculo && final < Number(veiculo.hodometro)) {
+        return res.status(400).json({
+          sucesso: false,
+          erro: `O hodômetro final não pode ser menor que o hodômetro atual do veículo (${Number(veiculo.hodometro).toLocaleString('pt-BR')} km).`,
+        });
+      }
     }
 
     const agora = new Date().toISOString();
@@ -447,21 +492,7 @@ export async function concluirViagem(req, res) {
       return res.status(409).json({ sucesso: false, erro: 'A viagem foi alterada por outra operação.' });
     }
 
-    if (viagem.id_veiculo) {
-      const { error: eV } = await supabase
-        .from('veiculos')
-        .update({ status: 'DISPONIVEL', hodometro: final })
-        .eq('id', viagem.id_veiculo)
-        .eq('status', 'EM_VIAGEM');
-      if (eV) throw eV;
-      // Se estava disponível (rota concluída direto da agenda), só atualiza o hodômetro.
-      const { error: eH } = await supabase
-        .from('veiculos')
-        .update({ hodometro: final })
-        .eq('id', viagem.id_veiculo)
-        .lt('hodometro', final);
-      if (eH) throw eH;
-    }
+    await atualizarVeiculoAposConclusao(viagem.id_veiculo, final);
 
     return res.json({ sucesso: true, kmRodados: final - inicial });
   } catch (e) {

@@ -46,9 +46,29 @@ const sessaoDaResposta = (resultado, refreshToken) => ({
   perfil: Number(resultado.perfil),
   nome: resultado.nome,
   email: resultado.email,
+  ...(typeof resultado.imagem === 'string' && resultado.imagem.trim()
+    ? { imagem: resultado.imagem }
+    : {}),
   expiresAt: resultado.expires_at,
   refreshToken,
 });
+
+async function obterImagemUsuario(userId) {
+  try {
+    const { data, error } = await supabase
+      .from('usuarios')
+      .select('imagem')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) throw error;
+    return typeof data?.imagem === 'string' && data.imagem.trim()
+      ? data.imagem
+      : null;
+  } catch (erro) {
+    console.warn('Não foi possível carregar a foto de perfil durante a renovação:', erro?.message || erro);
+    return null;
+  }
+}
 
 export async function criarSessaoFrotix(userId) {
   const sessionId = randomUUID();
@@ -95,7 +115,11 @@ export async function rotacionarRefreshToken(refreshToken) {
   });
 
   if (!credencialAtiva(resultado)) return null;
-  return sessaoDaResposta(resultado, novoRefreshToken);
+  const sessao = sessaoDaResposta(resultado, novoRefreshToken);
+  if (sessao.imagem) return sessao;
+
+  const imagem = await obterImagemUsuario(sessao.userId);
+  return imagem ? { ...sessao, imagem } : sessao;
 }
 
 export async function revogarSessaoFrotix(sessionId, userId) {

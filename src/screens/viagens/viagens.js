@@ -69,6 +69,7 @@ export default function Viagens({ navigation, route }) {
   const rotas = dados?.rotas || [];
   const veiculos = dados?.veiculos || [];
   const buscarVeiculo = (id) => veiculos.find((v) => v.id === id);
+  const rotaSelecionada = rotas.find((rota) => rota.id === rotaId);
 
   const [veiculoId, setVeiculoId] = useState(route?.params?.veiculoId || null);
   const [rotaId, setRotaId] = useState(route?.params?.rotaId || null);
@@ -81,7 +82,10 @@ export default function Viagens({ navigation, route }) {
   const agendadas = rotas.filter((r) => r.status === 'agendada');
 
   const opcoesVeiculo = veiculos
-    .filter((v) => v.status === 'disponivel')
+    .filter((v) =>
+      v.status === 'disponivel' &&
+      (!rotaSelecionada?.veiculoId || v.id === rotaSelecionada.veiculoId)
+    )
     .map((v) => ({ id: v.id, label: `${v.modelo} · ${v.placa}` }));
   const opcoesRota = rotas
     .filter((r) => r.status === 'agendada')

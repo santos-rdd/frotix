@@ -48,7 +48,7 @@ export default async function emailController(req, res) {
         // 2. Busca os dados complementares na tabela usuarios.
         const { data: usuario, error: userError } = await supabase
             .from('usuarios')
-            .select('id, nome, email, id_perfil, ativo')
+            .select('id, nome, email, id_perfil, ativo, imagem')
             .eq('id', authData.user.id)
             .maybeSingle();
 

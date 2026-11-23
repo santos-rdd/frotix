@@ -359,6 +359,7 @@ export default function MotoristaHomeScreen(props) {
 
   const handleOpenSlider = (type) => {
     setActionType(type);
+    setAmountValue('0');
     setIsSliderVisible(true);
 
     Animated.timing(slideAnim, {
@@ -589,7 +590,9 @@ export default function MotoristaHomeScreen(props) {
                   </>
                 ) : (
                   <Text style={styles.cityName}>
-                    Nenhuma viagem agendada ou em andamento.
+                    {viagensUsandoCache
+                      ? 'Nenhuma viagem atribuída está disponível no cache offline. Conecte-se à internet para atualizar os dados.'
+                      : 'Nenhuma viagem atribuída a você. Peça ao Gestor para associar uma rota e um veículo ao seu usuário.'}
                   </Text>
                 )}
               </View>

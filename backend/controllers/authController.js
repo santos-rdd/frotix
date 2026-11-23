@@ -59,11 +59,39 @@ export default async function authController(req, res) {
             return res.status(403).json({ erro: 'Esta conta está desativada.' });
         }
 
+        let imagem = usuario.imagem;
+        if (!imagem && typeof payload.picture === 'string' && payload.picture) {
+            try {
+                const { data: atualizado, error: erroImagem } = await supabase
+                    .from('usuarios')
+                    .update({ imagem: payload.picture })
+                    .eq('id', usuario.id)
+                    .is('imagem', null)
+                    .select('imagem')
+                    .maybeSingle();
+
+                if (erroImagem) throw erroImagem;
+                imagem = atualizado?.imagem;
+                if (!imagem) {
+                    const { data: atual, error: erroConsulta } = await supabase
+                        .from('usuarios')
+                        .select('imagem')
+                        .eq('id', usuario.id)
+                        .maybeSingle();
+                    if (erroConsulta) throw erroConsulta;
+                    imagem = atual?.imagem || payload.picture;
+                }
+            } catch (erroImagem) {
+                console.warn('Não foi possível persistir a foto de perfil do Google:', erroImagem?.message || erroImagem);
+                imagem = payload.picture;
+            }
+        }
+
         const sessao = await criarSessaoFrotix(usuario.id);
 
         return res.status(200).json({
             mensagem: 'Login autorizado com sucesso!',
-            ...criarRespostaAutenticada(usuario, sessao),
+            ...criarRespostaAutenticada({ ...usuario, imagem }, sessao),
         });
     } catch (err) {
         if (err instanceof SessionUserInactiveError) {
