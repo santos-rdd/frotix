@@ -58,7 +58,7 @@ export default function FinanceiroHomeScreen(props) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* Header */}
+
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Boa Tarde</Text>
@@ -73,7 +73,7 @@ export default function FinanceiroHomeScreen(props) {
           )}
         </View>
 
-        {/* Resumo Geral Header */}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Resumo Geral</Text>
           <View style={styles.filterRow}>
@@ -82,7 +82,7 @@ export default function FinanceiroHomeScreen(props) {
           </View>
         </View>
 
-        {/* Card: Balanço Atual (Azul) */}
+
         <View style={styles.blueCard}>
           <View style={styles.cardTopRow}>
             <View>
@@ -122,7 +122,7 @@ export default function FinanceiroHomeScreen(props) {
           </View>
         </View>
 
-        {/* Ações Rápidas Financeiro */}
+
         <Text style={[styles.sectionTitle, { marginTop: 24, marginBottom: 12 }]}>Ações Rápidas</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
           <TouchableOpacity 
@@ -143,7 +143,7 @@ export default function FinanceiroHomeScreen(props) {
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Card: Saldo Atual */}
+
         <View style={styles.darkCard}>
           <Text style={styles.dateText}>Segunda, 14 de setembro</Text>
           <View style={{ alignItems: 'center', marginVertical: 12 }}>
@@ -155,7 +155,7 @@ export default function FinanceiroHomeScreen(props) {
           </View>
         </View>
 
-        {/* Card: Despesas e Percentual */}
+
         <View style={[styles.blueCard, { marginTop: 16 }]}>
           <View style={styles.cardTopRow}>
             <View>
@@ -188,7 +188,7 @@ export default function FinanceiroHomeScreen(props) {
           </View>
         </View>
 
-        {/* Trinca de Indicadores Rápidos */}
+
         <View style={styles.metricsRow}>
           <View style={styles.metricBox}>
             <Text style={styles.metricVal}>10</Text>

@@ -44,7 +44,7 @@ const listarAtividadesRecentes = async (req, res) => {
   try {
     const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 4, 1), 50);
 
-    // Admin e Financeiro veem a empresa toda; Gestor e Motorista, só os próprios lançamentos.
+
     let consulta = supabase.from('lancamentos_financeiros').select('*');
     if (![PERFIS.ADMIN, PERFIS.FINANCEIRO].includes(req.usuario?.perfil)) {
       consulta = consulta.eq('id_usuario', req.usuario.id);
@@ -108,8 +108,8 @@ const listarAtividadesRecentes = async (req, res) => {
   }
 };
 
-// Procura o id pelo nome quando o app antigo manda só o nome (C5: antes usava
-// .single(), que dá erro se não achar e o erro era ignorado).
+
+
 async function idPorNome(tabela, nome) {
   if (!nome) return null;
   const { data, error } = await supabase
@@ -122,8 +122,8 @@ async function idPorNome(tabela, nome) {
   return data?.[0]?.id || null;
 }
 
-// Só aceita anexos já enviados ao Storage (caminho devolvido por POST /comprovantes/upload).
-// Caminhos locais do celular (file://, content://) não servem para ninguém (erro I4).
+
+
 const anexoValido = (valor) =>
   typeof valor === 'string' && valor.length > 0 && !/^(file|content|ph|assets-library):/i.test(valor);
 
@@ -219,7 +219,7 @@ const cadastrarTransacao = async (req, res) => {
       const valorQuitacaoNum = parseValor(valorQuitacaoAntecipada);
       const primeiraDataValida = vencimentoPrimeira || data || dataAtual;
 
-      // 1. Tentativa de criação atômica via RPC PostgreSQL (se a função existir no Supabase)
+
       if (typeof supabase.rpc === 'function') {
         try {
           const { data: rpcResp, error: erroRpc } = await supabase.rpc('cadastrar_financiamento_com_parcelas', {
@@ -262,7 +262,7 @@ const cadastrarTransacao = async (req, res) => {
         }
       }
 
-      // 2. Fallback de compatibilidade (inserção sequencial com compensação de erro)
+
       const payloadFinanciamento = {
         descricao,
         valor_total: Number((valorParcelaNum * qtd).toFixed(2)),
@@ -632,9 +632,9 @@ const obterVisaoGeralFrota = async (req, res) => {
       if (cat && cat.nome) {
         nome = cat.nome.split('/')[0].trim();
       } 
-      // else if(item.descricao){
-      //   nome = item.descricao
-      // }
+
+
+
       if (nome.length > 18) {
         nome = nome.substring(0, 18).trim() + '...';
       }
@@ -664,8 +664,8 @@ const obterVisaoGeralFrota = async (req, res) => {
       };
     });
 
-    // Km rodados e despesas usam o mesmo período para que o custo por km não
-    // misture valores recentes com viagens históricas.
+
+
     const concluidasPeriodo = viagensConcluidasNoPeriodo(viagens, seteDiasAtrasStr);
     const kmRodados = somarKm(concluidasPeriodo);
     const custoKm = custoPorKm(totalDespesas, kmRodados);

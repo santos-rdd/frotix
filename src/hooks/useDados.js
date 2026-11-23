@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 
-/**
- * Carrega dados do backend sempre que a tela ganha foco (ex.: ao voltar de um cadastro).
- * carregar: função async que devolve os dados.
- * Retorna { dados, carregando, erro, recarregar }.
- */
+
+
+
+
+
 export default function useDados(carregar, inicial = null) {
   const [dados, setDados] = useState(inicial);
   const [carregando, setCarregando] = useState(true);

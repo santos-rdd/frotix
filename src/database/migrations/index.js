@@ -2,12 +2,14 @@ import { migracao001 } from './001_inicial.js';
 import { migracao002 } from './002_comprovantes_e_mapeamento.js';
 import { migracao003 } from './003_transacoes_locais.js';
 import { migracao004 } from './004_vinculo_viagem_transacao.js';
+import { migracao005 } from './005_posicoes_gps.js';
 
 const listaMigracoes = [
   migracao001,
   migracao002,
   migracao003,
   migracao004,
+  migracao005,
 ];
 
 export async function executarMigracoes(db) {

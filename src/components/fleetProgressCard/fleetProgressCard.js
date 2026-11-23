@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { META_KM_MES } from '../../constants/frota.js';
 
-// Data de hoje por extenso, ex.: "domingo, 8 de novembro".
+
 const hojePorExtenso = () =>
   new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
 

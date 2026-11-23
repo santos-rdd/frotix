@@ -820,7 +820,7 @@ test('veículos offline: cadastro, listagem, cache e enfileiramento na sync_queu
   assert.equal(pendencias[0].entidade, 'veiculos');
   assert.equal(pendencias[0].operacao, 'CRIAR');
 
-  // Cache mesclado
+
   const remotos = [{ id: 'rem_v1', modelo: 'Scania R450', placa: 'ABC-1234', hodometro: 45000, status: 'disponivel' }];
   await atualizarCacheVeiculos(usuarioId, remotos);
 
@@ -883,7 +883,7 @@ test('viagens offline: abertura e conclusão com atualização local de status e
   definirInstanciaBanco(db);
   const usuarioId = 'usr_viagem_fluxo';
 
-  // Cadastra veículo e rota local
+
   const v = await salvarVeiculoOffline(usuarioId, {
     id: 'local_veic_99',
     modelo: 'Mercedes Actros',
@@ -943,7 +943,7 @@ test('viagens offline: abertura e conclusão com atualização local de status e
     /já marca/
   );
 
-  // 1. Abertura offline
+
   const abertura = await abrirViagemOffline(usuarioId, r.id, {
     veiculoId: v.id,
     hodometroInicial: 50000,
@@ -964,7 +964,7 @@ test('viagens offline: abertura e conclusão com atualização local de status e
     /maior que 50\.000 km/
   );
 
-  // 2. Conclusão offline
+
   const conclusao = await concluirViagemOffline(usuarioId, r.id, {
     hodometroFinal: 50520,
   });
@@ -982,7 +982,7 @@ test('viagens offline: abertura e conclusão com atualização local de status e
   assert.equal(veiculoDisponivel.hodometro, 50520);
 
   const pendencias = await listarOperacoesPendentes(db, usuarioId);
-  assert.equal(pendencias.length, 4); // veiculo CRIAR, rota CRIAR, viagem ABRIR, viagem CONCLUIR
+  assert.equal(pendencias.length, 4);
   assert.ok(pendencias.some((p) => p.entidade === 'viagens' && p.operacao === 'ABRIR'));
   assert.ok(pendencias.some((p) => p.entidade === 'viagens' && p.operacao === 'CONCLUIR'));
 });
@@ -992,7 +992,7 @@ test('sincronização de frota: encadeamento de mapeamento de IDs entre veículo
   definirInstanciaBanco(db);
   const usuarioId = 'usr_encadeamento';
 
-  // 1. Cadastra veículo local e simula mapeamento remoto
+
   const veic = await salvarVeiculoOffline(usuarioId, {
     modelo: 'Scania R500',
     placa: 'BRA-2E19',
@@ -1004,7 +1004,7 @@ test('sincronização de frota: encadeamento de mapeamento de IDs entre veículo
   const idVeicRemoto = await obterIdRemoto(db, 'veiculos', veic.id);
   assert.equal(idVeicRemoto, 'rem_veic_uuid_123');
 
-  // 2. Cadastra rota local apontando para o veículo local
+
   const rota = await salvarRotaOffline(usuarioId, {
     origem: 'Curitiba',
     destino: 'Florianópolis',
@@ -1013,15 +1013,15 @@ test('sincronização de frota: encadeamento de mapeamento de IDs entre veículo
   });
   assert.ok(rota.id.startsWith('local_rota_'));
 
-  // Resolução da dependência: a rota obtém o ID remoto do veículo
+
   const idVeicParaEnvio = await obterIdRemoto(db, 'veiculos', rota.veiculoId);
   assert.equal(idVeicParaEnvio, 'rem_veic_uuid_123');
 
-  // Simula sincronização da rota e mapeamento remoto
+
   await salvarMapeamentoId(db, 'rotas', rota.id, 'rem_rota_uuid_456');
   await salvarMapeamentoId(db, 'viagens', rota.id, 'rem_rota_uuid_456');
 
-  // 3. Viagem local obtém o ID remoto da rota tanto por alias rotas quanto viagens
+
   const idRotaParaAbrir = (await obterIdRemoto(db, 'rotas', rota.id)) || (await obterIdRemoto(db, 'viagens', rota.id));
   assert.equal(idRotaParaAbrir, 'rem_rota_uuid_456');
 });
@@ -1042,7 +1042,7 @@ test('usuários offline: persistência de cache local e isolamento entre adminis
   assert.equal(obtidosA.length, 2);
   assert.equal(obtidosA[0].nome, 'Carlos Gestor');
 
-  // Isolamento: adminB ainda não possui cache
+
   const obtidosB = await listarUsuariosLocais(adminB);
   assert.equal(obtidosB.length, 0);
 });
@@ -1052,7 +1052,7 @@ test('financeiro offline: integridade de entradas, saídas e dívidas com idempo
   definirInstanciaBanco(db);
   const usuarioId = 'usr_financeiro_teste';
 
-  // 1. Salva entrada offline
+
   const entrada = await salvarTransacaoOffline(usuarioId, {
     tipo: 'entrada',
     descricao: 'Frete Avulso',
@@ -1062,7 +1062,7 @@ test('financeiro offline: integridade de entradas, saídas e dívidas com idempo
   assert.equal(entrada.statusSync, 'PENDENTE');
   assert.ok(entrada.idLocal.startsWith('local_tx_'));
 
-  // 2. Salva dívida parcelada offline
+
   const divida = await salvarTransacaoOffline(usuarioId, {
     tipo: 'divida',
     descricao: 'Financiamento Van',
@@ -1073,7 +1073,7 @@ test('financeiro offline: integridade de entradas, saídas e dívidas com idempo
   assert.equal(divida.tipo, 'divida');
   assert.equal(divida.quantidadeParcelas, 12);
 
-  // 3. Verifica persistência imediata no SQLite
+
   const transacoes = await listarTransacoesLocais(usuarioId);
   assert.equal(transacoes.length, 2);
 

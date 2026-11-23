@@ -1,4 +1,4 @@
-// Perfis da tabela "perfis" do banco.
+
 export const PERFIS = [
   { id: 1, nome: 'Administrador', cor: '#b22222' },
   { id: 2, nome: 'Gestor de Frota', cor: '#ff8c00' },

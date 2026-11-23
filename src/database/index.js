@@ -50,3 +50,4 @@ export * from './repositories/syncQueueRepository.js';
 export * from './repositories/dadosLocaisRepository.js';
 export * from './repositories/comprovantesRepository.js';
 export * from './repositories/transacoesRepository.js';
+export * from './repositories/posicoesGpsRepository.js';

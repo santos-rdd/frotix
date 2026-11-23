@@ -38,7 +38,7 @@ export default function ForgotPasswordScreen({ navigation }) {
     <View style={styles.container}>
       <View style={styles.content}>
         
-        {/* Botão Voltar */}
+
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -46,7 +46,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
 
-        {/* Cabeçalho */}
+
         <View style={styles.headerContainer}>
           <Text style={styles.title}>
             Log in no Frot<Text style={styles.titleX}>X</Text>
@@ -56,7 +56,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           </Text>
         </View>
 
-        {/* Campo de E-mail */}
+
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>E-mail:</Text>
@@ -74,7 +74,7 @@ export default function ForgotPasswordScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Botão de Enviar Link */}
+
         <View style={styles.footer}>
           <TouchableOpacity 
             style={styles.loginButton} 

@@ -18,10 +18,10 @@ Copie o `.env.example` para `.env` e preencha. O `.env` nunca vai para o GitHub.
 
 | Variável | Para quê |
 | --- | --- |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` | Conexão do backend com o banco; a chave `service_role` é exclusiva do backend |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` | `SUPABASE_SERVICE_ROLE_KEY` é obrigatória para o cliente privilegiado do backend e deve permanecer somente no servidor. `SUPABASE_ANON_KEY` é usada apenas pelo cliente de autenticação do backend; não substitua a chave de serviço pela chave anônima ou por `SUPABASE_KEY`. |
 | `JWT_SECRET` | Assina o token de login. **Obrigatório**: o backend não sobe sem ele (mínimo 32 caracteres) |
 | `GOOGLE_WEB_CLIENT_ID` | Confere o login com Google (o mesmo de `src/config/google.js`) |
-| `EXPO_PUBLIC_API_URL` | Opcional. Endereço do backend usado pelo app. Vazio = Render |
+| `EXPO_PUBLIC_API_URL` | Sobrescreve o backend somente em desenvolvimento. Builds de produção usam `https://frotix.onrender.com`. |
 | `EMAIL_CONFIRM_REDIRECT_URL` | Destino já utilizado pela confirmação de cadastro no Supabase |
 | `PASSWORD_RECOVERY_REDIRECT_URL` | Deep link de recuperação; padrão local `frotix://auth/recovery` |
 
@@ -49,13 +49,13 @@ npx expo start --dev-client
 npm run test:backend     # testes do backend (sem tocar no banco de verdade)
 ```
 
-Para o app do emulador usar o backend local, coloque no `.env`:
+Para usar o backend local durante o desenvolvimento, coloque no `.env`:
 
 ```
-EXPO_PUBLIC_API_URL=http://10.0.2.2:3000
+EXPO_PUBLIC_API_URL=http://localhost:3000
 ```
 
-O `10.0.2.2` é como o emulador Android enxerga o `localhost` do computador. Reinicie o Metro depois de mudar o `.env`.
+Em um aparelho Android conectado por USB, encaminhe a porta com `adb reverse tcp:3000 tcp:3000`. No emulador Android, use `http://10.0.2.2:3000`. Reinicie o Metro depois de mudar o `.env`. Builds de produção ignoram essa sobrescrita local e usam o backend do Render.
 
 ## 5. Login e permissões
 

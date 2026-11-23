@@ -5,9 +5,9 @@ import {
   ehDespesa, ehReceita, dataDoLancamento, somarValores, custoPorKm, arredondar,
 } from '../utils/calculos.js';
 
-// -----------------------------------------------------------------------------
-// Conversões entre o banco (MAIÚSCULAS, AAAA-MM-DD) e o app (minúsculas, DD/MM/AAAA)
-// -----------------------------------------------------------------------------
+
+
+
 
 const STATUS_VEICULO = { DISPONIVEL: 'disponivel', EM_VIAGEM: 'em_viagem', MANUTENCAO: 'manutencao' };
 const STATUS_ROTA = { PLANEJADA: 'agendada', EM_ANDAMENTO: 'em_transito', CONCLUIDA: 'concluida' };
@@ -15,7 +15,7 @@ const STATUS_MANUTENCAO = { AGENDADA: 'agendada', EM_ANDAMENTO: 'em_andamento', 
 const TIPOS_MANUTENCAO = ['preventiva', 'corretiva', 'troca_oleo', 'pneus', 'freios', 'revisao'];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** "DD/MM/AAAA" -> "AAAA-MM-DD" (null se a data não existir). */
+
 export function dataParaIso(texto) {
   const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(texto || '').trim());
   if (!m) return null;
@@ -25,7 +25,7 @@ export function dataParaIso(texto) {
   return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
-/** "AAAA-MM-DD" ou timestamp -> "DD/MM/AAAA" no fuso de São Paulo. */
+
 export function dataParaBr(valor) {
   if (!valor) return null;
   const texto = String(valor);
@@ -37,7 +37,7 @@ export function dataParaBr(valor) {
 }
 
 const hojeIso = () =>
-  new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }); // AAAA-MM-DD
+  new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
 const numero = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
 const placaValida = (placa) => /^[A-Z]{3}-?\d[A-Z0-9]\d{2}$/.test(String(placa || '').toUpperCase());
@@ -72,9 +72,9 @@ async function atualizarVeiculoAposConclusao(veiculoId, hodometroFinal) {
   if (erroHodometro) throw erroHodometro;
 }
 
-// -----------------------------------------------------------------------------
-// Leitura em lote (poucas consultas, junta tudo em memória)
-// -----------------------------------------------------------------------------
+
+
+
 
 async function carregarBase({ apenasMotorista, incluirDisponiveis = false } = {}) {
   let consultaViagens = supabase.from('viagens').select('*');
@@ -187,9 +187,9 @@ function montarRotas(base) {
     .sort((a, b) => String(b.dataInicial || '').localeCompare(String(a.dataInicial || '')));
 }
 
-// -----------------------------------------------------------------------------
-// Veículos
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function listarVeiculos(req, res) {
   try {
@@ -255,13 +255,13 @@ export async function cadastrarVeiculo(req, res) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Rotas e viagens (a mesma tabela "viagens": PLANEJADA -> EM_ANDAMENTO -> CONCLUIDA)
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function listarRotas(req, res) {
   try {
-    // Erro P10/P11: o motorista só vê as próprias viagens.
+
     const base = await carregarBase({ apenasMotorista: ehMotorista(req) ? req.usuario.id : null });
     return res.json({ sucesso: true, rotas: montarRotas(base) });
   } catch (e) {
@@ -370,7 +370,7 @@ async function buscarViagemPermitida(req, res) {
   return viagem;
 }
 
-/** POST /frota/rotas/:id/abrir  { veiculoId?, hodometroInicial } — PLANEJADA -> EM_ANDAMENTO */
+
 export async function abrirViagem(req, res) {
   try {
     const viagem = await buscarViagemPermitida(req, res);
@@ -416,7 +416,7 @@ export async function abrirViagem(req, res) {
       return res.status(400).json({ sucesso: false, erro: `O hodômetro do veículo já marca ${Number(veiculo.hodometro).toLocaleString('pt-BR')} km.` });
     }
 
-    // Só abre se ainda estiver PLANEJADA (evita abrir duas vezes ao mesmo tempo).
+
     const { data: aberta, error } = await supabase
       .from('viagens')
       .update({ status: 'EM_ANDAMENTO', id_veiculo: veiculoId, km_inicial: inicial, iniciada_em: new Date().toISOString() })
@@ -436,7 +436,7 @@ export async function abrirViagem(req, res) {
   }
 }
 
-/** POST /frota/rotas/:id/concluir  { hodometroFinal } — PLANEJADA/EM_ANDAMENTO -> CONCLUIDA */
+
 export async function concluirViagem(req, res) {
   try {
     const viagem = await buscarViagemPermitida(req, res);
@@ -501,7 +501,7 @@ export async function concluirViagem(req, res) {
   }
 }
 
-/** Viagens em andamento da Home (substitui /usuarios/viagens-andamento). */
+
 export async function listarViagensEmAndamento(req, res) {
   try {
     const base = await carregarBase({ apenasMotorista: ehMotorista(req) ? req.usuario.id : null });
@@ -709,9 +709,9 @@ export async function listarPosicoesViagem(req, res) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Manutenções
-// -----------------------------------------------------------------------------
+
+
+
 
 const montarManutencao = (m) => ({
   id: m.id,
@@ -770,7 +770,7 @@ export async function agendarManutencao(req, res) {
   }
 }
 
-/** Agendada -> em andamento (veículo fica em manutenção) -> concluída (veículo disponível). */
+
 export async function avancarManutencao(req, res) {
   try {
     const { data: ordem, error } = await supabase.from('manutencoes').select('*').eq('id', req.params.id).maybeSingle();
@@ -800,9 +800,9 @@ export async function avancarManutencao(req, res) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Resumo da Home do Gestor e Relatórios
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function resumoFrota(req, res) {
   try {
@@ -846,7 +846,7 @@ export async function relatorio(req, res) {
     const rotas = montarRotas(base);
     const porId = Object.fromEntries(base.viagens.map((v) => [v.id, v]));
 
-    // Rotas do período: agendadas para o período em diante, ou iniciadas/concluídas nele.
+
     const rotasPeriodo = rotas.filter((r) => {
       const v = porId[r.id];
       return dentroDoPeriodo(v.data_saida || v.iniciada_em || v.concluida_em, inicio)
@@ -854,7 +854,7 @@ export async function relatorio(req, res) {
     });
     const manutencoesPeriodo = (manut || []).filter((m) => dentroDoPeriodo(m.data, inicio)).map(montarManutencao);
 
-    // Erro P3: os números financeiros vêm dos mesmos lançamentos da Home.
+
     const lancPeriodo = base.lancamentos.filter((l) => dentroDoPeriodo(dataDoLancamento(l), inicio));
     const receita = somarValores(lancPeriodo.filter(ehReceita));
     const despesasLancadas = somarValores(lancPeriodo.filter(ehDespesa));

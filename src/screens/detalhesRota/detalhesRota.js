@@ -10,12 +10,13 @@ import { STATUS_ROTA, formatarMoeda } from '../../constants/frota.js';
 import { concluirViagem } from '../../services/frotix.js';
 import { concluirViagemOffline } from '../../services/localDataService.js';
 import { obterUsuarioLogado } from '../../services/api.js';
+import { sincronizarPosicoesGpsDaViagem } from '../../services/rastreamentoGpsService.js';
 
-/**
- * Detalhes de uma rota (params.rota).
- * Agendada: hodômetro final editável + Salvar (sem rentabilidade, como no Figma).
- * Em trânsito / concluída: somente leitura + card de rentabilidade.
- */
+
+
+
+
+
 export default function DetalhesRota({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const motorista = Number(usuario?.role) === 4;
@@ -41,7 +42,7 @@ export default function DetalhesRota({ navigation, route }) {
   const saldo = rota.receita - custos;
   const margem = rota.receita > 0 ? Math.round((saldo / rota.receita) * 100) : 0;
 
-  // Registrar o hodômetro final conclui a rota no banco (antes só mudava na tela).
+
   const salvar = async () => {
     if (total === null) {
       Alert.alert(
@@ -53,6 +54,17 @@ export default function DetalhesRota({ navigation, route }) {
     if (salvando) return;
     setSalvando(true);
     try {
+      const uLogado = await obterUsuarioLogado();
+      const uId = uLogado?.id || uLogado?.sub || usuario?.id;
+      if (uId) {
+        const gps = await sincronizarPosicoesGpsDaViagem(uId, rota.id);
+        if (!gps.sucesso && gps.pendentes > 0) {
+          const erroConexao = /failed|network|conex|timeout|http_5\d\d/i.test(gps.erro || '');
+          throw new Error(erroConexao
+            ? 'Sem conexão com o servidor para sincronizar as posições da viagem.'
+            : 'Não foi possível sincronizar as posições GPS antes de concluir a viagem.');
+        }
+      }
       await concluirViagem(rota.id, final);
       Alert.alert('Rota concluída', `Total percorrido: ${total.toLocaleString('pt-BR')} km.`);
       navigation.goBack();
@@ -62,7 +74,7 @@ export default function DetalhesRota({ navigation, route }) {
       if (ehErroConexao) {
         try {
           const uLogado = await obterUsuarioLogado();
-          const uId = usuario?.id || uLogado?.id || uLogado?.sub;
+          const uId = uLogado?.id || uLogado?.sub || usuario?.id;
           if (uId) {
             await concluirViagemOffline(uId, rota.id, { hodometroFinal: final });
             Alert.alert(

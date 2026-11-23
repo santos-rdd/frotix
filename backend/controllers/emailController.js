@@ -18,7 +18,7 @@ export default async function emailController(req, res) {
 
         const authClient = createSupabaseAuthClient();
 
-        // 1. Autentica utilizando o Supabase Auth.
+
         const { data: authData, error: authError } =
             await authClient.auth.signInWithPassword({
                 email: email.trim().toLowerCase(),
@@ -45,7 +45,7 @@ export default async function emailController(req, res) {
             });
         }
 
-        // 2. Busca os dados complementares na tabela usuarios.
+
         const { data: usuario, error: userError } = await supabase
             .from('usuarios')
             .select('id, nome, email, id_perfil, ativo, imagem')
@@ -68,7 +68,7 @@ export default async function emailController(req, res) {
             });
         }
 
-        // 3. Emite a sessão Frotix; os tokens Supabase permanecem somente no servidor.
+
         const sessao = await criarSessaoFrotix(usuario.id);
 
         return res.status(200).json({

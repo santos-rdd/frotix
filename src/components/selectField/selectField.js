@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, FlatList, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-/**
- * Campo "Selecione ⌄" que abre uma lista em modal (sem biblioteca de picker).
- * opcoes: [{ id, label }]
- */
+
+
+
+
 export default function SelectField({ label, opcoes, valor, onSelecionar, vazio = 'Nenhuma opção disponível' }) {
   const [aberto, setAberto] = useState(false);
   const selecionada = opcoes.find((o) => o.id === valor);

@@ -21,6 +21,7 @@ import {
   atualizarCacheVeiculos,
 } from '../../services/localDataService.js';
 import { obterUsuarioLogado } from '../../services/api.js';
+import { sincronizarPosicoesGpsDaViagem } from '../../services/rastreamentoGpsService.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
@@ -194,6 +195,17 @@ export default function Viagens({ navigation, route }) {
     if (salvando) return;
     setSalvando(true);
     try {
+      const uLogado = await obterUsuarioLogado();
+      const uId = uLogado?.id || uLogado?.sub || usuario?.id;
+      if (uId) {
+        const gps = await sincronizarPosicoesGpsDaViagem(uId, viagem.id);
+        if (!gps.sucesso && gps.pendentes > 0) {
+          const erroConexao = /failed|network|conex|timeout|http_5\d\d/i.test(gps.erro || '');
+          throw new Error(erroConexao
+            ? 'Sem conexão com o servidor para sincronizar as posições da viagem.'
+            : 'Não foi possível sincronizar as posições GPS antes de concluir a viagem.');
+        }
+      }
       await concluirViagem(viagem.id, final);
       setHodometrosFinais({ ...hodometrosFinais, [viagem.id]: '' });
       await recarregar();
@@ -203,7 +215,7 @@ export default function Viagens({ navigation, route }) {
       if (ehErroConexao) {
         try {
           const uLogado = await obterUsuarioLogado();
-          const uId = usuario?.id || uLogado?.id || uLogado?.sub;
+          const uId = uLogado?.id || uLogado?.sub || usuario?.id;
           if (uId) {
             await concluirViagemOffline(uId, viagem.id, { hodometroFinal: final });
             setHodometrosFinais({ ...hodometrosFinais, [viagem.id]: '' });

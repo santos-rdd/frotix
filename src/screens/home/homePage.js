@@ -16,9 +16,9 @@ import {
 import BottomNavigation from '../../components/bottomNavigation/bottomNavigation.js';
 import QuickActions from '../../components/quickActions/quickActions.js';
 import GeneralSummaryCard from '../../components/generalSummaryCard/GeneralSummaryCard.js';
-// import CurrentBalanceCard from '../../components/currentBalanceCard/currentBalanceCard.js';
+
 import ValueSliderModal from '../../components/valueSliderModal/valueSliderModal.js';
-// import FleetProgressCard from '../../components/fleetProgressCard/fleetProgressCard.js';
+
 import FleetExpensesOverview from '../../components/fleetExpensesOverview/fleetExpensesOverview.js';
 import PaymentCardsCarousel from '../../components/paymentCardsCarousel/paymentCardsCarousel.js';
 import InteractiveCarousel from '../../components/interactiveCarousel/interactiveCarousel.js';
@@ -209,8 +209,8 @@ function HomePageOutrosPerfis({ navigation, route }) {
 
         {acaoAtiva === 'finance' && (userRole === 1 || userRole === 3) && (
           <>
-            {/* <FleetProgressCard /> */}
-            {/* <CurrentBalanceCard saldoAtual={saldoAtual} totalSaidas={totalSaidas} /> */}
+
+
             <FleetExpensesOverview onFilterPress={abrirRelatorios} onMenuPress={abrirRelatorios} />
             <View style={styles.atalhosFinanceiro}>
               <TouchableOpacity

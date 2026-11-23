@@ -29,6 +29,10 @@ import {
   concluirViagem,
 } from './frotix.js';
 import { obterUsuarioLogado } from './api.js';
+import {
+  sincronizarPosicoesGpsDaViagem,
+  sincronizarPosicoesGpsPendentes,
+} from './rastreamentoGpsService.js';
 
 let sincronizacaoEmAndamento = false;
 let instanciaNetInfo = null;
@@ -86,14 +90,20 @@ export async function sincronizarOperacoes(usuarioId) {
   try {
     const online = await verificarDisponibilidadeBackend();
     if (!online) {
-      return { sucesso: false, motivo: 'backend_offline' };
+      const gps = await sincronizarPosicoesGpsPendentes(usuarioId);
+      return {
+        sucesso: false,
+        motivo: 'backend_offline',
+        posicoesGps: gps.processadas || 0,
+      };
     }
 
     const db = await abrirBanco();
     const pendencias = await listarOperacoesPendentes(db, usuarioId);
 
     if (pendencias.length === 0) {
-      return { sucesso: true, processadas: 0 };
+      const gps = await sincronizarPosicoesGpsPendentes(usuarioId);
+      return { sucesso: gps.sucesso, processadas: 0, posicoesGps: gps.processadas || 0 };
     }
 
     let processadas = 0;
@@ -345,7 +355,7 @@ export async function sincronizarOperacoes(usuarioId) {
               if (mapeado) {
                 idVeiculoFinal = mapeado;
               } else {
-                // Aguarda o veículo dependente ser sincronizado primeiro
+
                 throw new Error('Veículo vinculado ainda pendente de sincronização remota.');
               }
             }
@@ -402,6 +412,12 @@ export async function sincronizarOperacoes(usuarioId) {
             await removerOperacaoSync(db, item.id);
             processadas++;
           } else if (item.operacao === 'CONCLUIR') {
+            const gps = await sincronizarPosicoesGpsDaViagem(usuarioId, dados.rotaId);
+            if (!gps.sucesso && gps.pendentes > 0) {
+              await marcarOperacaoPendente(db, item.id, gps.erro || 'Posições GPS aguardam sincronização.');
+              return { sucesso: false, processadas, posicoesGps: gps.processadas || 0 };
+            }
+
             let idRotaFinal = dados.rotaId;
             if (String(idRotaFinal).startsWith('local_')) {
               idRotaFinal = (await obterIdRemoto(db, 'rotas', idRotaFinal)) || (await obterIdRemoto(db, 'viagens', idRotaFinal));
@@ -442,7 +458,12 @@ export async function sincronizarOperacoes(usuarioId) {
       }
     }
 
-    return { sucesso: true, processadas };
+    const gps = await sincronizarPosicoesGpsPendentes(usuarioId);
+    return {
+      sucesso: gps.sucesso,
+      processadas,
+      posicoesGps: gps.processadas || 0,
+    };
   } finally {
     sincronizacaoEmAndamento = false;
   }
@@ -471,7 +492,10 @@ export function iniciarMonitorConectividade(onSyncConcluido) {
             if (!idUsuario) return;
 
             const online = await verificarDisponibilidadeBackend();
-            if (!online) return;
+            if (!online) {
+              await sincronizarPosicoesGpsPendentes(idUsuario);
+              return;
+            }
 
             await recuperarOperacoesInterrompidas(idUsuario);
             const resultado = await sincronizarOperacoes(idUsuario);

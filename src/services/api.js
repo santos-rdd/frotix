@@ -279,7 +279,7 @@ export function definirLogoutEmAndamento(valor) {
   logoutEmAndamento = Boolean(valor);
 }
 
-/** O App.js registra aqui o que fazer quando uma sessão é confirmada inválida. */
+
 export function definirAoExpirarSessao(fn) {
   aoExpirarSessao = fn;
 }
@@ -298,10 +298,10 @@ async function fetchComToken(caminho, opcoes, token) {
   return fetch(`${API_URL}${caminho}`, { ...opcoes, headers, body });
 }
 
-/**
- * fetch autenticado: tenta uma única rotação compartilhada e repete a chamada uma vez.
- * Use naoRenovarSessao em operações como logout, que não podem iniciar um refresh.
- */
+
+
+
+
 export async function apiFetch(caminho, opcoes = {}) {
   const { naoRenovarSessao = false, ...fetchOptions } = opcoes;
   const token = await carregarToken();
@@ -323,7 +323,7 @@ export async function apiFetch(caminho, opcoes = {}) {
   return fetchComToken(caminho, fetchOptions, renovacao.token);
 }
 
-/** Chama o backend e devolve o JSON; lança Error com a mensagem do backend se der erro. */
+
 export async function apiJson(caminho, opcoes = {}) {
   let resposta;
   try {
@@ -338,7 +338,7 @@ export async function apiJson(caminho, opcoes = {}) {
   return json;
 }
 
-/** Decodifica o payload do JWT sem depender de bibliotecas externas. */
+
 export function decodificarToken(token) {
   if (!token) return null;
   try {
@@ -352,7 +352,7 @@ export function decodificarToken(token) {
   }
 }
 
-/** Retorna os dados do usuário autenticado ({ sub, perfil, nome }) salvos no token. */
+
 export async function obterUsuarioLogado() {
   const token = await carregarToken();
   return decodificarToken(token);

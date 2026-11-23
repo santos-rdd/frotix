@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { SessionStoreError, validarSessaoFrotix } from '../services/sessionService.js';
 
-// Perfis (tabela perfis): 1 = Admin, 2 = Gestor de Frota, 3 = Financeiro, 4 = Motorista.
+
 export const PERFIS = { ADMIN: 1, GESTOR: 2, FINANCEIRO: 3, MOTORISTA: 4 };
 
 const VALIDADE_TOKEN = '12h';
@@ -15,12 +15,12 @@ function segredo() {
   return valor;
 }
 
-// Confere o segredo ao subir o servidor, para o erro aparecer logo no deploy.
+
 export function conferirConfiguracaoAuth() {
   segredo();
 }
 
-/** Gera o JWT de acesso associado a uma sessão individual do Frotix. */
+
 export function gerarToken(usuario, sessionId) {
   if (!usuario?.id || !UUID.test(sessionId || '')) {
     throw new Error('Usuário e identificador de sessão são obrigatórios para emitir o token.');
@@ -109,17 +109,17 @@ async function autenticarRequisicao(req, res, next, somenteRevogacao = false) {
   }
 }
 
-/** Verifica JWT, sessão ativa e perfil atual antes de liberar endpoints protegidos. */
+
 export function autenticar(req, res, next) {
   return autenticarRequisicao(req, res, next);
 }
 
-/** Permite somente revogar o sid assinado, inclusive após expiração ou revogação. */
+
 export function autenticarParaLogout(req, res, next) {
   return autenticarRequisicao(req, res, next, true);
 }
 
-/** Libera a rota só para os perfis informados. Usar depois de autenticar. */
+
 export function exigirPerfil(...perfis) {
   return (req, res, next) => {
     if (!req.usuario || !perfis.includes(req.usuario.perfil)) {

@@ -12,7 +12,7 @@ router.use(autenticar);
 router.get('/veiculos', frotaAcesso, frota.listarVeiculos);
 router.post('/veiculos', gestao, frota.cadastrarVeiculo);
 
-// Rotas = viagens planejadas. O motorista só vê e mexe nas dele (o controller filtra).
+
 router.get('/rotas', frotaAcesso, frota.listarRotas);
 router.post('/rotas', gestao, frota.cadastrarRota);
 router.post('/rotas/:id/abrir', frotaAcesso, frota.abrirViagem);

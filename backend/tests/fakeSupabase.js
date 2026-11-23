@@ -1,5 +1,5 @@
-// Supabase falso em memória, só com o que os controllers usam.
-// Serve para testar o backend sem tocar no banco de verdade.
+
+
 import crypto from 'crypto';
 
 export function criarFakeSupabase(tabelasIniciais = {}) {

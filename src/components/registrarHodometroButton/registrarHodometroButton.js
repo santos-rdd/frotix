@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,18 +7,18 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
+import { listarPosicoesViagem } from '../../services/frotix.js';
 
 const { width } = Dimensions.get('window');
 const MAP_WIDTH = width - 40;
 const MAP_HEIGHT = 480;
+const MENSAGEM_POSICAO_AUSENTE = 'O motorista ainda não iniciou o rastreamento ou não concedeu permissão para acessar sua localização. Isso também pode ocorrer se ele ainda não iniciou a viagem ou se o aplicativo ainda não conseguiu obter a primeira posição GPS.';
+const MENSAGEM_CONSULTANDO_POSICOES = 'Consultando posições GPS...';
 
 
-function generateLeafletHTML(origem, destino, motorista) {
-  const safeOrigem = (origem || 'Campinas - SP').replace(/'/g, "\\'");
-  const safeDestino = (destino || 'Rio de Janeiro - RJ').replace(/'/g, "\\'");
-  const safeMotorista = (motorista || 'Motorista').replace(/'/g, "\\'");
-
+function generateLeafletHTML() {
   return `
 <!DOCTYPE html>
 <html>
@@ -36,33 +36,6 @@ function generateLeafletHTML(origem, destino, motorista) {
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
-    .custom-marker-pin {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 32px;
-      height: 32px;
-      border-radius: 16px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-      border: 2px solid #FFFFFF;
-      font-size: 16px;
-    }
-    .pin-start {
-      background: #10B981;
-    }
-    .pin-end {
-      background: #EF4444;
-      animation: pulse 1.5s infinite;
-    }
-    .truck-icon {
-      font-size: 22px;
-      filter: drop-shadow(0 2px 5px rgba(0,0,0,0.8));
-    }
-    @keyframes pulse {
-      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-      70% { transform: scale(1.15); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-    }
     .leaflet-popup-content-wrapper {
       background: rgba(18, 18, 18, 0.95);
       color: #FFFFFF;
@@ -79,271 +52,375 @@ function generateLeafletHTML(origem, destino, motorista) {
 </head>
 <body>
   <div id="map"></div>
-
   <script>
-    const KNOWN_COORDS = {
-      'campinas - sp': [-22.9056, -47.0608],
-      'campinas': [-22.9056, -47.0608],
-      'rio de janeiro - rj': [-22.9068, -43.1729],
-      'rio de janeiro': [-22.9068, -43.1729],
-      'sao paulo - sp': [-23.5505, -46.6333],
-      'são paulo - sp': [-23.5505, -46.6333],
-      'sao paulo': [-23.5505, -46.6333],
-      'são paulo': [-23.5505, -46.6333],
-      'belo horizonte - mg': [-19.9167, -43.9345],
-      'belo horizonte': [-19.9167, -43.9345],
-      'curitiba - pr': [-25.4284, -49.2731],
-      'curitiba': [-25.4284, -49.2731],
-      'santos - sp': [-23.9608, -46.3333],
-      'santos': [-23.9608, -46.3333],
-      'porto alegre - rs': [-30.0346, -51.2177],
-      'porto alegre': [-30.0346, -51.2177],
-      'brasilia - df': [-15.7975, -47.8919],
-      'brasilia': [-15.7975, -47.8919],
-      'salvador - ba': [-12.9777, -38.5016],
-      'salvador': [-12.9777, -38.5016],
-      'fortaleza - ce': [-3.7172, -38.5433],
-      'recife - pe': [-8.0476, -34.8770],
-      'goiania - go': [-16.6869, -49.2648],
-      'ribeirao preto - sp': [-21.1776, -47.8101],
-      'sorocaba - sp': [-23.5015, -47.4587],
+    let mapa = null;
+    let marcadores = null;
+    let ultimaPosicao = null;
+    const reportar = (status) => {
+      const mensagem = { tipo: 'mapa', status };
+      if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify(mensagem));
+      } else if (window.parent !== window) {
+        window.parent.postMessage(mensagem, '*');
+      }
     };
 
-    function normalizeName(str) {
-      return String(str ?? '')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\\u0300-\\u036f]/g, '')
-        .trim();
-    }
+    window.onerror = () => reportar('indisponivel');
 
-    async function geocode(location) {
-      const norm = normalizeName(location);
-      if (KNOWN_COORDS[norm]) return KNOWN_COORDS[norm];
+    function atualizarPosicoes(coordenadas) {
+      if (!Array.isArray(coordenadas) || coordenadas.length === 0) return;
+      const validas = coordenadas.filter((p) =>
+        Number.isFinite(p.latitude) && p.latitude >= -90 && p.latitude <= 90 &&
+        Number.isFinite(p.longitude) && p.longitude >= -180 && p.longitude <= 180
+      );
+      if (validas.length === 0) return;
 
-      for (const [key, coords] of Object.entries(KNOWN_COORDS)) {
-        if (norm.includes(key) || key.includes(norm)) {
-          return coords;
-        }
+      const posicoesComData = validas.filter((posicao) =>
+        Number.isFinite(Date.parse(posicao.registradaEm || ''))
+      );
+      ultimaPosicao = posicoesComData.length
+        ? posicoesComData.reduce((maisRecente, posicao) =>
+          Date.parse(posicao.registradaEm) > Date.parse(maisRecente.registradaEm)
+            ? posicao
+            : maisRecente
+        )
+        : validas[validas.length - 1];
+
+      if (!mapa) {
+        mapa = L.map('map', { zoomControl: true, attributionControl: true })
+          .setView([validas[0].latitude, validas[0].longitude], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(mapa);
+        marcadores = L.layerGroup().addTo(mapa);
+        mapa.on('tileerror', () => reportar('tiles_indisponiveis'));
       }
 
-      // Consulta à API pública OpenStreetMap Nominatim para aceitar qualquer cidade do mundo
-      try {
-        const query = encodeURIComponent(location + ', Brasil');
-        const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&q=' + query + '&limit=1', {
-          headers: { 'Accept': 'application/json' }
-        });
-        const data = await res.json();
-        if (data && data[0]) {
-          return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-        }
-      } catch (e) {
-        console.warn('Geocoding error:', e);
-      }
-
-      return [-23.5505, -46.6333];
-    }
-
-    async function getRoadRoute(startCoords, endCoords) {
-      // Consulta a rota real de estradas via OSRM (Open Source Routing Machine)
-      try {
-        const url = 'https://router.project-osrm.org/route/v1/driving/' +
-          startCoords[1] + ',' + startCoords[0] + ';' +
-          endCoords[1] + ',' + endCoords[0] +
-          '?overview=full&geometries=geojson';
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data && data.routes && data.routes[0]) {
-          const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
-          return coords;
-        }
-      } catch (e) {
-        console.warn('OSRM error, usando linha direta:', e);
-      }
-
-      // Linha interpolada suave como fallback
-      const pts = [];
-      const steps = 30;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const lat = startCoords[0] + (endCoords[0] - startCoords[0]) * t;
-        const lon = startCoords[1] + (endCoords[1] - startCoords[1]) * t;
-        pts.push([lat, lon]);
-      }
-      return pts;
-    }
-
-    async function init() {
-      const map = L.map('map', {
-        zoomControl: true,
-        attributionControl: false
-      }).setView([-23.5505, -46.6333], 6);
-
-      // Camada de mapa real (OpenStreetMap)
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-      }).addTo(map);
-
-      const start = await geocode('${safeOrigem}');
-      const end = await geocode('${safeDestino}');
-
-      // Marcador de Partida (Origem)
-      const startIcon = L.divIcon({
-        className: 'custom-div-icon',
-        html: '<div class="custom-marker-pin pin-start">🟢</div>',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
+      marcadores.clearLayers();
+      validas.forEach((posicao) => {
+        const rotulo = document.createElement('span');
+        rotulo.textContent = posicao.rotulo || 'Posição GPS registrada';
+        L.marker([posicao.latitude, posicao.longitude]).addTo(marcadores).bindPopup(rotulo);
       });
-      L.marker(start, { icon: startIcon })
-        .addTo(map)
-        .bindPopup('<b>Saída:</b> ${safeOrigem}<br><b>Motorista:</b> ${safeMotorista}')
-        .openPopup();
 
-      // Marcador de Chegada (Ponto Marcado)
-      const endIcon = L.divIcon({
-        className: 'custom-div-icon',
-        html: '<div class="custom-marker-pin pin-end">🏁</div>',
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-      });
-      L.marker(end, { icon: endIcon })
-        .addTo(map)
-        .bindPopup('<b>Ponto Marcado (Destino):</b> ${safeDestino}');
-
-      // Busca traçado real das rodovias
-      const routePoints = await getRoadRoute(start, end);
-
-      // Traçado do trajeto completo com halo brilhante
-      const haloLine = L.polyline(routePoints, {
-        color: 'rgba(37, 65, 239, 0.4)',
-        weight: 9,
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(map);
-
-      const mainLine = L.polyline(routePoints, {
-        color: '#2541EF',
-        weight: 5,
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(map);
-
-      // Ajusta o zoom e centro do mapa automaticamente para caber toda a rota
-      const bounds = L.latLngBounds(routePoints);
-      map.fitBounds(bounds, { padding: [50, 50] });
-
-      // Animação do veículo (🚚) percorrendo a rota até o ponto marcado
-      const truckIcon = L.divIcon({
-        className: 'custom-div-icon',
-        html: '<div class="truck-icon">🚚</div>',
-        iconSize: [28, 28],
-        iconAnchor: [14, 14]
-      });
-      const truckMarker = L.marker(routePoints[0], { icon: truckIcon }).addTo(map);
-
-      let step = 0;
-      const totalSteps = routePoints.length;
-      const speed = Math.max(1, Math.floor(totalSteps / 120)); // ~2 segundos para percorrer
-
-      function animateTruck() {
-        step += speed;
-        if (step < totalSteps) {
-          truckMarker.setLatLng(routePoints[step]);
-          requestAnimationFrame(animateTruck);
-        } else {
-          truckMarker.setLatLng(routePoints[totalSteps - 1]);
-        }
+      if (validas.length === 1) {
+        mapa.setView([validas[0].latitude, validas[0].longitude], Math.max(mapa.getZoom(), 14));
+      } else {
+        mapa.fitBounds(L.latLngBounds(validas.map((p) => [p.latitude, p.longitude])), { padding: [50, 50] });
       }
-
-      setTimeout(animateTruck, 400);
+      reportar('disponivel');
     }
 
-    window.onload = init;
+    function recentralizarMapa() {
+      if (!mapa || !ultimaPosicao) return;
+      mapa.setView(
+        [ultimaPosicao.latitude, ultimaPosicao.longitude],
+        Math.max(mapa.getZoom(), 14)
+      );
+    }
+
+    window.setGpsPositions = atualizarPosicoes;
+    window.recentralizarGps = recentralizarMapa;
+    window.addEventListener('message', (evento) => {
+      const dados = evento.data;
+      if (dados?.tipo === 'posicoes') atualizarPosicoes(dados.coordenadas);
+      if (dados?.tipo === 'recentralizar') recentralizarMapa();
+    });
   </script>
 </body>
 </html>
 `;
 }
 
-export default function MapCardWithButton({ onButtonPress, viagem }) {
-  // Sem viagem em andamento, mostra só o botão (antes aparecia uma viagem de exemplo).
-  if (!viagem) {
+export default function MapCardWithButton({
+  onButtonPress,
+  viagem,
+  modoMotorista = false,
+  posicaoLocal = null,
+  erroRastreamento = null,
+  monitorarTodas = false,
+  exibirBotao = true,
+}) {
+  const [posicoesRemotas, setPosicoesRemotas] = useState([]);
+  const [erroMapa, setErroMapa] = useState(null);
+  const [consultaPosicoesConcluida, setConsultaPosicoesConcluida] = useState(false);
+  const [iframeCarregado, setIframeCarregado] = useState(false);
+  const [agora, setAgora] = useState(Date.now());
+  const webViewRef = useRef(null);
+  const iframeRef = useRef(null);
+
+  const viagemAtiva = Boolean(viagem) &&
+    (!viagem.status || ['em_transito', 'EM_ANDAMENTO'].includes(viagem.status));
+  const deveExibirMapa = monitorarTodas || viagemAtiva;
+
+  useEffect(() => {
+    if (posicoesRemotas.length === 0 && !posicaoLocal) return undefined;
+    const timer = setInterval(() => setAgora(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, [posicaoLocal, posicoesRemotas.length]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (modoMotorista || !deveExibirMapa) {
+        setPosicoesRemotas([]);
+        return undefined;
+      }
+
+      let ativo = true;
+      let timer;
+      setConsultaPosicoesConcluida(false);
+      const atualizar = async () => {
+        try {
+          const resultado = await listarPosicoesViagem(monitorarTodas ? undefined : viagem.id);
+          if (ativo) {
+            setPosicoesRemotas(Array.isArray(resultado) ? resultado : []);
+            setErroMapa(null);
+            setConsultaPosicoesConcluida(true);
+          }
+        } catch {
+          if (ativo) {
+            setErroMapa('Não foi possível atualizar as posições pelo servidor.');
+            setConsultaPosicoesConcluida(true);
+          }
+        } finally {
+          if (ativo) timer = setTimeout(atualizar, 15_000);
+        }
+      };
+
+      atualizar();
+      return () => {
+        ativo = false;
+        if (timer) clearTimeout(timer);
+      };
+    }, [deveExibirMapa, modoMotorista, monitorarTodas, viagem?.id])
+  );
+
+  const posicoes = useMemo(() => {
+    if (modoMotorista) {
+      if (!posicaoLocal || !viagem?.id) return [];
+      return [{
+        latitude: posicaoLocal.latitude,
+        longitude: posicaoLocal.longitude,
+        motorista: viagem.motorista,
+        placa: viagem.placa,
+        origem: viagem.origem,
+        destino: viagem.destino,
+        registrada_em: posicaoLocal.registradaEm,
+        rotulo: 'Sua posição GPS',
+      }];
+    }
+    return posicoesRemotas;
+  }, [modoMotorista, posicaoLocal, posicoesRemotas, viagem]);
+
+  const coordenadas = useMemo(
+    () => posicoes
+      .filter((posicao) => Number.isFinite(Number(posicao.latitude)) && Number.isFinite(Number(posicao.longitude)))
+      .map((posicao) => ({
+        latitude: Number(posicao.latitude),
+        longitude: Number(posicao.longitude),
+        registradaEm: posicao.registrada_em || posicao.registradaEm || null,
+        rotulo: modoMotorista
+          ? 'Sua posição GPS'
+          : [posicao.motorista, posicao.placa, posicao.origem, posicao.destino].filter(Boolean).join(' · '),
+      })),
+    [modoMotorista, posicoes]
+  );
+  const mensagemPosicoesVazias = consultaPosicoesConcluida
+    ? MENSAGEM_POSICAO_AUSENTE
+    : MENSAGEM_CONSULTANDO_POSICOES;
+  const recentralizarMapa = useCallback(() => {
+    if (coordenadas.length === 0) return;
+    if (Platform.OS === 'web') {
+      iframeRef.current?.contentWindow?.postMessage({ tipo: 'recentralizar' }, '*');
+    } else {
+      webViewRef.current?.injectJavaScript(
+        'window.recentralizarGps && window.recentralizarGps(); true;'
+      );
+    }
+  }, [coordenadas.length]);
+  const botaoRecentralizar = !modoMotorista && coordenadas.length > 0 ? (
+    <TouchableOpacity
+      onPress={recentralizarMapa}
+      accessibilityRole="button"
+      accessibilityLabel="Recentralizar mapa na posição GPS mais recente"
+    >
+      <Text style={styles.plateText}>Recentralizar</Text>
+    </TouchableOpacity>
+  ) : null;
+  const htmlContent = useMemo(() => generateLeafletHTML(), []);
+  const scriptPosicoes = useMemo(
+    () => `window.setGpsPositions && window.setGpsPositions(${JSON.stringify(coordenadas).replace(/</g, '\\u003c')}); true;`,
+    [coordenadas]
+  );
+  const posicoesDesatualizadas = posicoes.filter((posicao) => {
+    const registrada = Date.parse(posicao.registrada_em || posicao.registradaEm);
+    return !Number.isFinite(registrada) || agora - registrada > 120_000;
+  });
+  const uniqueKey = `${viagem?.id || (monitorarTodas ? 'monitoramento' : 'sem-viagem')}`;
+
+  useEffect(() => {
+    setIframeCarregado(false);
+  }, [uniqueKey]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && iframeCarregado) {
+      iframeRef.current?.contentWindow?.postMessage({ tipo: 'posicoes', coordenadas }, '*');
+    } else if (Platform.OS !== 'web') {
+      webViewRef.current?.injectJavaScript(scriptPosicoes);
+    }
+  }, [coordenadas, iframeCarregado, scriptPosicoes]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return undefined;
+    const receberMensagem = (evento) => {
+      if (evento.source !== iframeRef.current?.contentWindow || evento.data?.tipo !== 'mapa') return;
+      setErroMapa(evento.data.status === 'disponivel'
+        ? null
+        : 'Os mapas do OpenStreetMap estão indisponíveis no momento.');
+    };
+    window.addEventListener('message', receberMensagem);
+    return () => window.removeEventListener('message', receberMensagem);
+  }, []);
+
+  const receberStatusMapa = useCallback((evento) => {
+    try {
+      const mensagem = JSON.parse(evento.nativeEvent.data);
+      if (mensagem.tipo === 'mapa') {
+        setErroMapa(mensagem.status === 'disponivel'
+          ? null
+          : 'Os mapas do OpenStreetMap estão indisponíveis no momento.');
+      }
+    } catch {
+      setErroMapa('Não foi possível carregar o mapa.');
+    }
+  }, []);
+
+  if (!deveExibirMapa) {
     return (
       <View style={styles.mainContainer}>
-        <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={onButtonPress}>
-          <Text style={styles.buttonText}>Registrar Hodômetro</Text>
-        </TouchableOpacity>
+        {exibirBotao ? (
+          <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={onButtonPress}>
+            <Text style={styles.buttonText}>Registrar Hodômetro</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   }
-  return <MapaDaViagem viagem={viagem} onButtonPress={onButtonPress} />;
-}
-
-function MapaDaViagem({ onButtonPress, viagem }) {
-  const viagemAtiva = viagem;
-
-  const htmlContent = useMemo(() => {
-    return generateLeafletHTML(
-      viagemAtiva.origem,
-      viagemAtiva.destino,
-      viagemAtiva.motorista
-    );
-  }, [viagemAtiva.id, viagemAtiva.origem, viagemAtiva.destino, viagemAtiva.motorista]);
-
-  const uniqueKey = `${viagemAtiva.id || 'v'}-${viagemAtiva.origem}-${viagemAtiva.destino}`;
 
   return (
     <View style={styles.mainContainer}>
       <View style={styles.mapCard}>
-        {Platform.OS === 'web' ? (
-          <iframe
-            key={uniqueKey}
-            srcDoc={htmlContent}
-            title="Mapa da Rota"
-            style={{
-              width: '100%',
-              height: '100%',
-              border: 'none',
-              borderRadius: 24,
-            }}
-          />
+        {coordenadas.length > 0 ? (
+          Platform.OS === 'web' ? (
+            <iframe
+              key={uniqueKey}
+              ref={iframeRef}
+              srcDoc={htmlContent}
+              title="Mapa da localização GPS"
+              onLoad={() => setIframeCarregado(true)}
+              style={{
+                width: '100%',
+                height: '100%',
+                border: 'none',
+                borderRadius: 24,
+              }}
+            />
+          ) : (
+            <WebView
+              key={uniqueKey}
+              ref={webViewRef}
+              source={{ html: htmlContent }}
+              style={styles.webView}
+              originWhitelist={['*']}
+              javaScriptEnabled={true}
+              domStorageEnabled={true}
+              startInLoadingState={true}
+              mixedContentMode="always"
+              allowsInlineMediaPlayback={true}
+              onLoadEnd={() => webViewRef.current?.injectJavaScript(scriptPosicoes)}
+              onMessage={receberStatusMapa}
+              onError={() => setErroMapa('Não foi possível carregar o mapa.')}
+              onHttpError={() => setErroMapa('Os mapas do OpenStreetMap estão indisponíveis no momento.')}
+            />
+          )
         ) : (
-          <WebView
-            key={uniqueKey}
-            source={{ html: htmlContent }}
-            style={styles.webView}
-            originWhitelist={['*']}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={true}
-            mixedContentMode="always"
-            allowsInlineMediaPlayback={true}
-          />
+          modoMotorista || (!monitorarTodas && !viagem) ? (
+            <Text style={styles.routeText}>
+              {erroRastreamento ||
+                erroMapa ||
+                (modoMotorista
+                  ? 'Aguardando uma posição GPS válida da viagem.'
+                  : mensagemPosicoesVazias)}
+            </Text>
+          ) : null
         )}
 
-        {/* HUD Superior sobre o mapa com informações da viagem selecionada */}
-        <View style={styles.hudOverlay} pointerEvents="box-none">
-          <View style={styles.hudHeaderRow}>
-            <View style={styles.statusBadge}>
-              <View style={styles.liveDot} />
-              <Text style={styles.statusText}>EM ANDAMENTO</Text>
+        {viagem ? (
+          <View style={styles.hudOverlay} pointerEvents="box-none">
+            <View style={styles.hudHeaderRow}>
+              <View style={styles.statusBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.statusText}>
+                  {posicoesDesatualizadas.length
+                    ? 'ÚLTIMA POSIÇÃO'
+                    : modoMotorista
+                      ? 'GPS DA VIAGEM'
+                      : 'LOCALIZAÇÃO ATUAL'}
+                </Text>
+              </View>
+              <Text style={styles.plateText}>{viagem.placa || 'Sem veículo'}</Text>
             </View>
-            <Text style={styles.plateText}>{viagemAtiva?.placa || 'Sem veículo'}</Text>
+            {!monitorarTodas ? botaoRecentralizar : null}
+
+            <Text style={styles.driverNameText} numberOfLines={1}>
+              Motorista: {viagem.motorista || 'Motorista'}
+            </Text>
+
+            <Text style={styles.routeText} numberOfLines={1}>
+              {viagem.origem} ➔ {viagem.destino}
+            </Text>
+            {erroRastreamento || erroMapa ? (
+              <Text style={styles.routeText} numberOfLines={2}>{erroRastreamento || erroMapa}</Text>
+            ) : !modoMotorista && !monitorarTodas && coordenadas.length === 0 ? (
+              <Text style={styles.routeText}>{mensagemPosicoesVazias}</Text>
+            ) : null}
+            {posicoesDesatualizadas.length > 0 ? (
+              <Text style={styles.routeText} numberOfLines={2}>
+                {modoMotorista ? 'Última posição GPS sem atualização recente.' : 'Última posição sem atualização recente.'}
+              </Text>
+            ) : null}
           </View>
+        ) : null}
 
-          <Text style={styles.driverNameText} numberOfLines={1}>
-            Motorista: {viagemAtiva?.motorista || 'Motorista'}
-          </Text>
-
-          <Text style={styles.routeText} numberOfLines={1}>
-            {viagemAtiva?.origem} ➔ {viagemAtiva?.destino}
-          </Text>
-        </View>
+        {monitorarTodas ? (
+          <View style={styles.hudOverlay} pointerEvents="box-none">
+            <View style={styles.hudHeaderRow}>
+              <View style={styles.statusBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.statusText}>LOCALIZAÇÕES ATIVAS</Text>
+              </View>
+              <Text style={styles.plateText}>{posicoes.length} viagens</Text>
+            </View>
+            {botaoRecentralizar}
+            {erroMapa ? <Text style={styles.routeText}>{erroMapa}</Text> : null}
+            {!erroMapa && coordenadas.length === 0 ? (
+              <Text style={styles.routeText}>{mensagemPosicoesVazias}</Text>
+            ) : null}
+            {posicoesDesatualizadas.length > 0 ? (
+              <Text style={styles.routeText} numberOfLines={2}>
+                {posicoesDesatualizadas.length} posição(ões) sem atualização recente.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
-      <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={onButtonPress}>
-        <Text style={styles.buttonText}>Registrar Hodômetro</Text>
-      </TouchableOpacity>
+      {exibirBotao ? (
+        <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={onButtonPress}>
+          <Text style={styles.buttonText}>Registrar Hodômetro</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 }

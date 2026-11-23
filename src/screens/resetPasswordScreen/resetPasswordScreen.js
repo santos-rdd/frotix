@@ -70,7 +70,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <View style={styles.content}>
-        {/* Botão voltar */}
+
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -78,7 +78,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
 
-        {/* Cabeçalho */}
+
         <View style={styles.headerContainer}>
           <Text style={styles.title}>
             Redefinir senha do Frot
@@ -90,7 +90,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
           </Text>
         </View>
 
-        {/* Campos de senha */}
+
         <View style={styles.formContainer}>
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Nova senha</Text>
@@ -125,7 +125,7 @@ export default function ResetPasswordScreen({ navigation, route }) {
           </View>
         </View>
 
-        {/* Botão salvar */}
+
         <View style={styles.footer}>
           <TouchableOpacity
             style={styles.loginButton}

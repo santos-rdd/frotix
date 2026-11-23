@@ -16,14 +16,14 @@ import { useNavigation } from '@react-navigation/native';
 import PaymentCardsCarousel from '../paymentCardsCarousel/paymentCardsCarousel.js';
 import { descreverForma } from '../../constants/formasPagamento.js';
 
-// Textos do passo de seleção (Figma: "Registrar Entrada3 opção 2/3" e "Registrar Saída3 opção 2").
+
 const TEXTOS = {
   entrada: { titulo: 'Registrar Entrada', subtitulo: 'Selecione o meio de recebimento', justificar: 'Justificar entrada:' },
   saida: { titulo: 'Registrar Saída', subtitulo: 'Selecione o local de saída', justificar: 'Justificar saída:' },
   divida: { titulo: 'Nova Dívida', subtitulo: 'Selecione a forma de pagamento', justificar: 'Justificar dívida:' },
 };
 
-// Cartão extra no fim do carrossel: deixa a forma em branco para escolher no formulário.
+
 const OPCAO_OUTROS = { id: 'outros', tipo: 'outros' };
 
 export default function ValueSliderModal({
@@ -43,7 +43,7 @@ export default function ValueSliderModal({
   const cardHeightAnim = useRef(new Animated.Value(340)).current;
 
   const [modalStep, setModalStep] = useState('slider');
-  // Posição do cartão visível no carrossel: é a forma escolhida.
+
   const [indiceForma, setIndiceForma] = useState(0);
   const opcoesCarrossel = [...formasPagamento, OPCAO_OUTROS];
   const textos = TEXTOS[actionType] || TEXTOS.entrada;
@@ -115,7 +115,7 @@ export default function ValueSliderModal({
   };
 
   const handleProceed = () => {
-    // "Outros" deixa o campo em branco, para escolher no formulário.
+
     const forma = opcoesCarrossel[indiceForma];
     onClose();
     navigation.navigate('TransactionForm', {
@@ -135,7 +135,7 @@ export default function ValueSliderModal({
     >
       <View style={styles.modalOverlay}>
         {modalStep === 'justification' ? (
-          // Parte de cima: título e carrossel para escolher o meio de recebimento/pagamento.
+
           <View style={styles.selecaoArea}>
             <TouchableOpacity style={styles.selecaoVoltar} onPress={handleBackPress} hitSlop={10}>
               <Feather name="chevron-left" size={24} color="#FFF" />

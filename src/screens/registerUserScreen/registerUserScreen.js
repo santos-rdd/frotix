@@ -86,7 +86,7 @@ const handleSave = async () => {
         return;
     }
 
-    // Senha obrigatória somente no cadastro tradicional.
+
     if (accessMethod === 'email' && !password) {
         Alert.alert('Atenção', 'Informe uma senha.');
         return;
@@ -104,7 +104,7 @@ const handleSave = async () => {
         setLoading(true);
         setCadastroConcluido(false);
 
-        // const baseURL = API_URL.replace(/\/$/, '');
+
 
         const userData = {
             nome: nomeLimpo,
@@ -114,7 +114,7 @@ const handleSave = async () => {
             accessMethod
         };
 
-        // Senha somente para cadastro tradicional.
+
         if (accessMethod === 'email') {
             userData.password = password;
             await criarUsuarioEmail(userData);
@@ -203,7 +203,7 @@ const handleSave = async () => {
                 <Text style={{ color: '#2541ff' }}>X</Text>
             </Text>
 
-            {/* Nome */}
+
             <View style={styles.inputGroup}>
                 <Text style={styles.label}>Nome</Text>
 
@@ -217,7 +217,7 @@ const handleSave = async () => {
                 />
             </View>
 
-            {/* E-mail */}
+
             <View style={styles.inputGroup}>
                 <Text style={styles.label}>E-mail</Text>
 
@@ -250,7 +250,7 @@ const handleSave = async () => {
                 </View>
             )}
 
-            {/* Forma de acesso */}
+
             <Text style={styles.sectionLabel}>
                 Forma de acesso:
             </Text>
@@ -302,7 +302,7 @@ const handleSave = async () => {
                 </Text>
             )}
 
-            {/* Perfil */}
+
             <Text style={styles.sectionLabel}>
                 Perfil:
             </Text>
@@ -323,7 +323,7 @@ const handleSave = async () => {
                 />
             </TouchableOpacity>
 
-            {/* Salvar */}
+
             <TouchableOpacity
                 style={styles.saveButton}
                 onPress={handleSave}

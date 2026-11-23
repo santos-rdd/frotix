@@ -55,7 +55,7 @@ export default function VerifyCodeScreen({ navigation }) {
     <View style={styles.container}>
       <View style={styles.content}>
         
-        {/* Botão Voltar */}
+
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -63,7 +63,7 @@ export default function VerifyCodeScreen({ navigation }) {
           <Text style={styles.backArrow}>‹</Text>
         </TouchableOpacity>
 
-        {/* Cabeçalho */}
+
         <View style={styles.headerContainer}>
           <Text style={styles.title}>
             Verifique Seu{'\n'}<Text style={styles.titleBlue}>Email</Text>
@@ -73,7 +73,7 @@ export default function VerifyCodeScreen({ navigation }) {
           </Text>
         </View>
 
-        {/* Caixas de Texto para o Código (6 Dígitos) */}
+
         <View style={styles.otpContainer}>
           {code.map((digit, index) => (
             <TextInput
@@ -89,7 +89,7 @@ export default function VerifyCodeScreen({ navigation }) {
           ))}
         </View>
 
-        {/* Seção de Reenviar Código com Contador */}
+
         <View style={styles.resendContainer}>
           <Text style={styles.resendQuestion}>Não recebeu o código?</Text>
           <TouchableOpacity 
@@ -102,7 +102,7 @@ export default function VerifyCodeScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Botão Verificar */}
+
         <View style={styles.footer}>
           <TouchableOpacity 
             style={styles.verifyButton} 

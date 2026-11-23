@@ -19,11 +19,11 @@ const opcoesStatus = [
   { id: 'manutencao', label: STATUS_VEICULO.manutencao.label },
 ];
 
-/**
- * Cadastrar veículo (Gestor de Frota). Aberta pelo "+ Cadastrar veículo" da tela Veículos
- * e pela ação rápida "Cadastrar Veículo" da Home. Valida placa (antiga ou Mercosul),
- * placa repetida, ano e hodômetro.
- */
+
+
+
+
+
 export default function CadastroVeiculo({ navigation, route }) {
   const usuario = route?.params?.usuario;
 
@@ -55,7 +55,7 @@ export default function CadastroVeiculo({ navigation, route }) {
     return Object.keys(novos).length === 0;
   };
 
-  // Erro P6: grava no banco (a placa repetida é conferida pelo backend).
+
   const salvar = async () => {
     if (!validar() || salvando) return;
     setSalvando(true);
