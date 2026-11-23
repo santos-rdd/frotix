@@ -32,7 +32,7 @@ export default function GestorHomeScreen(props) {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         
-        {/* Header */}
+
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Boa Tarde</Text>
@@ -47,7 +47,7 @@ export default function GestorHomeScreen(props) {
           )}
         </View>
 
-        {/* Status da Frota em Tempo Real */}
+
         <Text style={styles.sectionTitle}>Status da Frota</Text>
         <View style={styles.metricsRow}>
           <View style={[styles.metricCard, { borderLeftColor: colors.greenSuccess, borderLeftWidth: 4 }]}>
@@ -66,7 +66,7 @@ export default function GestorHomeScreen(props) {
           </View>
         </View>
 
-        {/* Ações Rápidas de Gestão */}
+
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Ações Rápidas</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 8 }}>
           <TouchableOpacity 
@@ -97,7 +97,7 @@ export default function GestorHomeScreen(props) {
           </TouchableOpacity>
         </ScrollView>
 
-        {/* Painel de Alertas Operacionais */}
+
         <Text style={[styles.sectionTitle, { marginTop: 16 }]}>Alertas e Pendências</Text>
         
         <View style={styles.alertCard}>
@@ -118,7 +118,7 @@ export default function GestorHomeScreen(props) {
           <Text style={styles.alertSub}>Regularizar a renovação do documento da frota.</Text>
         </View>
 
-        {/* Indicadores de Rendimento Operacional */}
+
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Desempenho da Semana</Text>
           <View style={styles.summaryRow}>

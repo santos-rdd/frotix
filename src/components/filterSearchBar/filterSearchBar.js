@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
-/**
- * Filtros em "chips" + campo de busca + botão de cadastro.
- * filtros: [{ id, label, cor?, total? }] — `cor` desenha a borda e a bolinha do chip.
- */
+
+
+
+
 export default function FilterSearchBar({
   filtros,
   filtroAtivo,

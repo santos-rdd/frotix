@@ -1,17 +1,17 @@
-/**
- * Serviço de Roteamento e Geocodificação (Frotix)
- *
- * Centraliza as consultas externas de geocodificação e rotas rodoviárias.
- * Permite alternar provedores (OSRM, Nominatim, Google Maps, Mapbox, etc.)
- * sem impactar telas ou componentes.
- *
- * Cuidados implementados:
- * - Dicionário local para resolução instantânea de cidades brasileiras.
- * - Cache em memória para coordenadas e rotas calculadas.
- * - Deduplicação de requisições concorrentes (evita chamadas simultâneas idênticas).
- * - Fila de intervalo respeitando a política de uso do Nominatim (1 req/seg).
- * - Timeout com AbortController para não travar a aplicação.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const KNOWN_COORDS = {
   'campinas - sp': [-22.9056, -47.0608],
@@ -102,9 +102,9 @@ function normalizarTexto(str) {
     .trim();
 }
 
-/**
- * Aguarda o intervalo mínimo para respeitar a política de uso do Nominatim.
- */
+
+
+
 async function aguardarTaxaNominatim() {
   const agora = Date.now();
   const diferenca = agora - ultimaRequisicaoNominatim;
@@ -172,9 +172,9 @@ export async function obterCoordenadas(localizacao) {
   return promessa;
 }
 
-/**
- * Calcula a rota rodoviária entre dois pares de coordenadas via OSRM.
- */
+
+
+
 async function calcularRotaOsrm(coordsOrigem, coordsDestino) {
   const chave = `${coordsOrigem[0]},${coordsOrigem[1]};${coordsDestino[0]},${coordsDestino[1]}`;
 
@@ -222,21 +222,21 @@ async function calcularRotaOsrm(coordsOrigem, coordsDestino) {
   return promessa;
 }
 
-/**
- * Calcula a distância rodoviária aproximada entre origem e destino.
- *
- * @param {string} origem - Nome da cidade/endereço de partida.
- * @param {string} destino - Nome da cidade/endereço de destino.
- * @returns {Promise<{
- *   sucesso: boolean,
- *   distanciaKm: number | null,
- *   distanciaMetros?: number,
- *   erro?: string,
- *   provedor: string,
- *   atribuicao: string,
- *   avisoGeral: string
- * }>}
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 export async function calcularDistanciaRodoviaria(origem, destino) {
   const normOrigem = normalizarTexto(origem);
   const normDestino = normalizarTexto(destino);

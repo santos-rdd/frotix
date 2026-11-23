@@ -18,7 +18,7 @@ export const formasRoutes = Router()
   .post('/', soFinanceiro, cadastros.criarForma)
   .delete('/:id', soFinanceiro, cadastros.removerForma);
 
-// Gerenciador de usuários: exclusivo do Administrador.
+
 export const usuariosRoutes = Router()
   .use(autenticar, soAdmin)
   .get('/', cadastros.listarUsuarios)

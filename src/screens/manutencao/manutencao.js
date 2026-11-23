@@ -27,18 +27,18 @@ const carregarTudo = async () => {
 const hoje = () => new Date().toLocaleDateString('pt-BR');
 const paraNumero = (texto) => Number(texto.replace(/\./g, '').replace(',', '.'));
 
-/**
- * Agendar manutenção + Ordens de Serviço (Gestor de Frota).
- * - Ação rápida "Agendar Manutenção" da Home: abre com o formulário.
- * - Atalho "Ordens de Serviço" do card do veículo: params.veiculoId filtra a lista
- *   e já deixa o veículo escolhido no formulário.
- * Iniciar uma OS coloca o veículo "Em manutenção"; concluir devolve como "Disponível".
- */
+
+
+
+
+
+
+
 export default function Manutencao({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const veiculoInicial = route?.params?.veiculoId || null;
 
-  // Erro P6: ordens de serviço e veículos vêm do banco.
+
   const { dados, carregando, erro, recarregar } = useDados(carregarTudo, { ordens: [], veiculos: [] });
   const ordens = dados?.ordens || [];
   const veiculos = dados?.veiculos || [];
@@ -97,7 +97,7 @@ export default function Manutencao({ navigation, route }) {
     }
   };
 
-  // Avança o status da OS; o backend ajusta o status do veículo.
+
   const avancar = (ordem) => {
     const proximo = ordem.status === 'agendada' ? 'em_andamento' : 'concluida';
     const veiculo = buscarVeiculo(ordem.veiculoId);

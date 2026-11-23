@@ -20,20 +20,20 @@ const PERIODOS = [
   { id: 'tudo', label: 'Tudo', dias: null },
 ];
 
-// Relatório vazio, mostrado enquanto os dados do servidor não chegam.
+
 const RELATORIO_VAZIO = {
   rotasPeriodo: [], manutencoesPeriodo: [], receita: 0, despesasViagem: 0, custoManutencao: 0,
   despesas: 0, saldo: 0, margem: 0, kmRodados: 0, custoKm: 0, porStatus: [], ranking: [],
 };
 
-// Põe nome e cor de cada status (o backend manda só o id e o total).
+
 const completarStatus = (porStatus) =>
   porStatus.map((s) => ({ ...s, label: STATUS_ROTA[s.id]?.label || s.id, cor: STATUS_ROTA[s.id]?.cor || '#888' }));
 
-// Nome do arquivo exportado, ex.: relatorio-frotix-2026-11-19.pdf
+
 const nomeArquivo = (extensao) => `relatorio-frotix-${new Date().toISOString().slice(0, 10)}.${extensao}`;
 
-// Monta o HTML usado para gerar o PDF.
+
 function gerarHtml(rel, periodoLabel) {
   const linhasRotas = rel.rotasPeriodo
     .map((r) => {
@@ -84,7 +84,7 @@ function gerarHtml(rel, periodoLabel) {
   </body></html>`;
 }
 
-// CSV com ";" e BOM: o Excel em português abre direto, com acentos e colunas certas.
+
 function gerarCsv(rel, periodoLabel) {
   const numero = (v) => Number(v).toFixed(2).replace('.', ',');
   const linhas = [
@@ -118,14 +118,14 @@ function gerarCsv(rel, periodoLabel) {
   return '﻿' + linhas.map((l) => l.map(escapar).join(';')).join('\n');
 }
 
-/**
- * Relatórios (Gestor de Frota, Admin e Financeiro): resumo financeiro e operacional
- * do período e exportação para PDF ou para planilha (CSV que abre no Excel).
- */
+
+
+
+
 export default function Relatorios({ navigation, route }) {
   const usuario = route?.params?.usuario;
   const [periodo, setPeriodo] = useState(route?.params?.periodoInicial || '30');
-  const [exportando, setExportando] = useState(null); // 'pdf' | 'excel' | null
+  const [exportando, setExportando] = useState(null);
 
   useEffect(() => {
     if (route?.params?.periodoInicial) {
@@ -135,7 +135,7 @@ export default function Relatorios({ navigation, route }) {
 
   const periodoAtual = PERIODOS.find((p) => p.id === periodo);
 
-  // Erro P3: os números vêm do backend, dos mesmos lançamentos usados na Home.
+
   const carregar = useCallback(() => buscarRelatorio(periodoAtual.dias), [periodoAtual.dias]);
   const { dados, carregando, erro, recarregar } = useDados(carregar);
   const rel = dados ? { ...dados, porStatus: completarStatus(dados.porStatus) } : RELATORIO_VAZIO;
@@ -157,7 +157,7 @@ export default function Relatorios({ navigation, route }) {
     setExportando('pdf');
     try {
       const { uri } = await Print.printToFileAsync({ html: gerarHtml(rel, periodoAtual.label) });
-      // Erro C8: o PDF saía com nome aleatório; agora sai como relatorio-frotix-AAAA-MM-DD.pdf.
+
       let arquivoFinal = uri;
       try {
         const destino = new File(Paths.cache, nomeArquivo('pdf'));

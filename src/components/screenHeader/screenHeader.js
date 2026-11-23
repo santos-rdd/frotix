@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet } from 'react-native';
 
-// Saudação conforme o horário do aparelho.
+
 const saudacao = () => {
   const hora = new Date().getHours();
   if (hora < 12) return 'Bom dia';
@@ -9,10 +9,10 @@ const saudacao = () => {
   return 'Boa noite';
 };
 
-/**
- * Cabeçalho padrão das telas do Gestor: saudação, nome, avatar e título da tela.
- * usuario: { nome, foto } (mesmo formato que a HomePage repassa nas rotas).
- */
+
+
+
+
 export default function ScreenHeader({ usuario, titulo }) {
   const nome = usuario?.nome || 'Usuário';
   const foto = usuario?.foto;

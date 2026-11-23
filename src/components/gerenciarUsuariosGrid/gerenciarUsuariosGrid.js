@@ -24,7 +24,7 @@ export default function GerenciarUsuariosGrid({ onBack, onSelectUser }) {
 
       <Text style={styles.title}>Gerenciar usuários</Text>
 
-      {/* Grid de Usuários */}
+
       <View style={styles.gridContainer}>
         {usuariosMock.map((item) => (
           <TouchableOpacity
@@ -44,7 +44,7 @@ export default function GerenciarUsuariosGrid({ onBack, onSelectUser }) {
         ))}
       </View>
 
-      {/* Legenda dos Perfis */}
+
       <View style={styles.legendContainer}>
         <View style={styles.legendItem}>
           <View style={[styles.dot, { backgroundColor: '#DC2626' }]} />

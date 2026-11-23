@@ -6,7 +6,7 @@ export default function QuickActionsCards({ id, name, onPress, selectCardPass = 
     const isSelected = selectCardPass !== null;
 
     const renderIcon = () => {
-        if (icon) return icon; // ícone customizado (ex.: ações rápidas do Gestor)
+        if (icon) return icon;
         const iconColor = '#121212';
         if (id === 'finance') return <Feather name="file-text" size={24} color={iconColor} />;
         if (id === 'payment') return <MaterialCommunityIcons name="card-outline" size={24} color={iconColor} />;

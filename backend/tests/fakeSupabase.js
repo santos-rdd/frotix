@@ -1,5 +1,5 @@
-// Supabase falso em memória, só com o que os controllers usam.
-// Serve para testar o backend sem tocar no banco de verdade.
+
+
 import crypto from 'crypto';
 
 export function criarFakeSupabase(tabelasIniciais = {}) {
@@ -11,6 +11,15 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
   const alteracoesSenha = [];
 
   const comparar = (a, b) => String(a ?? '').localeCompare(String(b ?? ''));
+  const compararValores = (a, b) => {
+    const dataA = typeof a === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(a) ? Date.parse(a) : NaN;
+    const dataB = typeof b === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(b) ? Date.parse(b) : NaN;
+    if (Number.isFinite(dataA) && Number.isFinite(dataB)) return dataA - dataB;
+    const numeroA = Number(a);
+    const numeroB = Number(b);
+    if (Number.isFinite(numeroA) && Number.isFinite(numeroB)) return numeroA - numeroB;
+    return String(a ?? '').localeCompare(String(b ?? ''));
+  };
   const localizarUsuarioAtivo = (id) =>
     (tabelas.usuarios ||= []).find((usuario) => usuario.id === id && usuario.ativo === true);
   const dadosUsuarioSessao = (usuario, sessao) => ({
@@ -31,6 +40,8 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
     let limite = null;
     let faixa = null;
     let unico = null;
+    let conflitoUpsert = [];
+    let ignorarDuplicata = false;
 
     const linhas = () => (tabelas[nome] ||= []);
     const passa = (l) => filtros.every((f) => f(l));
@@ -38,12 +49,20 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
     const api = {
       select() { return api; },
       insert(v) { acao = 'insert'; dados = v; return api; },
+      upsert(v, opcoes = {}) {
+        acao = 'upsert';
+        dados = v;
+        conflitoUpsert = String(opcoes.onConflict || '').split(',').map((item) => item.trim());
+        ignorarDuplicata = opcoes.ignoreDuplicates === true;
+        return api;
+      },
       update(v) { acao = 'update'; dados = v; return api; },
       delete() { acao = 'delete'; return api; },
       eq(c, v) { filtros.push((l) => l[c] === v); return api; },
       is(c, v) { filtros.push((l) => l[c] === v); return api; },
-      lt(c, v) { filtros.push((l) => Number(l[c]) < Number(v)); return api; },
-      lte(c, v) { filtros.push((l) => Number(l[c]) <= Number(v)); return api; },
+      lt(c, v) { filtros.push((l) => compararValores(l[c], v) < 0); return api; },
+      lte(c, v) { filtros.push((l) => compararValores(l[c], v) <= 0); return api; },
+      gt(c, v) { filtros.push((l) => compararValores(l[c], v) > 0); return api; },
       in(c, vs) { filtros.push((l) => vs.includes(l[c])); return api; },
       ilike(c, v) { filtros.push((l) => String(l[c] ?? '').toLowerCase() === String(v).toLowerCase()); return api; },
       order(c, o = {}) { ordem = { c, asc: o.ascending !== false }; return api; },
@@ -56,29 +75,44 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
 
     function executar() {
       let resultado;
-      if (acao === 'insert') {
+      let count = null;
+      if (acao === 'insert' || acao === 'upsert') {
         const novos = (Array.isArray(dados) ? dados : [dados]).map((d) => ({ id: crypto.randomUUID(), ativo: true, ...d }));
+        const inseridos = [];
+        const jaExiste = (predicado) => linhas().some(predicado) || inseridos.some(predicado);
         for (const n of novos) {
-          if (nome === 'veiculos' && linhas().some((l) => l.placa === n.placa)) {
+          if (nome === 'posicoes_viagem' && acao === 'upsert' &&
+              conflitoUpsert.includes('id_viagem') &&
+              conflitoUpsert.includes('registrada_em') &&
+              jaExiste((l) => l.id_viagem === n.id_viagem && l.registrada_em === n.registrada_em)) {
+            if (ignorarDuplicata) continue;
             return { data: null, error: { code: '23505', message: 'duplicate key' } };
           }
-          if (nome === 'usuarios' && linhas().some((l) => l.email === n.email)) {
+          if (nome === 'veiculos' && jaExiste((l) => l.placa === n.placa)) {
             return { data: null, error: { code: '23505', message: 'duplicate key' } };
           }
-          if (n.id_local && nome === 'financiamentos' && linhas().some((l) => l.id_usuario === n.id_usuario && l.id_local === n.id_local)) {
+          if (nome === 'usuarios' && jaExiste((l) => l.email === n.email)) {
             return { data: null, error: { code: '23505', message: 'duplicate key' } };
           }
-          if (n.id_local && nome === 'lancamentos_financeiros' && linhas().some((l) => l.id_usuario === n.id_usuario && l.id_local === n.id_local)) {
+          if (n.id_local && nome === 'financiamentos' && jaExiste((l) => l.id_usuario === n.id_usuario && l.id_local === n.id_local)) {
             return { data: null, error: { code: '23505', message: 'duplicate key' } };
           }
+          if (n.id_local && nome === 'lancamentos_financeiros' && jaExiste((l) => l.id_usuario === n.id_usuario && l.id_local === n.id_local)) {
+            return { data: null, error: { code: '23505', message: 'duplicate key' } };
+          }
+          if (nome === 'posicoes_viagem' && jaExiste((l) => l.id === n.id)) {
+            return { data: null, error: { code: '23505', message: 'duplicate key' } };
+          }
+          inseridos.push(n);
         }
-        linhas().push(...novos);
-        resultado = novos;
+        linhas().push(...inseridos);
+        resultado = inseridos;
       } else if (acao === 'update') {
         resultado = linhas().filter(passa);
         for (const l of resultado) Object.assign(l, dados);
       } else if (acao === 'delete') {
         resultado = linhas().filter(passa);
+        count = resultado.length;
         tabelas[nome] = linhas().filter((l) => !passa(l));
       } else {
         resultado = linhas().filter(passa);
@@ -93,7 +127,7 @@ export function criarFakeSupabase(tabelasIniciais = {}) {
           : { data: null, error: { code: 'PGRST116', message: 'not single' } };
       }
       if (unico === 'maybe') return { data: resultado[0] || null, error: null };
-      return { data: resultado, error: null };
+      return { data: resultado, error: null, count };
     }
 
     return api;

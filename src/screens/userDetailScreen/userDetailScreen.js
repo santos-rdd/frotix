@@ -108,8 +108,7 @@ export default function UserDetailScreen() {
         />
       </View>
 
-      {/* Erro P9: o e-mail aparecia vazio e havia um botão "Entrar com Gmail" sem função.
-          O e-mail é o login da pessoa, então aparece só para leitura. */}
+
       <View style={styles.inputGroup}>
         <Text style={[styles.inputLine, styles.inputSomenteLeitura]} numberOfLines={1}>
           {usuario.email || 'E-mail não informado'}

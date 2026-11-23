@@ -1,5 +1,5 @@
-// Testes do backend com um Supabase falso em memória.
-// Rodar com:  npm run test:backend
+
+
 import { test, mock, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -34,7 +34,7 @@ const fake = criarFakeSupabase({
     { id: VEICULO, modelo: 'Scania R450', placa: 'ABC-1234', hodometro: 45789.2, status: 'DISPONIVEL', ativo: true },
   ],
   viagens: [
-    // Os mesmos números do banco que geraram o erro I7 (134.910 km).
+
     { id: 'v1', origem: 'São Paulo', destino: 'BH', id_motorista: MOTORISTA_1, status: 'CONCLUIDA', km_inicial: 45200.5, km_final: 45789.2, iniciada_em: agora, concluida_em: agora, id_veiculo: VEICULO },
     { id: 'v2', origem: 'Campinas', destino: 'Rio', id_motorista: MOTORISTA_2, status: 'EM_ANDAMENTO', km_inicial: 89120, km_final: null, iniciada_em: agora },
     { id: 'v3', origem: 'Curitiba', destino: 'Santos', id_motorista: MOTORISTA_1, id_veiculo: VEICULO, status: 'EM_ANDAMENTO', km_inicial: 45790, km_final: null, iniciada_em: agora },
@@ -52,6 +52,7 @@ const fake = criarFakeSupabase({
   ],
   financiamentos: [],
   manutencoes: [],
+  posicoes_viagem: [],
 });
 
 mock.module('../database/db.js', {
@@ -119,7 +120,7 @@ before(async () => {
 
 after(() => servidor?.close());
 
-// ---------------------------------------------------------------- C2 / I10
+
 test('rotas protegidas recusam pedido sem token (C2)', async () => {
   for (const [m, c] of [
     ['GET', '/financeiro/resumo-geral'], ['GET', '/frota/veiculos'], ['GET', '/resumo/atividades-recentes'],
@@ -138,7 +139,7 @@ test('token adulterado é recusado', async () => {
   assert.equal((await chamar('GET', '/frota/veiculos', { token: falso })).status, 401);
 });
 
-// ---------------------------------------------------------------- C1
+
 test('login Google sem idToken é recusado (C1)', async () => {
   const r = await chamar('POST', '/auth/login-google', { corpo: { email: 'admin@logfin.com' } });
   assert.equal(r.status, 400);
@@ -432,7 +433,7 @@ test('cadastro de usuário por e-mail exige apenas Admin', async () => {
   assert.equal((await chamar('POST', '/auth/cadastro', { token: T.financeiro, corpo: {} })).status, 403);
 });
 
-// ---------------------------------------------------------------- permissões
+
 test('motorista não vê números da empresa nem usuários', async () => {
   assert.equal((await chamar('GET', '/financeiro/resumo-geral', { token: T.motorista1 })).status, 403);
   assert.equal((await chamar('GET', '/financeiro/visao-geral-frota', { token: T.motorista1 })).status, 403);
@@ -490,14 +491,14 @@ test('motorista só vê veículos das próprias viagens', async () => {
   assert.equal(semRotaIndividual.json.veiculo, undefined);
 });
 
-// ---------------------------------------------------------------- I7
+
 test('km rodados usa km_final − km_inicial (I7)', async () => {
   const r = await chamar('GET', '/financeiro/visao-geral-frota?dias=7', { token: T.admin });
   assert.equal(r.status, 200);
   assert.equal(r.json.kmRodados, 588.7);
   assert.notEqual(r.json.kmRodados, 134910);
   assert.equal(r.json.veiculosEmRota, 1);
-  assert.equal(r.json.custoPorKm, 2); // 1.177,40 / 588,7 km
+  assert.equal(r.json.custoPorKm, 2);
 });
 
 test('visão da frota mantém despesas e percentuais dentro do período solicitado', async () => {
@@ -565,7 +566,7 @@ test('visão da frota mantém despesas e percentuais dentro do período solicita
   }
 });
 
-// ---------------------------------------------------------------- I3 / I5 / I6 / I4 / C5
+
 test('transação grava o usuário logado e a categoria pelo id (I5, I3)', async () => {
   const r = await chamar('POST', '/financeiro/transacoes', {
     token: T.motorista2,
@@ -576,7 +577,7 @@ test('transação grava o usuário logado e a categoria pelo id (I5, I3)', async
   assert.equal(r.json.lancamento.id_usuario, MOTORISTA_2);
   assert.equal(r.json.lancamento.id_categoria, CAT_DIESEL);
   assert.equal(r.json.lancamento.valor, 45.9);
-  assert.equal(r.json.lancamento.comprovante_url, null); // caminho local é descartado (I4)
+  assert.equal(r.json.lancamento.comprovante_url, null);
   assert.equal(r.json.lancamento.foto_url, 'm2/2026/a.jpg');
 });
 
@@ -848,7 +849,7 @@ test('motorista não pode alterar o próprio perfil nem elevar privilégios', as
   assert.equal(resposta.json.usuario, undefined);
 });
 
-// ---------------------------------------------------------------- frota (P5, P6, P7, P10, P11)
+
 test('motorista só vê as próprias rotas (P10, P11)', async () => {
   const r = await chamar('GET', '/frota/rotas', { token: T.motorista1 });
   assert.equal(r.status, 200);
@@ -877,6 +878,201 @@ test('motorista só vê as próprias rotas (P10, P11)', async () => {
   );
   const gestor = await chamar('GET', '/frota/viagens-andamento', { token: T.gestor });
   assert.equal(gestor.json.viagens.length, 2);
+});
+
+test('GPS: identidade JWT prevalece sobre IDs enviados e motorista não envia para viagem alheia', async () => {
+  const viagemId = 'd0000000-0000-0000-0000-000000000001';
+  const viagemAlheiaId = 'd0000000-0000-0000-0000-000000000002';
+  const iniciouEm = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const registradaEm = new Date(Date.now() - 60 * 1000).toISOString();
+  fake.tabelas.viagens.push(
+    {
+      id: viagemId,
+      id_motorista: MOTORISTA_1,
+      id_veiculo: VEICULO,
+      status: 'EM_ANDAMENTO',
+      iniciada_em: iniciouEm,
+      origem: 'Campinas',
+      destino: 'Santos',
+    },
+    {
+      id: viagemAlheiaId,
+      id_motorista: MOTORISTA_2,
+      id_veiculo: VEICULO,
+      status: 'EM_ANDAMENTO',
+      iniciada_em: iniciouEm,
+    }
+  );
+  const posicao = {
+    id: randomUUID(),
+    latitude: -23.55,
+    longitude: -46.63,
+    precisao: 8,
+    velocidade: 4,
+    registradaEm,
+  };
+  const tamanhoInicial = fake.tabelas.posicoes_viagem.length;
+
+  try {
+    const registrada = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { usuarioId: MOTORISTA_2, posicoes: [posicao] },
+    });
+    assert.equal(registrada.status, 200);
+    assert.deepEqual(registrada.json.persistidas, [posicao.id]);
+    const salva = fake.tabelas.posicoes_viagem.find((item) => item.id === posicao.id);
+    assert.equal(salva.id_motorista, MOTORISTA_1);
+    assert.equal(salva.id_viagem, viagemId);
+    assert.equal(salva.precisao_m, posicao.precisao);
+    assert.equal(salva.velocidade_ms, posicao.velocidade);
+    assert.equal(Object.hasOwn(salva, 'precisao'), false);
+    assert.equal(Object.hasOwn(salva, 'velocidade'), false);
+    assert.equal(Object.hasOwn(salva, 'usuarioId'), false);
+
+    const repetida = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [posicao] },
+    });
+    assert.equal(repetida.status, 200);
+    assert.deepEqual(repetida.json.persistidas, [posicao.id]);
+
+    const conflito = {
+      ...posicao,
+      id: randomUUID(),
+      latitude: -23.56,
+    };
+    const repeticaoConflitante = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [conflito] },
+    });
+    assert.equal(repeticaoConflitante.status, 207);
+    assert.deepEqual(repeticaoConflitante.json.persistidas, []);
+    assert.deepEqual(repeticaoConflitante.json.naoPersistidas, [conflito.id]);
+
+    const viagemDeOutro = await chamar('POST', `/frota/rotas/${viagemAlheiaId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [{ ...posicao, id: randomUUID() }] },
+    });
+    assert.equal(viagemDeOutro.status, 403);
+    assert.equal(fake.tabelas.posicoes_viagem.length, tamanhoInicial + 1);
+
+    assert.equal((await chamar('GET', '/frota/posicoes', { token: T.motorista1 })).status, 403);
+    assert.equal((await chamar('GET', '/frota/posicoes', { token: T.financeiro })).status, 403);
+    for (const tokenGestao of [T.admin, T.gestor]) {
+      const consulta = await chamar('GET', `/frota/posicoes?viagemId=${viagemId}`, { token: tokenGestao });
+      assert.equal(consulta.status, 200);
+      assert.equal(consulta.json.posicoes.length, 1);
+      assert.equal(consulta.json.posicoes[0].motoristaId, MOTORISTA_1);
+    }
+  } finally {
+    fake.tabelas.viagens = fake.tabelas.viagens.filter(
+      (item) => item.id !== viagemId && item.id !== viagemAlheiaId
+    );
+    fake.tabelas.posicoes_viagem = fake.tabelas.posicoes_viagem.filter(
+      (item) => item.id !== posicao.id
+    );
+  }
+});
+
+test('GPS aceita sincronização tardia apenas para posições capturadas antes da conclusão', async () => {
+  const viagemId = 'd0000000-0000-0000-0000-000000000003';
+  const iniciouEm = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+  const concluiuEm = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const posicoesExistentes = new Set(fake.tabelas.posicoes_viagem.map((item) => item.id));
+  fake.tabelas.viagens.push({
+    id: viagemId,
+    id_motorista: MOTORISTA_1,
+    id_veiculo: VEICULO,
+    status: 'CONCLUIDA',
+    iniciada_em: iniciouEm,
+    concluida_em: concluiuEm,
+  });
+
+  try {
+    const antesDeConcluir = {
+      id: randomUUID(),
+      latitude: -23.5,
+      longitude: -46.5,
+      registradaEm: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+    };
+    const aceita = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [antesDeConcluir] },
+    });
+    assert.equal(aceita.status, 200);
+
+    const depoisDeConcluir = {
+      ...antesDeConcluir,
+      id: randomUUID(),
+      registradaEm: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    };
+    const rejeitada = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [depoisDeConcluir] },
+    });
+    assert.equal(rejeitada.status, 409);
+    assert.equal(fake.tabelas.posicoes_viagem.some((item) => item.id === depoisDeConcluir.id), false);
+  } finally {
+    fake.tabelas.viagens = fake.tabelas.viagens.filter((item) => item.id !== viagemId);
+    fake.tabelas.posicoes_viagem = fake.tabelas.posicoes_viagem.filter(
+      (item) => posicoesExistentes.has(item.id)
+    );
+  }
+});
+
+test('GPS aceita duplicata legada sem metadados opcionais e retorna NULL na consulta', async () => {
+  const viagemId = 'd0000000-0000-0000-0000-000000000004';
+  const iniciouEm = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const registradaEm = new Date(Date.now() - 60 * 1000).toISOString();
+  const posicaoLegada = {
+    id: randomUUID(),
+    id_motorista: MOTORISTA_1,
+    id_viagem: viagemId,
+    latitude: -23.55,
+    longitude: -46.63,
+    registrada_em: registradaEm,
+  };
+  fake.tabelas.viagens.push({
+    id: viagemId,
+    id_motorista: MOTORISTA_1,
+    id_veiculo: VEICULO,
+    status: 'EM_ANDAMENTO',
+    iniciada_em: iniciouEm,
+    origem: 'Campinas',
+    destino: 'Santos',
+  });
+  fake.tabelas.posicoes_viagem.push(posicaoLegada);
+
+  try {
+    const repetida = {
+      id: randomUUID(),
+      latitude: posicaoLegada.latitude,
+      longitude: posicaoLegada.longitude,
+      precisao: 8,
+      velocidade: 4,
+      registradaEm,
+    };
+    const sincronizada = await chamar('POST', `/frota/rotas/${viagemId}/posicoes`, {
+      token: T.motorista1,
+      corpo: { posicoes: [repetida] },
+    });
+    assert.equal(sincronizada.status, 200);
+    assert.deepEqual(sincronizada.json.persistidas, [repetida.id]);
+
+    const consultada = await chamar('GET', `/frota/posicoes?viagemId=${viagemId}`, {
+      token: T.gestor,
+    });
+    assert.equal(consultada.status, 200);
+    assert.equal(consultada.json.posicoes.length, 1);
+    assert.equal(consultada.json.posicoes[0].precisao_m, null);
+    assert.equal(consultada.json.posicoes[0].velocidade_ms, null);
+    assert.equal(consultada.json.posicoes[0].latitude, posicaoLegada.latitude);
+  } finally {
+    fake.tabelas.viagens = fake.tabelas.viagens.filter((item) => item.id !== viagemId);
+    fake.tabelas.posicoes_viagem = fake.tabelas.posicoes_viagem.filter(
+      (item) => item.id !== posicaoLegada.id
+    );
+  }
 });
 
 test('motorista não pode trocar o veículo previamente associado à rota', async () => {
@@ -1043,15 +1239,15 @@ test('rota: motorista precisa ter perfil Motorista (P7) e o ciclo agendada → e
   const rotaCriada = listadas.json.rotas.find((x) => x.id === id);
   assert.equal(rotaCriada?.distanciaPrevistaKm, 420);
 
-  // Outro motorista não abre a rota que não é dele.
+
   assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista1, corpo: { hodometroInicial: 46000 } })).status, 403);
   assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, {
     token: T.motorista2,
     corpo: { veiculoId: 'b0000000-0000-0000-0000-000000000099', hodometroInicial: 45800 },
   })).status, 403);
-  // Hodômetro menor que o do veículo é recusado.
+
   assert.equal((await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 100 } })).status, 400);
-  // Concluir uma rota agendada não pode pular a abertura.
+
   assert.equal((await chamar('POST', `/frota/rotas/${id}/concluir`, { token: T.motorista2, corpo: { hodometroFinal: 46000 } })).status, 400);
 
   const aberta = await chamar('POST', `/frota/rotas/${id}/abrir`, { token: T.motorista2, corpo: { hodometroInicial: 45800 } });
@@ -1111,10 +1307,10 @@ test('resumo da frota e relatório usam os dados do banco (P3, P5)', async () =>
   assert.equal(r.receita, entradas);
   assert.equal(r.custoManutencao, 2350);
   assert.equal(r.saldo, Number((r.receita - r.despesas).toFixed(2)));
-  assert.equal(r.kmRodados, 1088.7); // 588,7 + 500 da rota concluída no teste anterior
+  assert.equal(r.kmRodados, 1088.7);
 });
 
-// ---------------------------------------------------------------- cadastros (P4)
+
 test('categorias: criar, duplicada, remover e reativar', async () => {
   const c = await chamar('POST', '/categorias', { token: T.financeiro, corpo: { nome: 'Seguro', tipo: 'saida' } });
   assert.equal(c.status, 201);
@@ -1145,7 +1341,7 @@ test('usuários: cadastro Google, editar perfil, não remover a si mesmo', async
   assert.equal((await chamar('DELETE', `/usuarios/${ADMIN}`, { token: T.admin })).status, 400);
 });
 
-// ---------------------------------------------------------------- I1
+
 test('upload de comprovante salva no Storage (I1)', async () => {
   const semArquivo = await chamar('POST', '/comprovantes/upload', { token: T.motorista1, form: new FormData() });
   assert.equal(semArquivo.status, 400);
@@ -1159,7 +1355,7 @@ test('upload de comprovante salva no Storage (I1)', async () => {
   assert.ok(fake.buckets.has('comprovantes'));
   assert.equal(fake.tabelas.lancamentos_financeiros.find((l) => l.id === 'l2').comprovante_url, r.json.caminho);
 
-  // Outro motorista não abre o comprovante.
+
   const link = await chamar('GET', `/comprovantes/link?caminho=${encodeURIComponent(r.json.caminho)}`, { token: T.motorista2 });
   assert.equal(link.status, 403);
 });

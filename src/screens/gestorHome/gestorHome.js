@@ -13,15 +13,16 @@ import { formatarMoeda, META_KM_MES } from '../../constants/frota.js';
 import { resumoFrota } from '../../services/frotix.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
+import RegistrarHodometroButton from '../../components/registrarHodometroButton/registrarHodometroButton.js';
 
-// Cores do donut conforme o Figma (diferentes dos selos de status das listas).
+
 const FATIAS = [
   { id: 'em_viagem', label: 'Em viagem', color: '#E5E7EB' },
   { id: 'manutencao', label: 'Manutenção', color: '#D32F2F' },
   { id: 'disponivel', label: 'Disponível', color: '#1E2A78' },
 ];
 
-// Rótulo "últimos 7 dias ≡" do Figma (filtro de período, ainda só visual).
+
 const Periodo = ({ style, texto = 'últimos 7 dias' }) => (
   <View style={[styles.periodo, style]}>
     <Text style={styles.periodoTexto}>{texto}</Text>
@@ -29,16 +30,16 @@ const Periodo = ({ style, texto = 'últimos 7 dias' }) => (
   </View>
 );
 
-/**
- * Home do Gestor de Frota (perfil 2).
- * Pode ser aberta como rota ("GestorHome", com params.usuario) ou renderizada
- * dentro da HomePage, que passa `usuario` direto por props.
- */
+
+
+
+
+
 export default function GestorHome({ navigation, route, usuario: usuarioProp }) {
   const usuario = usuarioProp || route?.params?.usuario;
   const [atalhoSelecionado, setAtalhoSelecionado] = useState('frota');
 
-  // Erro P5: os números vêm do backend (antes eram dados de exemplo).
+
   const { dados: resumo, carregando, erro, recarregar } = useDados(() => resumoFrota(7));
   const total = resumo?.totalVeiculos || 0;
   const contar = (status) => resumo?.porStatus?.[status] || 0;
@@ -177,6 +178,11 @@ export default function GestorHome({ navigation, route, usuario: usuarioProp }) 
         <TouchableOpacity style={styles.botaoViagens} onPress={() => ir('Viagens', { modo: 'motorista' })}>
           <Text style={styles.botaoViagensTexto}>Minhas Viagens</Text>
         </TouchableOpacity>
+
+        <RegistrarHodometroButton
+          monitorarTodas
+          exibirBotao={false}
+        />
       </ScrollView>
 
       <BottomNavigation navigation={navigation} userRole={2} usuario={usuario} />

@@ -19,7 +19,7 @@ import UserControlSection from '../../components/userControlSection/userControlS
 import RotasSection from '../../components/rotasSection/rotasSection';
 import { colors } from '../../constants/theme';
 
-// Dados dos gráficos
+
 const dataBalanco = [
   { value: 694.23, color: '#3B82F6' },
   { value: 554.15, color: '#94A3B8' },
@@ -70,7 +70,7 @@ export default function AdminHomeScreen(props) {
     authGoogle?.user?.photo ||
     null;
 
-  // 0: Categorias Financeiras, 1: Formas de Pagamento, 2: Gerenciador de usuários, 3: Rotas e Veículos
+
   const [selectedAction, setSelectedAction] = useState(0);
 
   const actions = [
@@ -102,7 +102,7 @@ export default function AdminHomeScreen(props) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Cabeçalho */}
+
         <View style={styles.header}>
           <View>
             <Text style={styles.subtitle}>Boa Tarde</Text>
@@ -117,7 +117,7 @@ export default function AdminHomeScreen(props) {
           )}
         </View>
 
-        {/* Resumo Geral */}
+
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Resumo Geral</Text>
           <View style={styles.filterContainer}>
@@ -126,7 +126,7 @@ export default function AdminHomeScreen(props) {
           </View>
         </View>
 
-        {/* Card Balanço Atual */}
+
         <View style={styles.blueCard}>
           <View style={styles.cardHeader}>
             <View>
@@ -158,7 +158,7 @@ export default function AdminHomeScreen(props) {
           </View>
         </View>
 
-        {/* Ações Rápidas */}
+
         <Text style={styles.sectionTitle}>Ações Rápidas</Text>
         <ScrollView
           horizontal
@@ -176,10 +176,10 @@ export default function AdminHomeScreen(props) {
           ))}
         </ScrollView>
 
-        {/* CONTEÚDO 0: CATEGORIAS FINANCEIRAS */}
+
         {selectedAction === 0 && (
           <View>
-            {/* Card Quilometragem */}
+
             <View style={styles.darkCard}>
               <Text style={styles.dateText}>Segunda, 14 de setembro</Text>
               <View style={styles.centerContent}>
@@ -191,7 +191,7 @@ export default function AdminHomeScreen(props) {
               </View>
             </View>
 
-            {/* Card Saldo */}
+
             <View style={styles.darkCardCenter}>
               <Text style={styles.dateText}>Segunda, 14 de setembro</Text>
               <MaterialCommunityIcons
@@ -206,7 +206,7 @@ export default function AdminHomeScreen(props) {
               <Text style={styles.expenseLabel}>Saídas do período</Text>
             </View>
 
-            {/* Card Despesas */}
+
             <View style={styles.blueCard}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Despesas</Text>
@@ -232,7 +232,7 @@ export default function AdminHomeScreen(props) {
               </View>
             </View>
 
-            {/* Métricas da Frota */}
+
             <View style={styles.metricsRow}>
               <View style={styles.metricCard}>
                 <Text style={styles.metricValue}>10</Text>
@@ -250,21 +250,21 @@ export default function AdminHomeScreen(props) {
           </View>
         )}
 
-        {/* CONTEÚDO 1: FORMAS DE PAGAMENTO */}
+
         {selectedAction === 1 && (
           <View style={{ marginTop: 8 }}>
             <AdmFormaPag />
           </View>
         )}
 
-        {/* CONTEÚDO 2: GERENCIADOR DE USUÁRIOS */}
+
         {selectedAction === 2 && (
           <View style={{ marginTop: 8 }}>
             <UserControlSection />
           </View>
         )}
 
-        {/* CONTEÚDO 3: ROTAS E VEÍCULOS */}
+
         {selectedAction === 3 && (
           <View style={{ marginTop: 8 }}>
             <RotasSection />

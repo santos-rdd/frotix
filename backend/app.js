@@ -8,10 +8,10 @@ import comprovantesRoutes from './routes/comprovantesRoutes.js';
 import { categoriasRoutes, formasRoutes, usuariosRoutes } from './routes/cadastrosRoutes.js';
 import financialRoutes from './routes/financialRoutes.js';
 
-// O app fica separado do listen() para os testes automatizados conseguirem usá-lo.
+
 const app = express();
 
-// Log de requisições no topo para capturar qualquer tráfego que atinja o servidor
+
 app.use((req, res, next) => {
     console.log(`[HTTP IN] ${req.method} ${req.originalUrl}`);
 
@@ -24,7 +24,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// Suporte a CORS e requisições preflight (OPTIONS)
+
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
@@ -39,7 +39,7 @@ app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => res.json({ sucesso: true, servico: 'frotix-backend' }));
 
-// Só /auth é público. Todas as outras rotas exigem o token do login (erro C2/I10).
+
 app.use('/auth', authRoutes);
 app.use('/financeiro', financeiroRoutes);
 app.use('/resumo', resumoRoutes);
@@ -52,8 +52,8 @@ app.use('/financial', financialRoutes);
 
 app.use((req, res) => res.status(404).json({ sucesso: false, erro: 'Rota não encontrada.' }));
 
-// Tratador de erros: precisa vir depois das rotas para funcionar.
-// eslint-disable-next-line no-unused-vars
+
+
 app.use((err, req, res, next) => {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
     return res.status(400).json({ sucesso: false, erro: 'JSON malformado ou inválido no corpo da requisição.' });

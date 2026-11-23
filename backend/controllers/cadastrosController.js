@@ -8,9 +8,9 @@ function erroInterno(res, contexto, erro) {
 
 const normalizar = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
-// -----------------------------------------------------------------------------
-// Categorias financeiras (erro P4: o app usava categorias de exemplo)
-// -----------------------------------------------------------------------------
+
+
+
 
 const montarCategoria = (c) => ({ id: c.id, nome: c.nome, tipo: String(c.tipo).toLowerCase() });
 
@@ -45,7 +45,7 @@ export async function criarCategoria(req, res) {
     const igual = (existentes || []).find((c) => normalizar(c.nome) === normalizar(nome));
     if (igual?.ativo) return res.status(409).json({ sucesso: false, erro: 'Essa categoria já existe.' });
 
-    // Se já existiu e foi removida, reativa em vez de duplicar.
+
     const resultado = igual
       ? await supabase.from('categorias_financeiras').update({ ativo: true, nome }).eq('id', igual.id).select().single()
       : await supabase.from('categorias_financeiras').insert([{ nome, tipo }]).select().single();
@@ -57,7 +57,7 @@ export async function criarCategoria(req, res) {
   }
 }
 
-/** Desativa (não apaga): lançamentos antigos continuam apontando para ela. */
+
 export async function removerCategoria(req, res) {
   try {
     const { error } = await supabase.from('categorias_financeiras').update({ ativo: false }).eq('id', req.params.id);
@@ -68,9 +68,9 @@ export async function removerCategoria(req, res) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Formas de pagamento (erro P4)
-// -----------------------------------------------------------------------------
+
+
+
 
 const TIPOS_FORMA = ['debito', 'credito', 'pix', 'boleto', 'dinheiro', 'outros'];
 
@@ -145,9 +145,9 @@ export async function removerForma(req, res) {
   }
 }
 
-// -----------------------------------------------------------------------------
-// Usuários (erro P4 e P9: lista e detalhe usavam dados de exemplo)
-// -----------------------------------------------------------------------------
+
+
+
 
 const montarUsuario = (u) => ({
   id: u.id,
@@ -174,11 +174,11 @@ export async function listarUsuarios(req, res) {
   }
 }
 
-/**
- * Cadastro de quem entra com Google: não tem senha, só precisa existir na tabela
- * usuarios com o e-mail da conta Google. (Quem entra com e-mail e senha usa
- * POST /auth/cadastro, que cria a conta no Supabase Auth.)
- */
+
+
+
+
+
 export async function criarUsuarioGoogle(req, res) {
   try {
     const nome = String(req.body?.nome || '').trim();
@@ -215,7 +215,7 @@ export async function atualizarUsuario(req, res) {
     if (req.body?.perfil !== undefined) {
       const perfil = Number(req.body.perfil);
       if (![1, 2, 3, 4].includes(perfil)) return res.status(400).json({ sucesso: false, erro: 'Perfil inválido.' });
-      // Ninguém tira o próprio acesso de Admin sem querer.
+
       if (req.params.id === req.usuario.id && req.usuario.perfil === PERFIS.ADMIN && perfil !== PERFIS.ADMIN) {
         return res.status(400).json({ sucesso: false, erro: 'Você não pode tirar o seu próprio perfil de Admin.' });
       }
@@ -237,7 +237,7 @@ export async function atualizarUsuario(req, res) {
   }
 }
 
-/** "Remover" desativa a conta: o histórico de lançamentos e viagens continua ligado a ela. */
+
 export async function desativarUsuario(req, res) {
   try {
     if (req.params.id === req.usuario.id) {

@@ -21,7 +21,7 @@ const ROLES = [
 export default function CadastrarUsuario({ onBack }) {
   const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
-  const [formaAcesso, setFormaAcesso] = useState('email'); // 'email' ou 'gmail'
+  const [formaAcesso, setFormaAcesso] = useState('email');
   const [perfil, setPerfil] = useState('Motorista');
   const [modalVisible, setModalVisible] = useState(false);
 
@@ -36,7 +36,7 @@ export default function CadastrarUsuario({ onBack }) {
 
   return (
     <View style={styles.container}>
-      {/* Botão Voltar */}
+
       <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.7}>
         <Feather name="chevron-left" size={28} color="#FFFFFF" />
       </TouchableOpacity>
@@ -45,7 +45,7 @@ export default function CadastrarUsuario({ onBack }) {
         Cadastrar usuário no <Text style={styles.brandTitle}>FrotiX</Text>
       </Text>
 
-      {/* Input Nome */}
+
       <Text style={styles.label}>Nome</Text>
       <TextInput
         style={styles.input}
@@ -55,7 +55,7 @@ export default function CadastrarUsuario({ onBack }) {
         placeholderTextColor="#6B7280"
       />
 
-      {/* Input E-mail */}
+
       <Text style={styles.label}>E-mail</Text>
       <TextInput
         style={styles.input}
@@ -67,7 +67,7 @@ export default function CadastrarUsuario({ onBack }) {
         placeholderTextColor="#6B7280"
       />
 
-      {/* Forma de Acesso */}
+
       <Text style={styles.labelSection}>Forma de acesso:</Text>
       
       <TouchableOpacity 
@@ -87,7 +87,7 @@ export default function CadastrarUsuario({ onBack }) {
         <Text style={styles.gmailBtnText}>Entrar com Gmail</Text>
       </TouchableOpacity>
 
-      {/* Dropdown de Perfil */}
+
       <Text style={styles.labelSection}>Perfil:</Text>
       <TouchableOpacity 
         style={styles.dropdown}
@@ -98,7 +98,7 @@ export default function CadastrarUsuario({ onBack }) {
         <Feather name="chevron-down" size={20} color="#000000" />
       </TouchableOpacity>
 
-      {/* Modal para seleção do perfil */}
+
       <Modal visible={modalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -127,7 +127,7 @@ export default function CadastrarUsuario({ onBack }) {
         </View>
       </Modal>
 
-      {/* Botão Salvar */}
+
       <TouchableOpacity style={styles.saveBtn} onPress={handleSalvar} activeOpacity={0.8}>
         <Text style={styles.saveBtnText}>Salvar</Text>
       </TouchableOpacity>

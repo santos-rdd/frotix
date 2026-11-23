@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet } from 'react-native';
 
-// Botão branco "Voltar" usado no rodapé das telas do Gestor.
+
 export default function VoltarButton({ navigation, label = 'Voltar', onPress }) {
   return (
     <TouchableOpacity style={styles.botao} onPress={onPress || (() => navigation.goBack())}>

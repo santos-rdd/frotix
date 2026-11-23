@@ -313,9 +313,9 @@ export async function obterTransacaoOffline(id) {
   return await obterTransacaoLocal(db, id);
 }
 
-// -----------------------------------------------------------------------------
-// Veículos Offline
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function salvarVeiculoOffline(usuarioId, dados) {
   if (!usuarioId) throw new Error('Identificação do usuário necessária para salvar veículo local.');
@@ -391,9 +391,9 @@ export async function atualizarCacheVeiculos(usuarioId, veiculosRemotos) {
   await salvarDadoLocal(db, usuarioId, chave, Array.from(mapa.values()));
 }
 
-// -----------------------------------------------------------------------------
-// Rotas Offline
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function salvarRotaOffline(usuarioId, dados) {
   if (!usuarioId) throw new Error('Identificação do usuário necessária para salvar rota local.');
@@ -450,9 +450,9 @@ export async function atualizarCacheRotas(usuarioId, rotasRemotas) {
   await salvarDadoLocal(db, usuarioId, chave, Array.from(mapa.values()));
 }
 
-// -----------------------------------------------------------------------------
-// Viagens Offline (Abertura e Conclusão)
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function abrirViagemOffline(usuarioId, rotaId, { veiculoId, hodometroInicial } = {}) {
   if (!usuarioId || !rotaId) throw new Error('Parâmetros insuficientes para abrir viagem localmente.');
@@ -581,9 +581,9 @@ export async function concluirViagemOffline(usuarioId, rotaId, { hodometroFinal 
   return { rotaId: rota.id, status: 'concluida' };
 }
 
-// -----------------------------------------------------------------------------
-// Viagens Locais (listagem de rotas como proxy de viagens)
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function listarViagensLocais(usuarioId) {
   if (!usuarioId) return [];
@@ -592,9 +592,9 @@ export async function listarViagensLocais(usuarioId) {
   return Array.isArray(rotas) ? rotas : [];
 }
 
-// -----------------------------------------------------------------------------
-// Usuários Locais (Cache Administrativo)
-// -----------------------------------------------------------------------------
+
+
+
 
 export async function salvarUsuariosLocais(usuarioId, usuarios) {
   if (!usuarioId || !Array.isArray(usuarios)) return;

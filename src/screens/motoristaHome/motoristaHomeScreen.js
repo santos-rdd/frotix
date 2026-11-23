@@ -41,6 +41,10 @@ import {
 } from '../../services/localDataService.js';
 
 import { obterUsuarioLogado } from '../../services/api.js';
+import {
+  iniciarRastreamentoGps,
+  sincronizarPosicoesGpsPendentes,
+} from '../../services/rastreamentoGpsService.js';
 import useDados from '../../hooks/useDados.js';
 import EstadoDados from '../../components/estadoDados/estadoDados.js';
 
@@ -102,11 +106,13 @@ export default function MotoristaHomeScreen(props) {
     foto: usuarioFoto,
   };
 
-  // Os dois cartões apenas alternam o conteúdo exibido abaixo.
+
   const [selectedAction, setSelectedAction] = useState('finance');
   const [formasPagamento, setFormasPagamento] = useState([]);
   const [viagemSelecionada, setViagemSelecionada] = useState(null);
   const [viagensUsandoCache, setViagensUsandoCache] = useState(false);
+  const [posicaoGps, setPosicaoGps] = useState(null);
+  const [erroGps, setErroGps] = useState(null);
 
   const [isSliderVisible, setIsSliderVisible] = useState(false);
   const [actionType, setActionType] = useState('entrada');
@@ -294,6 +300,53 @@ export default function MotoristaHomeScreen(props) {
   );
 
   const viagemEmAndamento = andamentoLista[0] || null;
+  const viagemSelecionadaAtiva = ['em_transito', 'EM_ANDAMENTO'].includes(viagemSelecionada?.status)
+    ? viagemSelecionada
+    : viagemEmAndamento;
+
+  useEffect(() => {
+    let ativo = true;
+    let pararRastreamento = null;
+    setPosicaoGps(null);
+    setErroGps(null);
+
+    if (Number(usuarioRole) !== 4 || !usuarioId || !viagemSelecionadaAtiva?.id) {
+      return () => {
+        ativo = false;
+      };
+    }
+
+    iniciarRastreamentoGps({
+      usuarioId,
+      viagemId: viagemSelecionadaAtiva.id,
+      onPosicao: (posicao) => {
+        if (ativo) setPosicaoGps(posicao);
+      },
+      onErro: (erro) => {
+        if (ativo) setErroGps(erro?.message || 'Não foi possível registrar a localização GPS.');
+      },
+    }).then((parar) => {
+      if (ativo) pararRastreamento = parar;
+      else parar();
+    }).catch((erro) => {
+      if (ativo) setErroGps(erro?.message || 'Não foi possível iniciar o rastreamento GPS.');
+    });
+
+    return () => {
+      ativo = false;
+      pararRastreamento?.();
+    };
+  }, [usuarioId, usuarioRole, viagemSelecionadaAtiva?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (usuarioId) {
+        sincronizarPosicoesGpsPendentes(usuarioId).catch((erro) => {
+          console.error('Falha ao sincronizar posições GPS pendentes:', erro);
+        });
+      }
+    }, [usuarioId])
+  );
 
   const rotaEmDestaque =
     viagemEmAndamento || rotasAgendadas[0] || null;
@@ -599,11 +652,10 @@ export default function MotoristaHomeScreen(props) {
             )}
 
             <RegistrarHodometroButton
-              viagem={
-                viagensUsandoCache
-                  ? null
-                  : viagemSelecionada || viagemEmAndamento
-              }
+              viagem={viagemSelecionadaAtiva}
+              modoMotorista
+              posicaoLocal={posicaoGps}
+              erroRastreamento={erroGps}
               onButtonPress={abrirViagens}
             />
           </View>

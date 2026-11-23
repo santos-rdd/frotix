@@ -26,11 +26,11 @@ export default function RotasSection({ onRegistrarHodometro }) {
     <View style={styles.container}>
       <Text style={styles.sectionTitle}>Viagens em curso</Text>
 
-      {/* Card da Viagem Atual */}
+
       <View style={styles.blueCard}>
         <Text style={styles.cardHeaderTitle}>VIAGEM ATUAL</Text>
 
-        {/* Linha do Percurso (Origem -> Destino) */}
+
         <View style={styles.routeRow}>
           <View style={styles.pointContainer}>
             <View style={styles.circleOutline} />
@@ -47,7 +47,7 @@ export default function RotasSection({ onRegistrarHodometro }) {
           </View>
         </View>
 
-        {/* Card Interno: Licença do veículo */}
+
         <View style={styles.licenseCard}>
           <Text style={styles.licenseLabel}>Licença do{'\n'}veículo</Text>
           <View style={styles.dashedLine} />
@@ -55,26 +55,26 @@ export default function RotasSection({ onRegistrarHodometro }) {
         </View>
       </View>
 
-      {/* Indicadores de página/carrossel */}
+
       <View style={styles.paginationDots}>
         <View style={[styles.dot, styles.inactiveDot]} />
         <View style={[styles.dot, styles.activeDot]} />
         <View style={[styles.dot, styles.inactiveDot]} />
       </View>
 
-      {/* Visualização do Mapa */}
+
       <View style={styles.mapContainer}>
         <Image
           source={{ uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?auto=format&fit=crop&q=80&w=600' }}
           style={styles.mapImage}
         />
-        {/* Marcador do mapa */}
+
         <View style={styles.mapMarker}>
           <Ionicons name="location-sharp" size={32} color="#DC2626" />
         </View>
       </View>
 
-      {/* Botão Registrar Hodômetro */}
+
       <TouchableOpacity 
         style={styles.btnRegistrar} 
         onPress={handleRegistrar} 

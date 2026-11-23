@@ -11,15 +11,14 @@ dotenv.config({
 });
 
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey || !supabaseAnonKey) {
-    throw new Error('Configurações do Supabase não encontradas.');
+if (!supabaseUrl || !supabaseServiceRoleKey || !supabaseAnonKey) {
+    throw new Error('Configure SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY e SUPABASE_ANON_KEY no backend.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
+const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
         autoRefreshToken: false,
         persistSession: false

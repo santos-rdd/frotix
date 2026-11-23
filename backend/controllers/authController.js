@@ -7,8 +7,8 @@ import {
 } from '../services/sessionService.js';
 import { criarRespostaAutenticada } from '../utils/authResponse.js';
 
-// Client ID "Web" do Google usado pelo app (src/config/google.js). O idToken que o
-// app recebe do Google é emitido para esse público; qualquer outro é recusado.
+
+
 const GOOGLE_WEB_CLIENT_ID =
     process.env.GOOGLE_WEB_CLIENT_ID ||
     '716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com';
@@ -203,7 +203,7 @@ export const cadastrarUsuario = async (req, res) => {
             });
         }
 
-        // Verifica se existe na tabela usuarios.
+
         const { data: usuarioExistente, error: consultaError } =
             await supabase
                 .from('usuarios')
@@ -227,7 +227,7 @@ export const cadastrarUsuario = async (req, res) => {
         const imagemNormalizada =
             imagem && imagem !== 'null' ? imagem : null;
 
-        // CADASTRO TRADICIONAL
+
         if (accessMethod === 'email') {
 
             const authClient = createSupabaseAuthClient();

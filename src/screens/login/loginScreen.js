@@ -23,8 +23,8 @@ import {
 } from '../../services/api.js';
 import { CommonActions } from '@react-navigation/native';
 
-// Depois do login a Home vira a única tela da pilha: assim o "voltar" do Android
-// não leva de novo para o login (para sair, use "Sair da Conta" no perfil).
+
+
 const irParaHome = (navigation, params) =>
   navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'HomePage', params }] }));
 
@@ -33,9 +33,9 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  // Erro P1: o login pode levar até ~30 s quando o Render está "dormindo";
-  // sem um aviso na tela, parecia que o botão não tinha funcionado.
-  const [entrando, setEntrando] = useState(null); // 'google' | 'email' | null
+
+
+  const [entrando, setEntrando] = useState(null);
 
   useEffect(() => { 
     GoogleSignin.configure({

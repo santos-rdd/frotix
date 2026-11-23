@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, ImageBackground } from 'react-native'
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { labelTipo } from '../../constants/formasPagamento.js';
 
-// Largura do cartão + espaço entre cartões: usada para saber qual cartão está visível.
+
 const LARGURA_CARTAO = 319;
 const ESPACO = 15;
 
@@ -63,7 +63,7 @@ export default function PaymentCardsCarousel({ formas = [], onChangeIndex }) {
       return (
         <View style={[styles.cardBase, styles.cardPix]}>
           <View style={styles.pixLogoContainer}>
-            {/* Simulação estilizada do logo do Pix */}
+
             <View style={styles.pixDiamondShape} />
             <Text style={styles.pixTextLogo}>pix</Text>
           </View>
@@ -72,7 +72,7 @@ export default function PaymentCardsCarousel({ formas = [], onChangeIndex }) {
       );
     }
 
-    // Boleto, dinheiro e "Outros": cartão simples com ícone e descrição.
+
     const icones = { boleto: 'barcode', dinheiro: 'cash-multiple', outros: 'dots-horizontal-circle-outline' };
     return (
       <View style={[styles.cardBase, styles.cardPix]}>
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
   },
-  // Inverte as dimensões e rotaciona APENAS a imagem de fundo
+
   cardImageRotated: {
     position: 'absolute',
     width: 200,
@@ -147,14 +147,14 @@ const styles = StyleSheet.create({
   cardImageStyle: {
     borderRadius: 22,
   },
-  // Container interno que garante o padding e mantém os textos na orientação normal (sem girar)
+
   cardInnerContent: {
     flex: 1,
     padding: 20,
     justifyContent: 'space-between',
     zIndex: 2,
   },
-  // Estilo do Cartão 1 (Vortex / Halo)
+
   cardVortex: {
     backgroundColor: '#050b14',
   },
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 13,
   },
-  // Estilo do Cartão 3 (Pix)
+
   cardPix: {
     backgroundColor: '#161b22',
     justifyContent: 'center',

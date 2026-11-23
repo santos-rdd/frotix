@@ -27,8 +27,8 @@ export default function ViagemAtualCard({
 
   const [erro, setErro] = useState(null);
 
-  // Erro P10: o backend devolve só as viagens do motorista logado (ou todas, para os
-  // outros perfis). Antes havia uma lista fixa de "reserva" com viagens de exemplo.
+
+
   useEffect(() => {
     let isMounted = true;
 
@@ -107,7 +107,7 @@ export default function ViagemAtualCard({
     <View style={styles.container}>
       <Text style={styles.headerTitle}>Viagens em curso</Text>
 
-      {/* Abas para alternar rapidamente entre todos os motoristas */}
+
       {viagens.length > 1 && (
         <ScrollView
           horizontal
@@ -144,7 +144,7 @@ export default function ViagemAtualCard({
         </ScrollView>
       )}
 
-      {/* Carrossel de Cards das viagens */}
+
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -230,7 +230,7 @@ export default function ViagemAtualCard({
         })}
       </ScrollView>
 
-      {/* Paginação inferior */}
+
       {viagens.length > 1 && (
         <View style={styles.pagination}>
           {viagens.map((item, index) => {

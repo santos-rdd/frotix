@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 
-/**
- * Mostra "carregando" ou a mensagem de erro com o botão "Tentar de novo".
- * Não mostra nada quando já há dados e não há erro.
- */
+
+
+
+
 export default function EstadoDados({ carregando, erro, onTentarDeNovo, temDados }) {
   if (erro) {
     return (

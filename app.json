@@ -1,12 +1,13 @@
 {
   "expo": {
-    "name": "frotix",
+    "name": "Frotix",
     "slug": "frotix",
     "version": "1.0.0",
     "scheme": "frotix",
+    "icon": "./assets/iconsApp/frotix-icon.png",
     "extra": {
       "googleClientId": "716901513376-tnb5fm21k2t2hlavoei6n7052m2terdk.apps.googleusercontent.com",
-      "apiUrl": "http://10.0.2.2:3000"
+      "apiUrl": "https://frotix.onrender.com"
     },
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -14,7 +15,12 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.frotix.android"
+      "package": "com.frotix.android",
+      "icon": "./assets/iconsApp/frotix-icon.png",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/iconsApp/frotix-adaptive-foreground.png",
+        "backgroundColor": "#061B48"
+      }
     },
     "plugins": [
       [
@@ -35,6 +41,15 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "Permita que o Frotix use o Face ID para confirmar sua identidade."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Permita que o Frotix registre a localização durante uma viagem em andamento.",
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false,
+          "isIosBackgroundLocationEnabled": false
         }
       ],
       "expo-sqlite"

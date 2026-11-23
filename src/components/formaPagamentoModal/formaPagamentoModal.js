@@ -5,7 +5,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { TIPOS_FORMA_PAGAMENTO } from '../../constants/formasPagamento.js';
 
-// Validade no formato MM/AA, com mês de 01 a 12.
+
 const validadeValida = (texto) => {
   const m = /^(\d{2})\/(\d{2})$/.exec(texto);
   if (!m) return false;
@@ -13,16 +13,16 @@ const validadeValida = (texto) => {
   return mes >= 1 && mes <= 12;
 };
 
-// Coloca a barra automaticamente enquanto digita: "1228" -> "12/28".
+
 const formatarValidade = (texto) => {
   const numeros = texto.replace(/\D/g, '').slice(0, 4);
   return numeros.length > 2 ? `${numeros.slice(0, 2)}/${numeros.slice(2)}` : numeros;
 };
 
-/**
- * Modal "Adicionar forma de pagamento".
- * onSalvar(forma) recebe { tipo, titular?, validade?, chave?, descricao? } já validado.
- */
+
+
+
+
 export default function FormaPagamentoModal({ visible, onClose, onSalvar }) {
   const [tipo, setTipo] = useState('debito');
   const [titular, setTitular] = useState('');
@@ -30,7 +30,7 @@ export default function FormaPagamentoModal({ visible, onClose, onSalvar }) {
   const [chave, setChave] = useState('');
   const [descricao, setDescricao] = useState('');
 
-  // Limpa o formulário sempre que o modal abre.
+
   useEffect(() => {
     if (visible) {
       setTipo('debito');

@@ -9,9 +9,9 @@ const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julh
 
 const dataPorExtenso = (d) => `${DIAS[d.getDay()]}, ${d.getDate()} de ${MESES[d.getMonth()]}`;
 
-/**
- * Medidor semicircular de quilometragem (valor x meta), com a data do dia no topo.
- */
+
+
+
 export default function KmGauge({ valor, meta, largura = 260, data = new Date() }) {
   const espessura = 34;
   const r = (largura - espessura) / 2;
@@ -19,7 +19,7 @@ export default function KmGauge({ valor, meta, largura = 260, data = new Date() 
   const cy = r + espessura / 2;
   const fracao = meta > 0 ? Math.min(valor / meta, 1) : 0;
 
-  // Ponto no arco para um ângulo (π = esquerda, 0 = direita).
+
   const ponto = (angulo) => `${cx + r * Math.cos(angulo)} ${cy - r * Math.sin(angulo)}`;
   const arco = (de, ate) =>
     `M ${ponto(Math.PI - Math.PI * de)} A ${r} ${r} 0 0 1 ${ponto(Math.PI - Math.PI * ate)}`;

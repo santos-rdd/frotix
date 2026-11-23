@@ -59,9 +59,9 @@ export default function AdmFormaPag({ onBack, navigation }) {
     },
   ]);
 
-  // Estados do Modal de Novo Registro
+
   const [modalVisible, setModalVisible] = useState(false);
-  const [transactionType, setTransactionType] = useState('in'); // 'in' ou 'out'
+  const [transactionType, setTransactionType] = useState('in');
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('pix');
@@ -74,7 +74,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
     }
   };
 
-  // Função para abrir o formulário configurado
+
   const handleOpenRegister = (type) => {
     setTransactionType(type);
     setTitle('');
@@ -82,7 +82,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
     setModalVisible(true);
   };
 
-  // Salvar novo registro de Entrada/Saída
+
   const handleSaveTransaction = () => {
     if (!title.trim() || !amount.trim()) {
       Alert.alert('Atenção', 'Preencha a descrição e o valor.');
@@ -107,7 +107,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
 
     setTransactions([newEntry, ...transactions]);
     setModalVisible(false);
-    setActiveSubTab(1); // Redireciona automaticamente para o histórico
+    setActiveSubTab(1);
   };
 
   const filteredTransactions = transactions.filter((item) => {
@@ -124,14 +124,14 @@ export default function AdmFormaPag({ onBack, navigation }) {
         </TouchableOpacity>
       )}
 
-      {/* 1. CARROSSEL DOS MÉTODOS DE PAGAMENTO (CARTÃO, PIX, BOLETO) */}
+
       <View style={styles.dashboardPaymentContainer}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.paymentCardsScroll}
         >
-          {/* CARD 1: CARTÃO */}
+
           <TouchableOpacity
             activeOpacity={0.8}
             style={[
@@ -158,7 +158,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
             </View>
           </TouchableOpacity>
 
-          {/* CARD 2: PIX */}
+
           <TouchableOpacity
             activeOpacity={0.8}
             style={[
@@ -179,7 +179,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
             </View>
           </TouchableOpacity>
 
-          {/* CARD 3: BOLETO */}
+
           <TouchableOpacity
             activeOpacity={0.8}
             style={[
@@ -201,7 +201,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
           </TouchableOpacity>
         </ScrollView>
 
-        {/* PAGINAÇÃO DOS MÉTODOS */}
+
         <View style={styles.dotsRow}>
           <View style={styles.dotInactive} />
           <View style={styles.dotActive} />
@@ -209,7 +209,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
         </View>
       </View>
 
-      {/* 2. ALTERNADOR ENTRE OPÇÕES E HISTÓRICO */}
+
       <View style={styles.subTabHeader}>
         <TouchableOpacity onPress={() => setActiveSubTab(0)}>
           <Text style={[styles.subTabTitle, activeSubTab === 0 && styles.subTabTitleActive]}>
@@ -223,10 +223,10 @@ export default function AdmFormaPag({ onBack, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* VIEW ABA 0: OPÇÕES (ADICIONAR/DELETAR CARTÃO E REGISTRAR ENTRADA/SAÍDA) */}
+
       {activeSubTab === 0 && (
         <View style={styles.optionsContainer}>
-          {/* Botões Circulares */}
+
           <View style={styles.circleButtonsRow}>
             <TouchableOpacity 
               style={styles.circleBtnContainer}
@@ -249,7 +249,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Botões de Ação de Registro */}
+
           <TouchableOpacity
             style={styles.registerInBtn}
             onPress={() => handleOpenRegister('in')}
@@ -268,7 +268,7 @@ export default function AdmFormaPag({ onBack, navigation }) {
         </View>
       )}
 
-      {/* VIEW ABA 1: ATIVIDADE RECENTE / HISTÓRICO */}
+
       {activeSubTab === 1 && (
         <View style={styles.transactionsList}>
           {selectedPaymentFilter !== 'all' && (
@@ -318,15 +318,15 @@ export default function AdmFormaPag({ onBack, navigation }) {
         </View>
       )}
 
-      {/* INDICADOR DE PAGINAÇÃO DAS ABAS */}
+
       <View style={[styles.dotsRow, { marginTop: 20 }]}>
         <View style={activeSubTab === 0 ? styles.dotActive : styles.dotInactive} />
         <View style={activeSubTab === 1 ? styles.dotActive : styles.dotInactive} />
       </View>
 
-      {/* ======================================================== */}
-      {/* MODAL PARA REGISTRAR ENTRADA / SAÍDA                      */}
-      {/* ======================================================== */}
+
+
+
       <Modal visible={modalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
 
-  /* SUB TABS INTERNAS (OPÇÕES / ATIVIDADE RECENTE) */
+
   subTabHeader: {
     flexDirection: 'row',
     gap: 16,
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  /* CONTAINER DAS OPÇÕES */
+
   optionsContainer: {
     alignItems: 'center',
     gap: 12,
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  /* HISTÓRICO DE TRANSAÇÕES */
+
   transactionsList: {
     marginTop: 5,
   },
@@ -655,7 +655,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  /* ESTILOS DO MODAL */
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.75)',

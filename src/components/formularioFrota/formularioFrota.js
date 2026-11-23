@@ -2,17 +2,17 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { colors } from '../../constants/theme.js';
 
-/**
- * Peças dos formulários das telas de frota, no mesmo visual do formulário de Viagens
- * (card azul, campos azul-escuros, botões Cancelar vermelho e ação clara).
- */
 
-// Card azul que envolve os campos.
+
+
+
+
+
 export function CardFormulario({ children, style }) {
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-// Rótulo + campo de texto. `erro` mostra a mensagem em vermelho embaixo do campo.
+
 export function CampoTexto({ label, erro, style, ...props }) {
   return (
     <View style={styles.bloco}>
@@ -27,7 +27,7 @@ export function CampoTexto({ label, erro, style, ...props }) {
   );
 }
 
-// Chips de escolha única (ex.: tipo de manutenção, entrada/saída).
+
 export function EscolhaChips({ label, opcoes, valor, onSelecionar }) {
   return (
     <View style={styles.bloco}>
@@ -50,8 +50,8 @@ export function EscolhaChips({ label, opcoes, valor, onSelecionar }) {
   );
 }
 
-// Par de botões do rodapé do card: Cancelar (vermelho) e a ação principal (claro).
-// salvando: mostra o indicador e bloqueia o botão (evita cadastro em dobro).
+
+
 export function BotoesFormulario({ onCancelar, onConfirmar, confirmarLabel = 'Salvar', cancelarLabel = 'Cancelar', salvando = false }) {
   return (
     <View style={styles.botoes}>

@@ -1,20 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-/**
- * Card azul de viagem/rota: título, selo de status, Origem → Destino
- * e caixa com placa, motorista e hodômetro.
- * `children` aparece abaixo da caixa (ex.: campo de hodômetro final + Fechar).
- * Com `onPress`, o card inteiro vira um botão.
- */
+
+
+
+
+
+
 export default function TripCard({
   titulo,
-  status, // { label, cor }
+  status,
   origem,
   destino,
   placa,
   motorista,
-  infoDireita, // texto do canto inferior direito (hodômetro / km rodados)
+  infoDireita,
   onPress,
   children,
 }) {

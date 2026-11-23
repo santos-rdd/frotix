@@ -17,20 +17,20 @@ import useDados from '../../hooks/useDados.js';
 const somenteNumeros = (texto) => texto.replace(/\D/g, '');
 const normalizar = (texto) => String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
 
-// Data de hoje no formato DD/MM/AAAA (valor inicial do campo).
+
 const hoje = () => new Date().toLocaleDateString('pt-BR');
 
-// "DD/MM/AAAA" -> Date, para comparar com hoje.
+
 const paraDate = (texto) => {
   const [d, m, a] = texto.split('/').map(Number);
   return new Date(a, m - 1, d);
 };
 
-/**
- * Cadastrar rota (Gestor de Frota). Aberta pelo "+ Cadastrar rota" da tela Rotas e pela
- * ação rápida "Nova Rota" da Home. A rota nasce como "Agendada"; o hodômetro final é
- * informado depois, nos Detalhes da rota.
- */
+
+
+
+
+
 export default function CadastroRota({ navigation, route }) {
   const usuario = route?.params?.usuario;
 
@@ -42,18 +42,18 @@ export default function CadastroRota({ navigation, route }) {
   const [hodometroInicial, setHodometroInicial] = useState('');
   const [receita, setReceita] = useState('');
   const [distancia, setDistancia] = useState('');
-  const [origemDistancia, setOrigemDistancia] = useState(null); // 'sugerido' | 'manual' | null
+  const [origemDistancia, setOrigemDistancia] = useState(null);
   const [calculandoDistancia, setCalculandoDistancia] = useState(false);
   const [sugestaoDistancia, setSugestaoDistancia] = useState(null);
   const [erros, setErros] = useState({});
   const [salvando, setSalvando] = useState(false);
 
   const { dados: veiculos } = useDados(listarVeiculos, []);
-  // Erro P7: o motorista é escolhido entre os usuários com perfil Motorista.
+
   const { dados: motoristas } = useDados(listarMotoristas, []);
   const buscarVeiculo = (id) => (veiculos || []).find((v) => v.id === id);
 
-  // Veículos em manutenção não podem receber rota.
+
   const opcoesVeiculo = (veiculos || [])
     .filter((v) => v.status !== 'manutencao')
     .map((v) => ({ id: v.id, label: `${v.modelo} · ${v.placa}` }));

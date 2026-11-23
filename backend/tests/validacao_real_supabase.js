@@ -1,29 +1,29 @@
-/**
- * Script de Validação Real de Idempotência Financeira contra o Supabase.
- *
- * Cenários contemplados:
- * - Cenário A: Lançamento financeiro (receita/despesa) com reenvio do mesmo idLocal.
- * - Cenário B: Dívida parcelada com reenvio do mesmo idLocal (sem duplicação de parcelas).
- * - Cenário C: Concorrência simultânea com o mesmo idLocal (Promise.all).
- *
- * Recuperação de Falhas e Manifesto Local:
- * - Os IDs criados são persistidos em disco em backend/tests/.manifestos/manifesto_<RUN_ID>.json a cada criação.
- * - Respostas inconclusivas ou timeouts são recuperados via busca pontual exata (id_usuario + id_local).
- * - Limpeza interrompida pode ser retomada com:
- *     node backend/tests/validacao_real_supabase.js --retomar-limpeza=<RUN_ID_OU_CAMINHO> --confirmar-conta-teste
- * - Antes de qualquer exclusão, o script verifica se os registros pertencem estritamente ao usuário e ao idLocal do teste.
- * - Confere pós-limpeza para certificar que nada sobrou antes de marcar status=LIMPO.
- *
- * Modos de operação:
- * 1. Simulação (DRY-RUN) - PADRÃO:
- *    Comando: node backend/tests/validacao_real_supabase.js
- *
- * 2. Execução Real (apenas com autorização e parâmetros explícitos):
- *    Comando: node backend/tests/validacao_real_supabase.js --executar-real --confirmar-conta-teste --usuario-id=<UUID>
- *
- * 3. Retomada de Limpeza de Execução Interrompida:
- *    Comando: node backend/tests/validacao_real_supabase.js --retomar-limpeza=<RUN_ID_OU_CAMINHO> --confirmar-conta-teste
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,7 +33,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DIR_MANIFESTOS = path.join(__dirname, '.manifestos');
 
-// Leitura de parâmetros de linha de comando e variáveis de ambiente
+
 const args = process.argv.slice(2);
 const flagExecutarReal = args.includes('--executar-real') || process.env.EXECUTAR_REAL === 'true';
 const flagConfirmarContaTeste = args.includes('--confirmar-conta-teste') || process.env.CONFIRMAR_CONTA_TESTE === 'true';
@@ -41,7 +41,7 @@ const argUsuarioId = (args.find((a) => a.startsWith('--usuario-id=')) || '').spl
 const argRetomarLimpeza = (args.find((a) => a.startsWith('--retomar-limpeza=')) || '').split('=')[1] || null;
 const flagPularLimpeza = args.includes('--manter-dados') || process.env.MANTER_DADOS === 'true';
 
-// O modo padrão é SEMPRE Dry-Run (simulação) a menos que explicitamente solicitado executar-real ou retomar-limpeza
+
 const MODO_RETOMAR_LIMPEZA = Boolean(argRetomarLimpeza);
 const MODO_DRY_RUN = !flagExecutarReal && !MODO_RETOMAR_LIMPEZA;
 
@@ -49,16 +49,16 @@ const RUN_ID = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 const PREFIXO_AUDITORIA = `AUDITORIA_TESTE_IDEMP_${RUN_ID}`;
 const CAMINHO_MANIFESTO = path.join(DIR_MANIFESTOS, `manifesto_${RUN_ID}.json`);
 
-/**
- * Estrutura do Manifesto em disco
- */
+
+
+
 let manifesto = {
   runId: RUN_ID,
   prefixo: PREFIXO_AUDITORIA,
   usuarioId: argUsuarioId,
   criadoEm: new Date().toISOString(),
   atualizadoEm: new Date().toISOString(),
-  status: 'EM_ANDAMENTO', // EM_ANDAMENTO | CONCLUIDO | FALHA | LIMPO
+  status: 'EM_ANDAMENTO',
   passos: {
     cenarioA: {
       idLocal: `${PREFIXO_AUDITORIA}_TX_1`,
@@ -84,9 +84,9 @@ let manifesto = {
   },
 };
 
-/**
- * Salva o estado atual do manifesto em disco de forma síncrona
- */
+
+
+
 function salvarManifestoEmDisco(m = manifesto, caminho = CAMINHO_MANIFESTO) {
   try {
     if (!fs.existsSync(DIR_MANIFESTOS)) {
@@ -99,9 +99,9 @@ function salvarManifestoEmDisco(m = manifesto, caminho = CAMINHO_MANIFESTO) {
   }
 }
 
-/**
- * Registra novo ID para limpeza e atualiza o manifesto em disco imediatamente
- */
+
+
+
 function registrarIdLimpeza(tipo, id) {
   if (!id) return;
   const lista = manifesto.registrosParaLimpeza[tipo];
@@ -111,9 +111,9 @@ function registrarIdLimpeza(tipo, id) {
   }
 }
 
-/**
- * Utilitário HTTP local
- */
+
+
+
 async function fazerRequisicaoHttp(urlBase, caminho, { metodo = 'POST', token, corpo } = {}) {
   const url = `${urlBase}${caminho}`;
   const headers = { 'Content-Type': 'application/json' };
@@ -131,9 +131,9 @@ async function fazerRequisicaoHttp(urlBase, caminho, { metodo = 'POST', token, c
   return { status: resposta.status, ok: resposta.ok, json };
 }
 
-/**
- * Localiza registro no Supabase por combinação exata de id_usuario e id_local (sem buscas por prefixo)
- */
+
+
+
 async function localizarRegistroPorIdLocal(supabase, tabela, usuarioId, idLocal) {
   const { data, error } = await supabase
     .from(tabela)
@@ -149,9 +149,9 @@ async function localizarRegistroPorIdLocal(supabase, tabela, usuarioId, idLocal)
   return data;
 }
 
-/**
- * Validação pré-exclusão rigorosa: garante que os registros realmente pertencem ao usuário e ao teste
- */
+
+
+
 async function validarRegistrosAntesDeExcluir(supabase, usuarioId, manifestoAlvo) {
   const idsValidados = {
     parcelas: [],
@@ -161,7 +161,7 @@ async function validarRegistrosAntesDeExcluir(supabase, usuarioId, manifestoAlvo
 
   const { parcelasIds, financiamentosIds, lancamentosIds } = manifestoAlvo.registrosParaLimpeza;
 
-  // 1. Validar financiamentos
+
   if (financiamentosIds.length > 0) {
     const { data: fins, error } = await supabase
       .from('financiamentos')
@@ -180,7 +180,7 @@ async function validarRegistrosAntesDeExcluir(supabase, usuarioId, manifestoAlvo
     }
   }
 
-  // 2. Validar parcelas vinculadas aos financiamentos da execução
+
   if (parcelasIds.length > 0) {
     const { data: parcs, error } = await supabase
       .from('lancamentos_financeiros')
@@ -198,7 +198,7 @@ async function validarRegistrosAntesDeExcluir(supabase, usuarioId, manifestoAlvo
     }
   }
 
-  // 3. Validar lançamentos avulsos
+
   if (lancamentosIds.length > 0) {
     const { data: lancs, error } = await supabase
       .from('lancamentos_financeiros')
@@ -223,9 +223,9 @@ async function validarRegistrosAntesDeExcluir(supabase, usuarioId, manifestoAlvo
   return idsValidados;
 }
 
-/**
- * Teardown seguro com verificação de integridade referencial e checagem pós-exclusão
- */
+
+
+
 async function executarTeardownSeguro(supabase, usuarioId, manifestoAlvo, caminhoManifestoAlvo) {
   if (flagPularLimpeza) {
     console.log('\n[TEARDOWN] Flag --manter-dados ativada. Registros preservados no Supabase remoto.');
@@ -253,7 +253,7 @@ async function executarTeardownSeguro(supabase, usuarioId, manifestoAlvo, caminh
   console.log(` - Financiamentos validados: ${validados.financiamentos.length} de ${financiamentosIds.length}`);
   console.log(` - Lançamentos avulsos validados: ${validados.lancamentos.length} de ${lancamentosIds.length}`);
 
-  // Passo 1: Excluir parcelas vinculadas em lancamentos_financeiros
+
   if (validados.parcelas.length > 0) {
     console.log(`[TEARDOWN] Excluindo ${validados.parcelas.length} parcelas vinculadas...`);
     const { error } = await supabase
@@ -264,7 +264,7 @@ async function executarTeardownSeguro(supabase, usuarioId, manifestoAlvo, caminh
     else console.log('✔ Parcelas excluídas com sucesso.');
   }
 
-  // Passo 2: Excluir financiamentos em financiamentos
+
   if (validados.financiamentos.length > 0) {
     console.log(`[TEARDOWN] Excluindo ${validados.financiamentos.length} financiamentos...`);
     const { error } = await supabase
@@ -275,7 +275,7 @@ async function executarTeardownSeguro(supabase, usuarioId, manifestoAlvo, caminh
     else console.log('✔ Financiamentos excluídos com sucesso.');
   }
 
-  // Passo 3: Excluir lançamentos avulsos em lancamentos_financeiros
+
   if (validados.lancamentos.length > 0) {
     console.log(`[TEARDOWN] Excluindo ${validados.lancamentos.length} lançamentos avulsos...`);
     const { error } = await supabase
@@ -286,7 +286,7 @@ async function executarTeardownSeguro(supabase, usuarioId, manifestoAlvo, caminh
     else console.log('✔ Lançamentos avulsos excluídos com sucesso.');
   }
 
-  // Conferência Pós-Limpeza no Supabase
+
   console.log('\n[CONFERÊNCIA PÓS-LIMPEZA] Verificando se os registros foram 100% removidos...');
   const todosIdsExcluidos = [...validados.parcelas, ...validados.lancamentos];
   let resquicioDetectado = false;
@@ -326,9 +326,9 @@ async function executarTeardownSeguro(supabase, usuarioId, manifestoAlvo, caminh
   console.log('================================================================');
 }
 
-/**
- * Retomada de limpeza de uma execução interrompida
- */
+
+
+
 async function executarRetomadaLimpeza() {
   console.log('================================================================');
   console.log('   RETOMADA DE LIMPEZA DE EXECUÇÃO ANTERIOR');
@@ -363,9 +363,9 @@ async function executarRetomadaLimpeza() {
   await executarTeardownSeguro(supabase, usuarioId, manifestoCarregado, caminhoAlvo);
 }
 
-/**
- * Modo de Simulação (Dry-Run)
- */
+
+
+
 async function executarDryRun() {
   console.log('================================================================');
   console.log('   VALIDAÇÃO REAL DE IDEMPOTÊNCIA — FROTIX (MODO DRY-RUN)');
@@ -404,9 +404,9 @@ async function executarDryRun() {
   console.log('================================================================');
 }
 
-/**
- * Execução Real contra o Supabase Remoto
- */
+
+
+
 async function executarValidacaoReal() {
   console.log('================================================================');
   console.log('   VALIDAÇÃO REAL DE IDEMPOTÊNCIA CONTRA O SUPABASE');
@@ -421,12 +421,12 @@ async function executarValidacaoReal() {
   const { gerarToken } = await import('../middleware/auth.js');
   const { criarSessaoFrotix, revogarSessaoFrotix } = await import('../services/sessionService.js');
 
-  // 1. Confirmar projeto Supabase de destino (mascarado)
+
   const supabaseUrl = process.env.SUPABASE_URL || '';
   const urlMascarada = supabaseUrl.replace(/https:\/\/(.{4}).*(\.supabase\.co.*)/, 'https://$1***$2');
   console.log(`[CHECK PREVIO] Projeto Supabase destino: ${urlMascarada}`);
 
-  // 2. Confirmar existência e status do usuário escolhido
+
   console.log(`[CHECK PREVIO] Verificando existência do usuário no banco remoto...`);
   const { data: usuarioDb, error: erroUsuario } = await supabase
     .from('usuarios')
@@ -442,7 +442,7 @@ async function executarValidacaoReal() {
   }
   console.log(`✔ Usuário confirmado: id=${usuarioDb.id}, perfil=${usuarioDb.id_perfil}, ativo=${usuarioDb.ativo}`);
 
-  // 3. Confirmar que os identificadores locais específicos dessa execução ainda não existem no banco
+
   console.log(`[CHECK PREVIO] Verificando se os idLocais já existem no Supabase...`);
   const idsParaChecar = [
     manifesto.passos.cenarioA.idLocal,
@@ -465,7 +465,7 @@ async function executarValidacaoReal() {
   }
   console.log(`✔ Identificadores locais inéditos confirmados.`);
 
-  // 4. Inicializa o manifesto no disco antes de qualquer chamada remota de escrita
+
   manifesto.usuarioId = argUsuarioId;
   salvarManifestoEmDisco();
   console.log(`✔ Manifesto inicializado e persistido em disco com sucesso.`);
@@ -490,9 +490,9 @@ async function executarValidacaoReal() {
     const urlBase = `http://127.0.0.1:${porta}`;
     console.log(`[INFO] Servidor backend Express rodando localmente na porta ${porta}.`);
 
-    // -------------------------------------------------------------
-    // CENÁRIO A: Lançamento Financeiro
-    // -------------------------------------------------------------
+
+
+
     console.log('\n--- [CENÁRIO A] Lançamento Financeiro (Receita/Despesa) ---');
     const idLocalA = manifesto.passos.cenarioA.idLocal;
     const payloadA = {
@@ -548,9 +548,9 @@ async function executarValidacaoReal() {
     }
     console.log('✔ Verificação no Supabase confirmada: exatamente 1 registro persistido.');
 
-    // -------------------------------------------------------------
-    // CENÁRIO B: Dívida Parcelada
-    // -------------------------------------------------------------
+
+
+
     console.log('\n--- [CENÁRIO B] Dívida Parcelada (Financiamento + Parcelas) ---');
     const idLocalB = manifesto.passos.cenarioB.idLocal;
     const payloadB = {
@@ -621,9 +621,9 @@ async function executarValidacaoReal() {
     salvarManifestoEmDisco();
     console.log(`✔ Verificação no Supabase confirmada: exatamente 1 financiamento e exatamente 2 parcelas registradas.`);
 
-    // -------------------------------------------------------------
-    // CENÁRIO C: Concorrência Simultânea
-    // -------------------------------------------------------------
+
+
+
     console.log('\n--- [CENÁRIO C] Concorrência Simultânea (Promise.all) ---');
     const idLocalC = manifesto.passos.cenarioC.idLocal;
     const payloadC = {
@@ -698,7 +698,7 @@ async function executarValidacaoReal() {
       }
     }
 
-    // Teardown resiliente usando o manifesto persistido
+
     try {
       await executarTeardownSeguro(supabase, argUsuarioId, manifesto, CAMINHO_MANIFESTO);
     } catch (erroLimpeza) {
@@ -711,9 +711,9 @@ async function executarValidacaoReal() {
   }
 }
 
-/**
- * Ponto de Entrada Principal
- */
+
+
+
 async function main() {
   if (MODO_RETOMAR_LIMPEZA) {
     await executarRetomadaLimpeza();
@@ -725,7 +725,7 @@ async function main() {
     return;
   }
 
-  // Validação estrita de segurança antes de permitir modo real
+
   if (!flagConfirmarContaTeste) {
     console.error('\n[BLOQUEIO DE SEGURANÇA]');
     console.error('A execução real exige a flag explícita --confirmar-conta-teste.');

@@ -22,12 +22,7 @@ export default function BottomNavigation({ navigation, userRole, usuario }) {
 
   return (
     <View style={styles.container}>
-      {/* <TouchableOpacity
-        style={styles.navButton}
-        onPress={abrirCaminhao}
-      >
-        <MaterialCommunityIcons name="truck-delivery-outline" size={24} color="#2541ff" />
-      </TouchableOpacity> */}
+
 
       <TouchableOpacity
         style={styles.navButton}
@@ -36,12 +31,7 @@ export default function BottomNavigation({ navigation, userRole, usuario }) {
         <Feather name="home" size={24} color="#2541ff" />
       </TouchableOpacity>
 
-      {/* <TouchableOpacity
-        style={styles.navButton}
-        onPress={abrirFerramenta}
-      >
-        <Feather name="tool" size={24} color="#2541ff" />
-      </TouchableOpacity> */}
+
 
       <TouchableOpacity 
         style={styles.navButton} 

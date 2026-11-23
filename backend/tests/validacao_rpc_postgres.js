@@ -1,19 +1,19 @@
-/**
- * Script de Teste Automatizado da RPC de Atomicidade Financeira contra PostgreSQL Real (Local)
- *
- * Este script NÃO toca no Supabase remoto.
- * Ele inicializa uma instância efêmera e isolada do PostgreSQL 18 local (porta 54329),
- * aplica o schema e a migration da RPC, e executa testes reais de:
- * 1. Criação de financiamento e parcelas com search_path = ''.
- * 2. Idempotência por id_local (re-envio sem duplicação).
- * 3. Concorrência simultânea (Promise.all com 2 conexões).
- * 4. Rollback integral em caso de falha em parcela.
- * 5. Validação rigorosa de identidade fail-closed (JWT moderno JSON, sub malformado/ausente, role anon/desconhecida, legado, service_role).
- * 6. Compatibilidade estrita do retorno JSON com o transacoesController.js.
- * 7. Validação explícita de parâmetros obrigatórios nulos.
- *
- * Ao final, a instância efêmera é parada e o diretório temporário é excluído.
- */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -179,13 +179,13 @@ async function prepararSchema() {
   log('Migration aplicada com sucesso no PostgreSQL de teste.');
 }
 
-/**
- * Utilitário de chamada da RPC simulando o contexto PostgREST (moderno ou legado)
- */
+
+
+
 async function chamarRpc(client, params, jwtOptions = { claims: { role: 'service_role' } }) {
   await client.query('BEGIN;');
   try {
-    // Configura formato JSON moderno
+
     if (jwtOptions.claims !== undefined) {
       if (jwtOptions.claims === null) {
         await client.query("SET LOCAL request.jwt.claims = '';");
@@ -198,7 +198,7 @@ async function chamarRpc(client, params, jwtOptions = { claims: { role: 'service
       await client.query("SET LOCAL request.jwt.claims = '';");
     }
 
-    // Configura GUCs legados
+
     if (jwtOptions.legacyRole !== undefined) {
       await client.query(`SET LOCAL request.jwt.claim.role = '${jwtOptions.legacyRole}';`);
     } else {
@@ -233,9 +233,9 @@ async function executarTestes() {
   const clientPadrao = await pool.connect();
 
   try {
-    // ---------------------------------------------------------------------------
-    // TESTE 1: Criação normal de financiamento + parcelas (via backend service_role)
-    // ---------------------------------------------------------------------------
+
+
+
     log('\n=== TESTE 1: Criação de financiamento e parcelas (search_path vazio) ===');
     try {
       const r1 = await chamarRpc(clientPadrao, [
@@ -270,9 +270,9 @@ async function executarTestes() {
       log(`✖ TESTE 1 FALHOU: ${err.message}`);
     }
 
-    // ---------------------------------------------------------------------------
-    // TESTE 2: Reenvio com o mesmo id_local (Idempotência)
-    // ---------------------------------------------------------------------------
+
+
+
     log('\n=== TESTE 2: Reenvio com mesmo id_local (Idempotência) ===');
     try {
       const r2 = await chamarRpc(clientPadrao, [
@@ -299,9 +299,9 @@ async function executarTestes() {
       log(`✖ TESTE 2 FALHOU: ${err.message}`);
     }
 
-    // ---------------------------------------------------------------------------
-    // TESTE 3: Concorrência Simultânea (Promise.all em 2 conexões distintas)
-    // ---------------------------------------------------------------------------
+
+
+
     log('\n=== TESTE 3: Concorrência simultânea (2 conexões) ===');
     try {
       const client1 = await pool.connect();
@@ -341,9 +341,9 @@ async function executarTestes() {
       log(`✖ TESTE 3 FALHOU: ${err.message}`);
     }
 
-    // ---------------------------------------------------------------------------
-    // TESTE 4: Rollback integral em caso de falha de parcela
-    // ---------------------------------------------------------------------------
+
+
+
     log('\n=== TESTE 4: Rollback integral em falha de parcela ===');
     try {
       await pool.query(`
@@ -398,20 +398,20 @@ async function executarTestes() {
       log(`✖ TESTE 4 FALHOU: ${err.message}`);
     }
 
-    // ---------------------------------------------------------------------------
-    // TESTE 5: Validação Rigorosa de Identidade e Segurança (JWT Moderno e Fail-Closed)
-    // ---------------------------------------------------------------------------
+
+
+
     log('\n=== TESTE 5: Segurança, Identidade e Fail-Closed ===');
     const clientSec = await pool.connect();
     try {
-      // 5.1 JWT Moderno: authenticated com sub legítimo correspondente a p_id_usuario
+
       const r51 = await chamarRpc(clientSec, [
         userA, 'Dívida Própria User A', 200, 100, 2, '2026-12-01', null, null, null, null, null, 'ID_SEC_5_1', '2026-11-20'
       ], { claims: { role: 'authenticated', sub: userA } });
       if (!r51.sucesso) throw new Error('Falha ao autorizar authenticated com sub válido.');
       log('✔ 5.1 Aprovado: JWT Moderno (claims JSON) com authenticated e sub legítimo autorizado.');
 
-      // 5.2 JWT Moderno: personificação (sub do User B tentando criar para User A)
+
       let per52 = false;
       try {
         await chamarRpc(clientSec, [
@@ -424,7 +424,7 @@ async function executarTestes() {
       if (!per52) throw new Error('Personificação não foi bloqueada com 42501!');
       log('✔ 5.2 Aprovado: Personificação rejeitada com código 42501.');
 
-      // 5.3 JWT Moderno: claim sub ausente no JSON
+
       let semSub53 = false;
       try {
         await chamarRpc(clientSec, [
@@ -437,7 +437,7 @@ async function executarTestes() {
       if (!semSub53) throw new Error('Claim sub ausente não foi bloqueada com 42501!');
       log('✔ 5.3 Aprovado: Claim sub ausente no JSON moderno bloqueada com código 42501.');
 
-      // 5.4 JWT Moderno: claim sub vazia no JSON
+
       let subVazio54 = false;
       try {
         await chamarRpc(clientSec, [
@@ -450,7 +450,7 @@ async function executarTestes() {
       if (!subVazio54) throw new Error('Claim sub vazia não foi bloqueada com 42501!');
       log('✔ 5.4 Aprovado: Claim sub vazia bloqueada com código 42501.');
 
-      // 5.5 JWT Moderno: claim sub malformada (não é UUID)
+
       let subMalformado55 = false;
       try {
         await chamarRpc(clientSec, [
@@ -463,7 +463,7 @@ async function executarTestes() {
       if (!subMalformado55) throw new Error('Claim sub malformada não foi bloqueada com 42501!');
       log('✔ 5.5 Aprovado: Claim sub malformada capturada e rejeitada com código 42501.');
 
-      // 5.6 JWT Moderno: role anon
+
       let anon56 = false;
       try {
         await chamarRpc(clientSec, [
@@ -476,7 +476,7 @@ async function executarTestes() {
       if (!anon56) throw new Error('Papel anon não foi bloqueado com 42501!');
       log('✔ 5.6 Aprovado: Papel anon bloqueado com código 42501.');
 
-      // 5.7 JWT Moderno: role ausente no JSON (fail-closed)
+
       let semRole57 = false;
       try {
         await chamarRpc(clientSec, [
@@ -489,7 +489,7 @@ async function executarTestes() {
       if (!semRole57) throw new Error('Role ausente não foi bloqueada com 42501!');
       log('✔ 5.7 Aprovado: Role ausente no JSON (fail-closed) bloqueada com código 42501.');
 
-      // 5.8 JWT Moderno: role desconhecida / forjada (fail-closed)
+
       let roleDesconhecida58 = false;
       try {
         await chamarRpc(clientSec, [
@@ -502,7 +502,7 @@ async function executarTestes() {
       if (!roleDesconhecida58) throw new Error('Role desconhecida não foi bloqueada com 42501!');
       log('✔ 5.8 Aprovado: Role desconhecida bloqueada com código 42501.');
 
-      // 5.9 Sem contexto de autenticação (GUCs vazios - fail-closed)
+
       let semGuc59 = false;
       try {
         await chamarRpc(clientSec, [
@@ -515,7 +515,7 @@ async function executarTestes() {
       if (!semGuc59) throw new Error('Chamada sem contexto de auth não foi bloqueada!');
       log('✔ 5.9 Aprovado: Chamada sem contexto de autenticação (fail-closed) bloqueada com código 42501.');
 
-      // 5.10 JSON malformado em request.jwt.claims (fail-closed)
+
       let jsonMalformado510 = false;
       try {
         await chamarRpc(clientSec, [
@@ -528,28 +528,28 @@ async function executarTestes() {
       if (!jsonMalformado510) throw new Error('JSON malformado em claims não foi tratado como fail-closed!');
       log('✔ 5.10 Aprovado: JSON malformado em claims tratado com segurança (fail-closed 42501).');
 
-      // 5.11 JWT Moderno: service_role autorizado (backend Express)
+
       const r511 = await chamarRpc(clientSec, [
         userA, 'Dívida Backend Moderno', 400, 200, 2, '2026-12-01', null, null, null, null, null, 'ID_SEC_5_11', '2026-11-20'
       ], { claims: { role: 'service_role' } });
       if (!r511.sucesso) throw new Error('Falha ao autorizar service_role em formato JSON moderno.');
       log('✔ 5.11 Aprovado: service_role autorizado no formato JSON moderno.');
 
-      // 5.12 Compatibilidade com GUCs legados: authenticated e sub
+
       const r512 = await chamarRpc(clientSec, [
         userB, 'Dívida Legada User B', 300, 150, 2, '2026-12-01', null, null, null, null, null, 'ID_SEC_5_12', '2026-11-20'
       ], { claims: null, legacyRole: 'authenticated', legacySub: userB });
       if (!r512.sucesso) throw new Error('Falha na compatibilidade com GUCs legados.');
       log('✔ 5.12 Aprovado: Compatibilidade com GUCs legados (request.jwt.claim.role/sub) preservada.');
 
-      // 5.13 Compatibilidade com GUCs legados: service_role
+
       const r513 = await chamarRpc(clientSec, [
         userA, 'Dívida Legada Backend', 300, 150, 2, '2026-12-01', null, null, null, null, null, 'ID_SEC_5_13', '2026-11-20'
       ], { claims: null, legacyRole: 'service_role' });
       if (!r513.sucesso) throw new Error('Falha ao autorizar service_role legado.');
       log('✔ 5.13 Aprovado: service_role autorizado via GUC legado.');
 
-      // 5.14 GUCs legados: role anon bloqueado
+
       let anonLegado514 = false;
       try {
         await chamarRpc(clientSec, [
@@ -569,9 +569,9 @@ async function executarTestes() {
       clientSec.release();
     }
 
-    // ---------------------------------------------------------------------------
-    // TESTE 6: Compatibilidade de contrato com transacoesController.js
-    // ---------------------------------------------------------------------------
+
+
+
     log('\n=== TESTE 6: Compatibilidade de Contrato JSON ===');
     try {
       const r = await chamarRpc(clientPadrao, [
@@ -597,9 +597,9 @@ async function executarTestes() {
       log(`✖ TESTE 6 FALHOU: ${err.message}`);
     }
 
-    // ---------------------------------------------------------------------------
-    // TESTE 7: Validação Explícita de Parâmetros Obrigatórios Nulos
-    // ---------------------------------------------------------------------------
+
+
+
     log('\n=== TESTE 7: Validação de Parâmetros Obrigatórios Nulos ===');
     try {
       const clientVal = await pool.connect();
@@ -619,12 +619,12 @@ async function executarTestes() {
           log(`✔ 7.${nome} Aprovado: Rejeição correta com código ${codigoEsperado}.`);
         };
 
-        // 7.1 Usuário nulo
+
         await testarParam('p_id_usuario_nulo', [
           null, 'Desc', 1000, 500, 2, '2026-12-01', null, null, null, null, null, 'ID_P1', '2026-11-20'
         ], '23502');
 
-        // 7.2 Descrição nula / vazia
+
         await testarParam('p_descricao_nula', [
           userA, null, 1000, 500, 2, '2026-12-01', null, null, null, null, null, 'ID_P2', '2026-11-20'
         ], '23502');
@@ -632,7 +632,7 @@ async function executarTestes() {
           userA, '   ', 1000, 500, 2, '2026-12-01', null, null, null, null, null, 'ID_P2B', '2026-11-20'
         ], '23502');
 
-        // 7.3 Valor total nulo ou <= 0
+
         await testarParam('p_valor_total_nulo', [
           userA, 'Desc', null, 500, 2, '2026-12-01', null, null, null, null, null, 'ID_P3', '2026-11-20'
         ], '22023');
@@ -640,7 +640,7 @@ async function executarTestes() {
           userA, 'Desc', 0, 500, 2, '2026-12-01', null, null, null, null, null, 'ID_P3B', '2026-11-20'
         ], '22023');
 
-        // 7.4 Valor parcela nulo ou <= 0
+
         await testarParam('p_valor_parcela_nulo', [
           userA, 'Desc', 1000, null, 2, '2026-12-01', null, null, null, null, null, 'ID_P4', '2026-11-20'
         ], '22023');
@@ -648,7 +648,7 @@ async function executarTestes() {
           userA, 'Desc', 1000, 0, 2, '2026-12-01', null, null, null, null, null, 'ID_P4B', '2026-11-20'
         ], '22023');
 
-        // 7.5 Quantidade de parcelas nula ou < 2
+
         await testarParam('p_quantidade_parcelas_nula', [
           userA, 'Desc', 1000, 500, null, '2026-12-01', null, null, null, null, null, 'ID_P5', '2026-11-20'
         ], '22023');
@@ -656,12 +656,12 @@ async function executarTestes() {
           userA, 'Desc', 1000, 1000, 1, '2026-12-01', null, null, null, null, null, 'ID_P5B', '2026-11-20'
         ], '22023');
 
-        // 7.6 Data primeiro vencimento nula
+
         await testarParam('p_data_primeiro_vencimento_nula', [
           userA, 'Desc', 1000, 500, 2, null, null, null, null, null, null, 'ID_P6', '2026-11-20'
         ], '23502');
 
-        // 7.7 Valor quitação antecipada negativo
+
         await testarParam('p_valor_quitacao_negativo', [
           userA, 'Desc', 1000, 500, 2, '2026-12-01', -50, null, null, null, null, 'ID_P7', '2026-11-20'
         ], '22023');
